@@ -15,6 +15,8 @@ is not a staircase.
 */
 int c_yes, c_no;
 
+// gamex86.dll: 1004BE60..1004C15F
+// gamei386.so: 000351F0..00035464
 qboolean M_CheckBottom (edict_t *ent)
 {
 	vec3_t	mins, maxs, start, stop;
@@ -90,6 +92,8 @@ pr_global_struct->trace_normal is set to the normal of the blocking wall
 */
 //FIXME since we need to test end position contents here, can we avoid doing
 //it again later in catagorize position?
+// gamex86.dll: 1004C15F..1004C74E
+// gamei386.so: 00035464..000358C5
 qboolean SV_movestep (edict_t *ent, vec3_t move, qboolean relink)
 {
 	float		dz;
@@ -282,6 +286,8 @@ M_ChangeYaw
 
 ===============
 */
+// gamex86.dll: 1004C74E..1004C838
+// gamei386.so: 000358C8..0003599F
 void M_ChangeYaw (edict_t *ent)
 {
 	float	ideal;
@@ -331,6 +337,8 @@ facing it.
 
 ======================
 */
+// gamex86.dll: 1004C838..1004C956
+// gamei386.so: 000359A0..00035B6F
 qboolean SV_StepDirection (edict_t *ent, float yaw, float dist)
 {
 	vec3_t		move, oldorigin;
@@ -367,6 +375,8 @@ SV_FixCheckBottom
 
 ======================
 */
+// gamex86.dll: 1004C956..1004C970
+// gamei386.so: 00035B70..00035B82
 void SV_FixCheckBottom (edict_t *ent)
 {
 	ent->flags |= FL_PARTIALGROUND;
@@ -381,6 +391,8 @@ SV_NewChaseDir
 ================
 */
 #define	DI_NODIR	-1
+// gamex86.dll: 1004C970..1004CCB5
+// gamei386.so: 00035B84..00035F6E
 void SV_NewChaseDir (edict_t *actor, edict_t *enemy, float dist)
 {
 	float	deltax,deltay;
@@ -473,6 +485,8 @@ SV_CloseEnough
 
 ======================
 */
+// gamex86.dll: 1004CCB5..1004CD2C
+// gamei386.so: 00035F70..00035FCA
 qboolean SV_CloseEnough (edict_t *ent, edict_t *goal, float dist)
 {
 	int		i;
@@ -493,6 +507,8 @@ qboolean SV_CloseEnough (edict_t *ent, edict_t *goal, float dist)
 M_MoveToGoal
 ======================
 */
+// gamex86.dll: 1004CD2C..1004CDD2
+// gamei386.so: 00035FCC..00036080
 void M_MoveToGoal (edict_t *ent, float dist)
 {
 	edict_t		*goal;
@@ -520,6 +536,8 @@ void M_MoveToGoal (edict_t *ent, float dist)
 M_walkmove
 ===============
 */
+// gamex86.dll: 1004CDD2..1004CE60
+// gamei386.so: 00036080..00036114
 qboolean M_walkmove (edict_t *ent, float yaw, float dist)
 {
 	vec3_t	move;

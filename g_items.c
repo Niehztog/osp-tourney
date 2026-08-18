@@ -21,16 +21,19 @@ gitem_armor_t jacketarmor_info	= { 25,  50, .30, .00, ARMOR_JACKET};
 gitem_armor_t combatarmor_info	= { 50, 100, .60, .30, ARMOR_COMBAT};
 gitem_armor_t bodyarmor_info	= {100, 200, .80, .60, ARMOR_BODY};
 
-static int	jacket_armor_index;
-static int	combat_armor_index;
-static int	body_armor_index;
-static int	power_screen_index;
-static int	power_shield_index;
+int		jacket_armor_index;
+int		combat_armor_index;
+int		body_armor_index;
+int		power_screen_index;
+int		power_shield_index;
 
 #define HEALTH_IGNORE_MAX	1
 #define HEALTH_TIMED		2
 
 void Use_Quad (edict_t *ent, gitem_t *item);
+void Use_Silencer (edict_t *ent, gitem_t *item);
+void Use_Breather (edict_t *ent, gitem_t *item);
+void Use_Envirosuit (edict_t *ent, gitem_t *item);
 static int	quad_drop_timeout_hack;
 
 //======================================================================
@@ -40,6 +43,8 @@ static int	quad_drop_timeout_hack;
 GetItemByIndex
 ===============
 */
+// gamex86.dll: 10012540..10012565
+// gamei386.so: 0001EC98..0001ECD8
 gitem_t	*GetItemByIndex (int index)
 {
 	if (index == 0 || index >= game.num_items)
@@ -55,6 +60,8 @@ FindItemByClassname
 
 ===============
 */
+// gamex86.dll: 10012565..100125C5
+// gamei386.so: 0001ECD8..0001ED2C
 gitem_t	*FindItemByClassname (char *classname)
 {
 	int		i;
@@ -78,6 +85,8 @@ FindItem
 
 ===============
 */
+// gamex86.dll: 100125C5..10012627
+// gamei386.so: 0001ED2C..0001ED80
 gitem_t	*FindItem (char *pickup_name)
 {
 	int		i;
@@ -97,6 +106,8 @@ gitem_t	*FindItem (char *pickup_name)
 
 //======================================================================
 
+// gamex86.dll: 10012627..10012729
+// gamei386.so: 0001ED80..0001EE3A
 void DoRespawn (edict_t *ent)
 {
 	if (ent->team)
@@ -107,15 +118,18 @@ void DoRespawn (edict_t *ent)
 
 		master = ent->teammaster;
 
-		for (count = 0, ent = master; ent; ent = ent->chain, count++)
-			;
+		for (count = 0, ent = master; ent; ent = ent->chain)
+			if (!OSP_disableItems (ent))
+				count++;
 
 		choice = rand() % count;
 
-		for (count = 0, ent = master; count < choice; ent = ent->chain, count++)
-			;
+		for (count = 0, ent = master; count < choice || OSP_disableItems (ent); ent = ent->chain)
+			if (!OSP_disableItems (ent))
+				count++;
 	}
 
+	ent->nextthink = 0;
 	ent->svflags &= ~SVF_NOCLIENT;
 	ent->solid = SOLID_TRIGGER;
 	gi.linkentity (ent);
@@ -124,8 +138,27 @@ void DoRespawn (edict_t *ent)
 	ent->s.event = EV_ITEM_RESPAWN;
 }
 
+// gamex86.dll: 10012729..10012876
+// gamei386.so: 0001EE3C..0001EFCF
 void SetRespawn (edict_t *ent, float delay)
 {
+	int		players;
+
+	// The powerups keep their fixed respawn time; everything else scales with
+	// how busy the server is, clamped to the fast_minpbound..fast_maxpbound
+	// player range.
+	if (strcmp (ent->classname, "item_invulnerability") && strcmp (ent->classname, "item_quad"))
+	{
+		players = active_clients;
+		if (players < (int)fast_minpbound->value)
+			players = (int)fast_minpbound->value;
+		if (players > (int)fast_maxpbound->value)
+			players = (int)fast_maxpbound->value;
+		if (fast_respawn->value < 0.05)
+			gi.cvar_set ("fast_respawn", "0.05");
+		delay = delay * (1.0 - (1.0 - fast_respawn->value) * (float)players / fast_maxpbound->value);
+	}
+
 	ent->flags |= FL_RESPAWN;
 	ent->svflags |= SVF_NOCLIENT;
 	ent->solid = SOLID_NOT;
@@ -137,6 +170,8 @@ void SetRespawn (edict_t *ent, float delay)
 
 //======================================================================
 
+// gamex86.dll: 10012876..10012B48
+// gamei386.so: 0001EFD0..0001F2F0
 qboolean Pickup_Powerup (edict_t *ent, edict_t *other)
 {
 	int		quantity;
@@ -150,21 +185,39 @@ qboolean Pickup_Powerup (edict_t *ent, edict_t *other)
 
 	other->client->pers.inventory[ITEM_INDEX(ent->item)]++;
 
-	if (deathmatch->value)
+	if (ent->item->use == Use_Quad)
 	{
-		if (!(ent->spawnflags & DROPPED_ITEM) )
-			SetRespawn (ent, ent->item->quantity);
-		if (((int)dmflags->value & DF_INSTANT_ITEMS) || ((ent->item->use == Use_Quad) && (ent->spawnflags & DROPPED_PLAYER_ITEM)))
-		{
-			if ((ent->item->use == Use_Quad) && (ent->spawnflags & DROPPED_PLAYER_ITEM))
-				quad_drop_timeout_hack = (ent->nextthink - level.time) / FRAMETIME;
-			ent->item->use (other, ent->item);
-		}
+		q2log_pickupItem ("Quad", ent - g_edicts, other);
+		other->client->resp.osp_r200 = ent - g_edicts;
 	}
+	if (ent->item->use == Use_Invulnerability)
+	{
+		q2log_pickupItem ("Invulnerability", ent - g_edicts, other);
+		other->client->resp.osp_r200 = ent - g_edicts;
+	}
+	if ((int)nglog_logallpickups->value)
+	{
+		if (Use_Silencer == ent->item->use || Use_Breather == ent->item->use
+			|| Use_Envirosuit == ent->item->use)
+			q2log_pickupItem (ent->item->pickup_name, 0, other);
+	}
+
+	if (!(ent->spawnflags & DROPPED_ITEM) )
+		SetRespawn (ent, ent->item->quantity);
+	if (((int)dmflags->value & DF_INSTANT_ITEMS) || ((ent->item->use == Use_Quad) && (ent->spawnflags & DROPPED_PLAYER_ITEM)))
+	{
+		if ((ent->item->use == Use_Quad) && (ent->spawnflags & DROPPED_PLAYER_ITEM))
+			quad_drop_timeout_hack = (ent->nextthink - level.time) / FRAMETIME;
+		ent->item->use (other, ent->item);
+	}
+
+	other->client->resp.osp_r23c = 0;
 
 	return true;
 }
 
+// gamex86.dll: 10012B48..10012BA8
+// gamei386.so: 0001F2F0..0001F346
 void Drop_General (edict_t *ent, gitem_t *item)
 {
 	Drop_Item (ent, item);
@@ -175,6 +228,8 @@ void Drop_General (edict_t *ent, gitem_t *item)
 
 //======================================================================
 
+// gamex86.dll: 10012BA8..10012C73
+// gamei386.so: 0001F348..0001F41B
 qboolean Pickup_Adrenaline (edict_t *ent, edict_t *other)
 {
 	if (!deathmatch->value)
@@ -186,9 +241,14 @@ qboolean Pickup_Adrenaline (edict_t *ent, edict_t *other)
 	if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
 		SetRespawn (ent, ent->item->quantity);
 
+	if ((int)nglog_logallpickups->value)
+		q2log_pickupItem (ent->item->pickup_name, 0, other);
+
 	return true;
 }
 
+// gamex86.dll: 10012C73..10012D03
+// gamei386.so: 0001F41C..0001F4BD
 qboolean Pickup_AncientHead (edict_t *ent, edict_t *other)
 {
 	other->max_health += 2;
@@ -196,13 +256,20 @@ qboolean Pickup_AncientHead (edict_t *ent, edict_t *other)
 	if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
 		SetRespawn (ent, ent->item->quantity);
 
+	if ((int)nglog_logallpickups->value)
+		q2log_pickupItem (ent->item->pickup_name, 0, other);
+
 	return true;
 }
 
+// gamex86.dll: 10012D03..10012F65
+// gamei386.so: 0001F4C0..0001F735
 qboolean Pickup_Bandolier (edict_t *ent, edict_t *other)
 {
 	gitem_t	*item;
 	int		index;
+
+	other->client->pers.inventory[ITEM_INDEX(ent->item)]++;
 
 	if (other->client->pers.max_bullets < 250)
 		other->client->pers.max_bullets = 250;
@@ -234,26 +301,22 @@ qboolean Pickup_Bandolier (edict_t *ent, edict_t *other)
 	if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
 		SetRespawn (ent, ent->item->quantity);
 
+	if ((int)nglog_logallpickups->value)
+		q2log_pickupItem (ent->item->pickup_name, 0, other);
+
 	return true;
 }
 
+// gamex86.dll: 10012F65..10013372
+// gamei386.so: 0001F738..0001FBB9
 qboolean Pickup_Pack (edict_t *ent, edict_t *other)
 {
 	gitem_t	*item;
 	int		index;
 
-	if (other->client->pers.max_bullets < 300)
-		other->client->pers.max_bullets = 300;
-	if (other->client->pers.max_shells < 200)
-		other->client->pers.max_shells = 200;
-	if (other->client->pers.max_rockets < 100)
-		other->client->pers.max_rockets = 100;
-	if (other->client->pers.max_grenades < 100)
-		other->client->pers.max_grenades = 100;
-	if (other->client->pers.max_cells < 300)
-		other->client->pers.max_cells = 300;
-	if (other->client->pers.max_slugs < 100)
-		other->client->pers.max_slugs = 100;
+	other->client->pers.inventory[ITEM_INDEX(ent->item)]++;
+
+	OSP_packPlayer (other);
 
 	item = FindItem("Bullets");
 	if (item)
@@ -312,11 +375,16 @@ qboolean Pickup_Pack (edict_t *ent, edict_t *other)
 	if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
 		SetRespawn (ent, ent->item->quantity);
 
+	if ((int)nglog_logallpickups->value)
+		q2log_pickupItem (ent->item->pickup_name, 0, other);
+
 	return true;
 }
 
 //======================================================================
 
+// gamex86.dll: 10013372..10013478
+// gamei386.so: 0001FBBC..0001FCA1
 void Use_Quad (edict_t *ent, gitem_t *item)
 {
 	int		timeout;
@@ -340,10 +408,13 @@ void Use_Quad (edict_t *ent, gitem_t *item)
 		ent->client->quad_framenum = level.framenum + timeout;
 
 	gi.sound(ent, CHAN_ITEM, gi.soundindex("items/damage.wav"), 1, ATTN_NORM, 0);
+	q2log_useItem ("Quad", ent);
 }
 
 //======================================================================
 
+// gamex86.dll: 10013478..10013522
+// gamei386.so: 0001FCA4..0001FD35
 void Use_Breather (edict_t *ent, gitem_t *item)
 {
 	ent->client->pers.inventory[ITEM_INDEX(item)]--;
@@ -359,6 +430,8 @@ void Use_Breather (edict_t *ent, gitem_t *item)
 
 //======================================================================
 
+// gamex86.dll: 10013522..100135CC
+// gamei386.so: 0001FD38..0001FDC9
 void Use_Envirosuit (edict_t *ent, gitem_t *item)
 {
 	ent->client->pers.inventory[ITEM_INDEX(item)]--;
@@ -374,6 +447,8 @@ void Use_Envirosuit (edict_t *ent, gitem_t *item)
 
 //======================================================================
 
+// gamex86.dll: 100135CC..100136B1
+// gamei386.so: 0001FDCC..0001FE98
 void	Use_Invulnerability (edict_t *ent, gitem_t *item)
 {
 	ent->client->pers.inventory[ITEM_INDEX(item)]--;
@@ -385,10 +460,13 @@ void	Use_Invulnerability (edict_t *ent, gitem_t *item)
 		ent->client->invincible_framenum = level.framenum + 300;
 
 	gi.sound(ent, CHAN_ITEM, gi.soundindex("items/protect.wav"), 1, ATTN_NORM, 0);
+	q2log_useItem ("Invulnerability", ent);
 }
 
 //======================================================================
 
+// gamex86.dll: 100136B1..1001371C
+// gamei386.so: 0001FE98..0001FEEF
 void	Use_Silencer (edict_t *ent, gitem_t *item)
 {
 	ent->client->pers.inventory[ITEM_INDEX(item)]--;
@@ -400,6 +478,8 @@ void	Use_Silencer (edict_t *ent, gitem_t *item)
 
 //======================================================================
 
+// gamex86.dll: 1001371C..100138A1
+// gamei386.so: 0001FEF0..00020036
 qboolean Pickup_Key (edict_t *ent, edict_t *other)
 {
 	if (coop->value)
@@ -425,6 +505,8 @@ qboolean Pickup_Key (edict_t *ent, edict_t *other)
 
 //======================================================================
 
+// gamex86.dll: 100138A1..100139DA
+// gamei386.so: 00020038..00020116
 qboolean Add_Ammo (edict_t *ent, gitem_t *item, int count)
 {
 	int			index;
@@ -461,6 +543,8 @@ qboolean Add_Ammo (edict_t *ent, gitem_t *item, int count)
 	return true;
 }
 
+// gamex86.dll: 100139DA..10013B58
+// gamei386.so: 00020118..00020376
 qboolean Pickup_Ammo (edict_t *ent, edict_t *other)
 {
 	int			oldcount;
@@ -475,22 +559,28 @@ qboolean Pickup_Ammo (edict_t *ent, edict_t *other)
 	else
 		count = ent->item->quantity;
 
+	// vanilla's oldcount survives as a dead assignment.
 	oldcount = other->client->pers.inventory[ITEM_INDEX(ent->item)];
 
 	if (!Add_Ammo (other, ent->item, count))
 		return false;
 
-	if (weapon && !oldcount)
+	if (weapon && !other->client->newweapon)
 	{
-		if (other->client->pers.weapon != ent->item && ( !deathmatch->value || other->client->pers.weapon == FindItem("blaster") ) )
+		if (other->client->pers.weapon != ent->item && other->client->pers.weapon == FindItem("blaster"))
 			other->client->newweapon = ent->item;
 	}
 
 	if (!(ent->spawnflags & (DROPPED_ITEM | DROPPED_PLAYER_ITEM)) && (deathmatch->value))
 		SetRespawn (ent, 30);
+	if ((int)nglog_logallpickups->value)
+		q2log_pickupItem (ent->item->pickup_name, 0, other);
+
 	return true;
 }
 
+// gamex86.dll: 10013B58..10013C68
+// gamei386.so: 00020378..00020459
 void Drop_Ammo (edict_t *ent, gitem_t *item)
 {
 	edict_t	*dropped;
@@ -519,12 +609,27 @@ void Drop_Ammo (edict_t *ent, gitem_t *item)
 
 //======================================================================
 
+// gamex86.dll: 10013C68..10013DF3
+// gamei386.so: 0002045C..0002059D
 void MegaHealth_think (edict_t *self)
 {
-	if (self->owner->health > self->owner->max_health)
+	if (self->owner->health > self->owner->max_health && self->dmg > 0)
 	{
+		self->dmg--;
 		self->nextthink = level.time + 1;
-		self->owner->health -= 1;
+		if (rune_stat & RUNE_REGEN)
+		{
+			if (OSP_runesHasRegeneration (self->owner)
+				&& self->owner->health <= (int)runes_regen_hmax->value)
+				self->dmg = 0;
+			else if (OSP_runesHasVampire (self->owner)
+					 && self->owner->health <= (int)runes_vampire_max->value)
+				self->dmg = 0;
+			else
+				self->owner->health -= 1;
+		}
+		else
+			self->owner->health -= 1;
 		return;
 	}
 
@@ -534,6 +639,8 @@ void MegaHealth_think (edict_t *self)
 		G_FreeEdict (self);
 }
 
+// gamex86.dll: 10013DF3..100140C2
+// gamei386.so: 000205A0..000207E2
 qboolean Pickup_Health (edict_t *ent, edict_t *other)
 {
 	if (!(ent->style & HEALTH_IGNORE_MAX))
@@ -548,6 +655,16 @@ qboolean Pickup_Health (edict_t *ent, edict_t *other)
 			other->health = other->max_health;
 	}
 
+	if ((int)nglog_logallpickups->value)
+	{
+		if (ent->count == 2)
+			q2log_pickupItem ("Stimpack_Health", 0, other);
+		else if (ent->count == 10)
+			q2log_pickupItem ("Normal_Health", 0, other);
+		else if (ent->count == 25)
+			q2log_pickupItem ("Large_Health", 0, other);
+	}
+
 	if (ent->style & HEALTH_TIMED)
 	{
 		ent->think = MegaHealth_think;
@@ -556,6 +673,23 @@ qboolean Pickup_Health (edict_t *ent, edict_t *other)
 		ent->flags |= FL_RESPAWN;
 		ent->svflags |= SVF_NOCLIENT;
 		ent->solid = SOLID_NOT;
+		other->client->resp.osp_r23c = 0;
+		if (rune_stat & RUNE_REGEN)
+		{
+			if (OSP_runesHasRegeneration (other)
+				&& (int)runes_regen_hmax->value > other->max_health)
+				ent->dmg = other->health - (int)runes_regen_hmax->value;
+			else if (OSP_runesHasVampire (other)
+				&& (int)runes_vampire_max->value > other->max_health)
+				ent->dmg = other->health - (int)runes_vampire_max->value;
+			else
+				ent->dmg = other->health - other->max_health;
+		}
+		else
+			ent->dmg = other->health - other->max_health;
+		if (ent->dmg > 100)
+			ent->dmg = 100;
+		q2log_pickupItem ("Mega_Health", 0, other);
 	}
 	else
 	{
@@ -568,6 +702,8 @@ qboolean Pickup_Health (edict_t *ent, edict_t *other)
 
 //======================================================================
 
+// gamex86.dll: 100140C2..1001412A
+// gamei386.so: 000207E4..0002083B
 int ArmorIndex (edict_t *ent)
 {
 	if (!ent->client)
@@ -585,14 +721,24 @@ int ArmorIndex (edict_t *ent)
 	return 0;
 }
 
+// gamex86.dll: 1001412A..1001447A
+// gamei386.so: 0002083C..00020C08
 qboolean Pickup_Armor (edict_t *ent, edict_t *other)
 {
 	int				old_armor_index;
 	gitem_armor_t	*oldinfo;
 	gitem_armor_t	*newinfo;
+	int				max;
 	int				newcount;
-	float			salvage;
+	float			protratio;
 	int				salvagecount;
+	gitem_t			*pack;	// invented name
+
+	pack = FindItem ("Ammo Pack");
+	if (other->client->pers.inventory[ITEM_INDEX(pack)])
+		max = pack_items[6];
+	else
+		max = max_items[6];
 
 	// get info on new armor
 	newinfo = (gitem_armor_t *)ent->item->info;
@@ -603,9 +749,17 @@ qboolean Pickup_Armor (edict_t *ent, edict_t *other)
 	if (ent->item->tag == ARMOR_SHARD)
 	{
 		if (!old_armor_index)
-			other->client->pers.inventory[jacket_armor_index] = 2;
+			other->client->pers.inventory[jacket_armor_index] =
+				(int)armor_shard->value;
 		else
-			other->client->pers.inventory[old_armor_index] += 2;
+		{
+			if (max && other->client->pers.inventory[old_armor_index] >= max)
+				return false;
+			other->client->pers.inventory[old_armor_index] +=
+				(int)armor_shard->value;
+			if (max && other->client->pers.inventory[old_armor_index] > max)
+				other->client->pers.inventory[old_armor_index] = max;
+		}
 	}
 
 	// if player has no armor, just use it
@@ -628,11 +782,13 @@ qboolean Pickup_Armor (edict_t *ent, edict_t *other)
 		if (newinfo->normal_protection > oldinfo->normal_protection)
 		{
 			// calc new armor values
-			salvage = oldinfo->normal_protection / newinfo->normal_protection;
-			salvagecount = salvage * other->client->pers.inventory[old_armor_index];
+			protratio = oldinfo->normal_protection / newinfo->normal_protection;
+			salvagecount = protratio * other->client->pers.inventory[old_armor_index];
 			newcount = newinfo->base_count + salvagecount;
 			if (newcount > newinfo->max_count)
 				newcount = newinfo->max_count;
+			else if (max && newcount > max)
+				newcount = max;
 
 			// zero count of old armor so it goes away
 			other->client->pers.inventory[old_armor_index] = 0;
@@ -643,14 +799,15 @@ qboolean Pickup_Armor (edict_t *ent, edict_t *other)
 		else
 		{
 			// calc new armor values
-			salvage = newinfo->normal_protection / oldinfo->normal_protection;
-			salvagecount = salvage * newinfo->base_count;
+			protratio = newinfo->normal_protection / oldinfo->normal_protection;
+			salvagecount = protratio * newinfo->base_count;
 			newcount = other->client->pers.inventory[old_armor_index] + salvagecount;
 			if (newcount > oldinfo->max_count)
 				newcount = oldinfo->max_count;
 
 			// if we're already maxed out then we don't need the new armor
-			if (other->client->pers.inventory[old_armor_index] >= newcount)
+			if (other->client->pers.inventory[old_armor_index] >= newcount ||
+				(max && other->client->pers.inventory[old_armor_index] >= max))
 				return false;
 
 			// update current armor value
@@ -658,14 +815,24 @@ qboolean Pickup_Armor (edict_t *ent, edict_t *other)
 		}
 	}
 
-	if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
+	// Every armor pickup is logged EXCEPT a shard, which needs
+	// nglog_logallpickups.
+	if (ent->item->tag != ARMOR_SHARD || (int)nglog_logallpickups->value)
+		q2log_pickupItem (ent->item->pickup_name, 0, other);
+
+	// The shell-timer clear is OUTSIDE the respawn guard, as in Pickup_Weapon.
+	if (!(ent->spawnflags & DROPPED_ITEM))
 		SetRespawn (ent, 20);
+
+	other->client->resp.osp_r23c = 0;
 
 	return true;
 }
 
 //======================================================================
 
+// gamex86.dll: 1001447A..100144DF
+// gamei386.so: 00020C08..00020C66
 int PowerArmorType (edict_t *ent)
 {
 	if (!ent->client)
@@ -683,6 +850,8 @@ int PowerArmorType (edict_t *ent)
 	return POWER_ARMOR_NONE;
 }
 
+// gamex86.dll: 100144DF..100145C3
+// gamei386.so: 00020C68..00020D81
 void Use_PowerArmor (edict_t *ent, gitem_t *item)
 {
 	int		index;
@@ -705,6 +874,8 @@ void Use_PowerArmor (edict_t *ent, gitem_t *item)
 	}
 }
 
+// gamex86.dll: 100145C3..100146D3
+// gamei386.so: 00020D84..00020E5B
 qboolean Pickup_PowerArmor (edict_t *ent, edict_t *other)
 {
 	int		quantity;
@@ -722,9 +893,14 @@ qboolean Pickup_PowerArmor (edict_t *ent, edict_t *other)
 			ent->item->use (other, ent->item);
 	}
 
+	q2log_pickupItem (ent->item->pickup_name, 0, other);
+	other->client->resp.osp_r23c = 0;
+
 	return true;
 }
 
+// gamex86.dll: 100146D3..1001472D
+// gamei386.so: 00020E5C..00020EF5
 void Drop_PowerArmor (edict_t *ent, gitem_t *item)
 {
 	if ((ent->flags & FL_POWER_ARMOR) && (ent->client->pers.inventory[ITEM_INDEX(item)] == 1))
@@ -739,6 +915,8 @@ void Drop_PowerArmor (edict_t *ent, gitem_t *item)
 Touch_Item
 ===============
 */
+// gamex86.dll: 1001472D..10014A3C
+// gamei386.so: 00020EF8..00021166
 void Touch_Item (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf)
 {
 	qboolean	taken;
@@ -749,6 +927,8 @@ void Touch_Item (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf
 		return;		// dead people can't pickup
 	if (!ent->item->pickup)
 		return;		// not a grabbable item?
+	if (sync_stat < 4)
+		return;
 
 	taken = ent->item->pickup(ent, other);
 
@@ -803,6 +983,8 @@ void Touch_Item (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf
 
 //======================================================================
 
+// gamex86.dll: 10014CC3..10014CF0
+// gamei386.so: 00022198..000221C8
 static void drop_temp_touch (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf)
 {
 	if (other == ent->owner)
@@ -811,16 +993,29 @@ static void drop_temp_touch (edict_t *ent, edict_t *other, cplane_t *plane, csur
 	Touch_Item (ent, other, plane, surf);
 }
 
+// gamex86.dll: 10014CF0..10014D6C
+// gamei386.so: 000221C8..00022254
 static void drop_make_touchable (edict_t *ent)
 {
 	ent->touch = Touch_Item;
-	if (deathmatch->value)
+
+	// A dropped rune lives a minute and goes back into the rune pool; anything
+	// else gets vanilla's 29 seconds and is freed. Vanilla's `deathmatch->value`
+	// guard is gone -- this mod is deathmatch-only.
+	if (rune_stat && strstr (ent->classname, "item_rune"))
+	{
+		ent->nextthink = level.time + 60;
+		ent->think = OSP_runeThink;
+	}
+	else
 	{
 		ent->nextthink = level.time + 29;
 		ent->think = G_FreeEdict;
 	}
 }
 
+// gamex86.dll: 10014A3C..10014CC3
+// gamei386.so: 00021168..00021378
 edict_t *Drop_Item (edict_t *ent, gitem_t *item)
 {
 	edict_t	*dropped;
@@ -836,7 +1031,10 @@ edict_t *Drop_Item (edict_t *ent, gitem_t *item)
 	dropped->s.renderfx = RF_GLOW;
 	VectorSet (dropped->mins, -15, -15, -15);
 	VectorSet (dropped->maxs, 15, 15, 15);
-	gi.setmodel (dropped, dropped->item->world_model);
+	if (rune_stat && strstr (dropped->classname, "item_rune"))
+		gi.setmodel (dropped, runes_model->string);
+	else
+		gi.setmodel (dropped, dropped->item->world_model);
 	dropped->solid = SOLID_TRIGGER;
 	dropped->movetype = MOVETYPE_TOSS;  
 	dropped->touch = drop_temp_touch;
@@ -870,6 +1068,8 @@ edict_t *Drop_Item (edict_t *ent, gitem_t *item)
 	return dropped;
 }
 
+// gamex86.dll: 10014D6C..10014DE6
+// gamei386.so: 00021378..000213E3
 void Use_Item (edict_t *ent, edict_t *other, edict_t *activator)
 {
 	ent->svflags &= ~SVF_NOCLIENT;
@@ -896,11 +1096,16 @@ void Use_Item (edict_t *ent, edict_t *other, edict_t *activator)
 droptofloor
 ================
 */
+// gamex86.dll: 10014DE6..1001517A
+// gamei386.so: 000213E4..0002166A
 void droptofloor (edict_t *ent)
 {
 	trace_t		tr;
 	vec3_t		dest;
 	float		*v;
+	int			count;
+	// Function scope, not inside the `if (ent->team)` block below.
+	edict_t		*master;
 
 	v = tv(-15,-15,-15);
 	VectorCopy (v, ent->mins);
@@ -959,6 +1164,24 @@ void droptofloor (edict_t *ent)
 	}
 
 	gi.linkentity (ent);
+
+	if (OSP_disableItems (ent))
+	{
+		count = 0;
+		if (ent->team)
+		{
+			// A genuinely redundant second `count = 0`, faithfully reproduced.
+			master = ent->teammaster;
+			count = 0;
+			for (ent = master; ent; ent = ent->chain)
+				if (!OSP_disableItems (ent))
+					count++;
+			if (!count)
+				ent = master;
+		}
+		if (!count)
+			SetRespawn (ent, 65000);
+	}
 }
 
 
@@ -971,6 +1194,8 @@ This will be called for each item spawned in a level,
 and for each item in each client's inventory.
 ===============
 */
+// gamex86.dll: 1001517A..1001537A
+// gamei386.so: 0002166C..00021892
 void PrecacheItem (gitem_t *it)
 {
 	char	*s, *start;
@@ -1039,8 +1264,15 @@ Items can't be immediately dropped to floor, because they might
 be on an entity that hasn't spawned yet.
 ============
 */
+// gamex86.dll: 1001537A..10015641
+// gamei386.so: 00021894..00021B34
 void SpawnItem (edict_t *ent, gitem_t *item)
 {
+	// ONE function-scope `master`, shared by all three chain walks.  `i` is
+	// dead -- a `for` init clause where a `while` would do.
+	edict_t	*master;
+	int		i;						// invented name
+
 	PrecacheItem (item);
 
 	if (ent->spawnflags)
@@ -1057,48 +1289,73 @@ void SpawnItem (edict_t *ent, gitem_t *item)
 	{
 		if ( (int)dmflags->value & DF_NO_ARMOR )
 		{
-			if (item->pickup == Pickup_Armor || item->pickup == Pickup_PowerArmor)
+			if (item->pickup == Pickup_Armor)
 			{
-				G_FreeEdict (ent);
-				return;
-			}
-		}
-		if ( (int)dmflags->value & DF_NO_ITEMS )
-		{
-			if (item->pickup == Pickup_Powerup)
-			{
-				G_FreeEdict (ent);
-				return;
+				if (ent->team)
+				{
+					master = ent;
+					for (i = 0; ent; ent = ent->chain)
+						if (!OSP_disableItems (ent))
+							break;
+					if (!ent)
+					{
+						G_FreeEdict (master);
+						return;
+					}
+				}
+				else
+				{
+					G_FreeEdict (ent);
+					return;
+				}
 			}
 		}
 		if ( (int)dmflags->value & DF_NO_HEALTH )
 		{
 			if (item->pickup == Pickup_Health || item->pickup == Pickup_Adrenaline || item->pickup == Pickup_AncientHead)
 			{
-				G_FreeEdict (ent);
-				return;
+				if (ent->team)
+				{
+					master = ent;
+					for (i = 0; ent; ent = ent->chain)
+						if (!OSP_disableItems (ent))
+							break;
+					if (!ent)
+					{
+						G_FreeEdict (master);
+						return;
+					}
+				}
+				else
+				{
+					G_FreeEdict (ent);
+					return;
+				}
 			}
 		}
 		if ( (int)dmflags->value & DF_INFINITE_AMMO )
 		{
 			if ( (item->flags == IT_AMMO) || (strcmp(ent->classname, "weapon_bfg") == 0) )
 			{
-				G_FreeEdict (ent);
-				return;
+				if (ent->team)
+				{
+					master = ent;
+					for (i = 0; ent; ent = ent->chain)
+						if (!OSP_disableItems (ent))
+							break;
+					if (!ent)
+					{
+						G_FreeEdict (master);
+						return;
+					}
+				}
+				else
+				{
+					G_FreeEdict (ent);
+					return;
+				}
 			}
 		}
-	}
-
-	if (coop->value && (strcmp(ent->classname, "key_power_cube") == 0))
-	{
-		ent->spawnflags |= (1 << (8 + level.power_cubes));
-		level.power_cubes++;
-	}
-
-	// don't let them drop items that stay in a coop game
-	if ((coop->value) && (item->flags & IT_STAY_COOP))
-	{
-		item->drop = NULL;
 	}
 
 	ent->item = item;
@@ -1142,7 +1399,7 @@ gitem_t	itemlist[] =
 		0,
 		&bodyarmor_info,
 		ARMOR_BODY,
-/* precache */ ""
+/* precache */ "world/10_0.wav"
 	},
 
 /*QUAKED item_armor_combat (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -1494,7 +1751,7 @@ always owned, never in the world
 		WEAP_RAILGUN,
 		NULL,
 		0,
-/* precache */ "weapons/rg_hum.wav"
+/* precache */ "weapons/rg_hum.wav weapons/railgf1a.wav weapons/railgr1a.wav"
 	},
 
 /*QUAKED weapon_bfg (.3 .3 1) (-16 -16 -16) (16 16 16)
@@ -2089,7 +2346,173 @@ tank commander's head
 		0,
 		NULL,
 		0,
-/* precache */ "items/s_health.wav items/n_health.wav items/l_health.wav items/m_health.wav"
+/* precache */ ""
+	},
+
+	//
+	// OSP: seven items appended past vanilla's last entry.
+	//
+
+	/*QUAKED dummy_item_flag_team1 (.3 .3 1) (-16 -16 -16) (16 16 16)
+	Scoreboard/HUD icon only -- no pickup, use, drop or think, and no world model.
+	*/
+	{
+		"dummy_item_flag_team1",
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		"ctf/flagtk.wav",
+		NULL, 0,
+		NULL,
+/* icon */		"i_ctf1",
+/* pickup */	"Red Flag",
+/* width */		2,
+		0,
+		NULL,
+		0,
+		0,
+		NULL,
+		0,
+/* precache */ ""
+	},
+
+	/*QUAKED dummy_item_flag_team2 (.3 .3 1) (-16 -16 -16) (16 16 16)
+	*/
+	{
+		"dummy_item_flag_team2",
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		"ctf/flagtk.wav",
+		NULL, 0,
+		NULL,
+/* icon */		"i_ctf2",
+/* pickup */	"Blue Flag",
+/* width */		2,
+		0,
+		NULL,
+		0,
+		0,
+		NULL,
+		0,
+/* precache */ ""
+	},
+
+	/*QUAKED item_rune1 (.3 .3 1) (-16 -16 -16) (16 16 16)
+	*/
+	{
+		"item_rune1",
+		OSP_Pickup_Rune,
+		NULL,
+		OSP_Drop_Rune,
+		NULL,
+		"items/pkup.wav",
+		"models/items/c_head/tris.md2", EF_ROTATE | EF_COLOR_SHELL,
+		NULL,
+/* icon */		"",
+/* pickup */	"Resist_Rune",
+/* width */		2,
+		22,
+		NULL,
+		IT_RUNE,
+		0,
+		NULL,
+		0,
+/* precache */ "world/force2.wav"
+	},
+
+	/*QUAKED item_rune2 (.3 .3 1) (-16 -16 -16) (16 16 16)
+	*/
+	{
+		"item_rune2",
+		OSP_Pickup_Rune,
+		NULL,
+		OSP_Drop_Rune,
+		NULL,
+		"items/pkup.wav",
+		"models/items/c_head/tris.md2", EF_ROTATE | EF_COLOR_SHELL,
+		NULL,
+/* icon */		"",
+/* pickup */	"Strength_Rune",
+/* width */		2,
+		23,
+		NULL,
+		IT_RUNE,
+		0,
+		NULL,
+		0,
+/* precache */ "items/damage3.wav"
+	},
+
+	/*QUAKED item_rune3 (.3 .3 1) (-16 -16 -16) (16 16 16)
+	*/
+	{
+		"item_rune3",
+		OSP_Pickup_Rune,
+		NULL,
+		OSP_Drop_Rune,
+		NULL,
+		"items/pkup.wav",
+		"models/items/c_head/tris.md2", EF_ROTATE | EF_COLOR_SHELL,
+		NULL,
+/* icon */		"",
+/* pickup */	"Haste_Rune",
+/* width */		2,
+		24,
+		NULL,
+		IT_RUNE,
+		0,
+		NULL,
+		0,
+/* precache */ "world/x_light.wav"
+	},
+
+	/*QUAKED item_rune4 (.3 .3 1) (-16 -16 -16) (16 16 16)
+	*/
+	{
+		"item_rune4",
+		OSP_Pickup_Rune,
+		NULL,
+		OSP_Drop_Rune,
+		NULL,
+		"items/pkup.wav",
+		"models/items/c_head/tris.md2", EF_ROTATE | EF_COLOR_SHELL,
+		NULL,
+/* icon */		"",
+/* pickup */	"Regen_Rune",
+/* width */		2,
+		25,
+		NULL,
+		IT_RUNE,
+		0,
+		NULL,
+		0,
+/* precache */ "items/l_health.wav"
+	},
+
+	/*QUAKED item_rune5 (.3 .3 1) (-16 -16 -16) (16 16 16)
+	*/
+	{
+		"item_rune5",
+		OSP_Pickup_Rune,
+		NULL,
+		OSP_Drop_Rune,
+		NULL,
+		"items/pkup.wav",
+		"models/items/c_head/tris.md2", EF_ROTATE | EF_COLOR_SHELL,
+		NULL,
+/* icon */		"",
+/* pickup */	"Vampire_Rune",
+/* width */		2,
+		26,
+		NULL,
+		IT_RUNE,
+		0,
+		NULL,
+		0,
+/* precache */ "makron/pain2.wav"
 	},
 
 	// end of list marker
@@ -2099,6 +2522,8 @@ tank commander's head
 
 /*QUAKED item_health (.3 .3 1) (-16 -16 -16) (16 16 16)
 */
+// gamex86.dll: 10015641..100156C0
+// gamei386.so: 00021B34..00021C16
 void SP_item_health (edict_t *self)
 {
 	if ( deathmatch->value && ((int)dmflags->value & DF_NO_HEALTH) )
@@ -2115,6 +2540,8 @@ void SP_item_health (edict_t *self)
 
 /*QUAKED item_health_small (.3 .3 1) (-16 -16 -16) (16 16 16)
 */
+// gamex86.dll: 100156C0..1001574C
+// gamei386.so: 00021C18..00021D07
 void SP_item_health_small (edict_t *self)
 {
 	if ( deathmatch->value && ((int)dmflags->value & DF_NO_HEALTH) )
@@ -2132,6 +2559,8 @@ void SP_item_health_small (edict_t *self)
 
 /*QUAKED item_health_large (.3 .3 1) (-16 -16 -16) (16 16 16)
 */
+// gamex86.dll: 1001574C..100157CB
+// gamei386.so: 00021D08..00021DEA
 void SP_item_health_large (edict_t *self)
 {
 	if ( deathmatch->value && ((int)dmflags->value & DF_NO_HEALTH) )
@@ -2148,6 +2577,8 @@ void SP_item_health_large (edict_t *self)
 
 /*QUAKED item_health_mega (.3 .3 1) (-16 -16 -16) (16 16 16)
 */
+// gamex86.dll: 100157CB..10015857
+// gamei386.so: 00021DEC..00021EDB
 void SP_item_health_mega (edict_t *self)
 {
 	if ( deathmatch->value && ((int)dmflags->value & DF_NO_HEALTH) )
@@ -2164,6 +2595,8 @@ void SP_item_health_mega (edict_t *self)
 }
 
 
+// gamex86.dll: 10015857..10015866
+// gamei386.so: 00021EDC..00021F01
 void InitItems (void)
 {
 	game.num_items = sizeof(itemlist)/sizeof(itemlist[0]) - 1;
@@ -2178,6 +2611,8 @@ SetItemNames
 Called by worldspawn
 ===============
 */
+// gamex86.dll: 10015866..10015960
+// gamei386.so: 00021F04..00022198
 void SetItemNames (void)
 {
 	int		i;

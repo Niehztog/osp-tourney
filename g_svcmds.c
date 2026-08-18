@@ -2,6 +2,8 @@
 #include "g_local.h"
 
 
+// gamex86.dll: 10043E00..10043E17
+// gamei386.so: 0002D7E0..0002D80B
 void	Svcmd_Test_f (void)
 {
 	gi.cprintf (NULL, PRINT_HIGH, "Svcmd_Test_f()\n");
@@ -54,6 +56,8 @@ int			numipfilters;
 StringToFilter
 =================
 */
+// gamex86.dll: 10043FEB..10044120
+// gamei386.so: 0002D80B..0002D904
 static qboolean StringToFilter (char *s, ipfilter_t *f)
 {
 	char	num[128];
@@ -101,6 +105,8 @@ static qboolean StringToFilter (char *s, ipfilter_t *f)
 SV_FilterPacket
 =================
 */
+// gamex86.dll: 10043E17..10043F28
+// gamei386.so: 0002D904..0002D9E1
 qboolean SV_FilterPacket (char *from)
 {
 	int		i;
@@ -136,6 +142,8 @@ qboolean SV_FilterPacket (char *from)
 SV_AddIP_f
 =================
 */
+// gamex86.dll: 10043F28..10043FEB
+// gamei386.so: 0002D9E4..0002DAB4
 void SVCmd_AddIP_f (void)
 {
 	int		i;
@@ -167,6 +175,8 @@ void SVCmd_AddIP_f (void)
 SV_RemoveIP_f
 =================
 */
+// gamex86.dll: 10044120..10044235
+// gamei386.so: 0002DAB4..0002DBE2
 void SVCmd_RemoveIP_f (void)
 {
 	ipfilter_t	f;
@@ -198,6 +208,8 @@ void SVCmd_RemoveIP_f (void)
 SV_ListIP_f
 =================
 */
+// gamex86.dll: 10044235..100442B6
+// gamei386.so: 0002DBE4..0002DC70
 void SVCmd_ListIP_f (void)
 {
 	int		i;
@@ -216,6 +228,8 @@ void SVCmd_ListIP_f (void)
 SV_WriteIP_f
 =================
 */
+// gamex86.dll: 100442B6..10044402
+// gamei386.so: 0002DC70..0002DDD9
 void SVCmd_WriteIP_f (void)
 {
 	FILE	*f;
@@ -227,7 +241,9 @@ void SVCmd_WriteIP_f (void)
 	game = gi.cvar("game", "", 0);
 
 	if (!*game->string)
-		sprintf (name, "%s/listip.cfg", GAMEVERSION);
+		// The literal, not GAMEVERSION -- this mod changed GAMEVERSION but left
+		// id's default game directory spelled out here.
+		sprintf (name, "%s/listip.cfg", "baseq2");
 	else
 		sprintf (name, "%s/listip.cfg", game->string);
 
@@ -260,13 +276,18 @@ The game can issue gi.argc() / gi.argv() commands to get the rest
 of the parameters
 =================
 */
+// gamex86.dll: 10044402..10044590
+// gamei386.so: 0002DDDC..0002E000
 void	ServerCommand (void)
 {
 	char	*cmd;
 
 	cmd = gi.argv(1);
 	if (Q_stricmp (cmd, "test") == 0)
+	{
 		Svcmd_Test_f ();
+		gi.dprintf ("test\n");
+	}
 	else if (Q_stricmp (cmd, "addip") == 0)
 		SVCmd_AddIP_f ();
 	else if (Q_stricmp (cmd, "removeip") == 0)
@@ -275,7 +296,21 @@ void	ServerCommand (void)
 		SVCmd_ListIP_f ();
 	else if (Q_stricmp (cmd, "writeip") == 0)
 		SVCmd_WriteIP_f ();
+	else if (Q_stricmp (cmd, "allready") == 0)
+		OSP_allready_svcmd ();
+	else if (Q_stricmp (cmd, "allnotready") == 0)
+		OSP_allnotready_svcmd (1);
+	else if (Q_stricmp (cmd, "mpause") == 0)
+		OSP_rmpause_cmd ();
+	else if (Q_stricmp (cmd, "stopmatch") == 0)
+		OSP_rstopmatch_cmd (0);
+	else if (Q_stricmp (cmd, "playerlist") == 0)
+		OSP_playerlist_svcmd ();
 	else
+	{
+		if (BotCmd (cmd, NULL, 1))
+			return;
 		gi.cprintf (NULL, PRINT_HIGH, "Unknown server command \"%s\"\n", cmd);
+	}
 }
 

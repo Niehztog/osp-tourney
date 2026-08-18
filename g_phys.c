@@ -27,6 +27,8 @@ SV_TestEntityPosition
 
 ============
 */
+// gamex86.dll: 1003FBF0..1003FC70
+// gamei386.so: 00028D74..00028DDC
 edict_t	*SV_TestEntityPosition (edict_t *ent)
 {
 	trace_t	trace;
@@ -50,6 +52,8 @@ edict_t	*SV_TestEntityPosition (edict_t *ent)
 SV_CheckVelocity
 ================
 */
+// gamex86.dll: 1003FC70..1003FCFC
+// gamei386.so: 00028DDC..00028E3D
 void SV_CheckVelocity (edict_t *ent)
 {
 	int		i;
@@ -73,6 +77,8 @@ SV_RunThink
 Runs thinking code for this frame if necessary
 =============
 */
+// gamex86.dll: 1003FCFC..1003FD7F
+// gamei386.so: 00028E40..00028ECA
 qboolean SV_RunThink (edict_t *ent)
 {
 	float	thinktime;
@@ -98,6 +104,8 @@ SV_Impact
 Two entities have touched, so run their touch functions
 ==================
 */
+// gamex86.dll: 1003FD7F..1003FDFA
+// gamei386.so: 00028ECC..00028F2B
 void SV_Impact (edict_t *e1, trace_t *trace)
 {
 	edict_t		*e2;
@@ -123,6 +131,8 @@ returns the blocked flags (1 = floor, 2 = step / wall)
 */
 #define	STOP_EPSILON	0.1
 
+// gamex86.dll: 1003FDFA..1003FEE8
+// gamei386.so: 00028F2C..00028FE8
 int ClipVelocity (vec3_t in, vec3_t normal, vec3_t out, float overbounce)
 {
 	float	backoff;
@@ -161,6 +171,8 @@ Returns the clipflags if the velocity was modified (hit something solid)
 ============
 */
 #define	MAX_CLIP_PLANES	5
+// gamex86.dll: 1003FEE8..10040470
+// gamei386.so: 00028FE8..0002957C
 int SV_FlyMove (edict_t *ent, float time, int mask)
 {
 	edict_t		*hit;
@@ -300,6 +312,8 @@ SV_AddGravity
 
 ============
 */
+// gamex86.dll: 10040470..100404A1
+// gamei386.so: 0002957C..000295BE
 void SV_AddGravity (edict_t *ent)
 {
 	ent->velocity[2] -= ent->gravity * sv_gravity->value * FRAMETIME;
@@ -320,6 +334,8 @@ SV_PushEntity
 Does not change the entities velocity at all
 ============
 */
+// gamex86.dll: 100404A1..100405FC
+// gamei386.so: 000295C0..0002970D
 trace_t SV_PushEntity (edict_t *ent, vec3_t push)
 {
 	trace_t	trace;
@@ -381,6 +397,8 @@ Objects need to be moved back on a failed push,
 otherwise riders would continue to slide.
 ============
 */
+// gamex86.dll: 100405FC..10040C81
+// gamei386.so: 00029710..00029DB1
 qboolean SV_Push (edict_t *pusher, vec3_t move, vec3_t amove)
 {
 	int			i, e;
@@ -540,6 +558,8 @@ Bmodel objects don't interact with each other, but
 push all box objects
 ================
 */
+// gamex86.dll: 10040C81..10040E5C
+// gamei386.so: 00029DB4..00029FC4
 void SV_Physics_Pusher (edict_t *ent)
 {
 	vec3_t		move, amove;
@@ -567,7 +587,8 @@ void SV_Physics_Pusher (edict_t *ent)
 				break;	// move was blocked
 		}
 	}
-	if (pushed_p > &pushed[MAX_EDICTS])
+	// OSP: `>=`, not vanilla's `>`.
+		if (pushed_p >= &pushed[MAX_EDICTS])
 		gi.error (ERR_FATAL, "pushed_p > &pushed[MAX_EDICTS], memory corrupted");
 
 	if (part)
@@ -608,6 +629,8 @@ SV_Physics_None
 Non moving objects can only think
 =============
 */
+// gamex86.dll: 10040E5C..10040E6D
+// gamei386.so: 00029FC4..0002A045
 void SV_Physics_None (edict_t *ent)
 {
 // regular thinking
@@ -621,6 +644,8 @@ SV_Physics_Noclip
 A moving object that doesn't obey physics
 =============
 */
+// gamex86.dll: 10040E6D..10040EDB
+// gamei386.so: 0002A048..0002A100
 void SV_Physics_Noclip (edict_t *ent)
 {
 // regular thinking
@@ -648,6 +673,8 @@ SV_Physics_Toss
 Toss, bounce, and fly movement.  When onground, do nothing.
 =============
 */
+// gamex86.dll: 10040EDB..1004124C
+// gamei386.so: 0002A100..0002A4DB
 void SV_Physics_Toss (edict_t *ent)
 {
 	trace_t		trace;
@@ -769,6 +796,8 @@ FIXME: is this true?
 #define sv_friction			6
 #define sv_waterfriction	1
 
+// gamex86.dll: 1004124C..1004134F
+// gamei386.so: 0002A4DC..0002A56A
 void SV_AddRotationalFriction (edict_t *ent)
 {
 	int		n;
@@ -793,6 +822,8 @@ void SV_AddRotationalFriction (edict_t *ent)
 	}
 }
 
+// gamex86.dll: 1004134F..100417C3
+// gamei386.so: 0002A56C..0002AA4A
 void SV_Physics_Step (edict_t *ent)
 {
 	qboolean	wasonground;
@@ -910,13 +941,17 @@ G_RunEntity
 
 ================
 */
+// gamex86.dll: 100417C3..100418A0
+// gamei386.so: 0002AA4C..0002ABD1
 void G_RunEntity (edict_t *ent)
 {
 	if (ent->prethink)
 		ent->prethink (ent);
 
-	switch ( (int)ent->movetype)
+	switch (ent->movetype)
 	{
+	// Case bodies are emitted in SOURCE order, and MOVETYPE_WALK has a body
+	// of its own that calls SV_RunThink.
 	case MOVETYPE_PUSH:
 	case MOVETYPE_STOP:
 		SV_Physics_Pusher (ent);
@@ -936,7 +971,10 @@ void G_RunEntity (edict_t *ent)
 	case MOVETYPE_FLYMISSILE:
 		SV_Physics_Toss (ent);
 		break;
+	case MOVETYPE_WALK:
+		SV_RunThink (ent);
+		break;
 	default:
-		gi.error ("SV_Physics: bad movetype %i", (int)ent->movetype);			
+		gi.error ("SV_Physics: bad movetype %i", ent->movetype);			
 	}
 }

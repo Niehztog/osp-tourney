@@ -3,6 +3,8 @@
 #include "g_local.h"
 
 
+// gamex86.dll: 10046DA0..10046E3B
+// gamei386.so: 00030B10..00030BF0
 void AnglesNormalize(vec3_t vec)
 {
 	while(vec[0] > 360)
@@ -15,6 +17,8 @@ void AnglesNormalize(vec3_t vec)
 		vec[1] += 360;
 }
 
+// gamex86.dll: 10046E3B..10046E8F
+// gamei386.so: 00030BF0..00030C72
 float SnapToEights(float x)
 {
 	x *= 8.0;
@@ -26,6 +30,8 @@ float SnapToEights(float x)
 }
 
 
+// gamex86.dll: 10046E8F..10046F10
+// gamei386.so: 00030C74..00030CD1
 void turret_blocked(edict_t *self, edict_t *other)
 {
 	edict_t	*attacker;
@@ -56,6 +62,8 @@ Use "angle" to set the starting angle.
 "maxyaw"	max acceptable yaw angle   : default 360
 */
 
+// gamex86.dll: 10046F10..10047038
+// gamei386.so: 00030CD4..00030E27
 void turret_breach_fire (edict_t *self)
 {
 	vec3_t	f, r, u;
@@ -74,6 +82,8 @@ void turret_breach_fire (edict_t *self)
 	gi.positioned_sound (start, self, CHAN_WEAPON, gi.soundindex("weapons/rocklf1a.wav"), 1, ATTN_NORM, 0);
 }
 
+// gamex86.dll: 10047038..1004763C
+// gamei386.so: 00030E28..00031576
 void turret_breach_think (edict_t *self)
 {
 	edict_t	*ent;
@@ -179,6 +189,8 @@ void turret_breach_think (edict_t *self)
 	}
 }
 
+// gamex86.dll: 1004763C..1004772A
+// gamei386.so: 00031578..00031636
 void turret_breach_finish_init (edict_t *self)
 {
 	// get and save info for muzzle location
@@ -198,6 +210,8 @@ void turret_breach_finish_init (edict_t *self)
 	self->think (self);
 }
 
+// gamex86.dll: 1004772A..10047898
+// gamei386.so: 00031638..0003178C
 void SP_turret_breach (edict_t *self)
 {
 	self->solid = SOLID_BSP;
@@ -237,6 +251,8 @@ This portion of the turret changes yaw only.
 MUST be teamed with a turret_breach.
 */
 
+// gamex86.dll: 10047898..100478F0
+// gamei386.so: 0003178C..000317E5
 void SP_turret_base (edict_t *self)
 {
 	self->solid = SOLID_BSP;
@@ -246,168 +262,5 @@ void SP_turret_base (edict_t *self)
 	gi.linkentity (self);
 }
 
-
-/*QUAKED turret_driver (1 .5 0) (-16 -16 -24) (16 16 32)
-Must NOT be on the team with the rest of the turret parts.
-Instead it must target the turret_breach.
-*/
-
-void infantry_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damage);
-void infantry_stand (edict_t *self);
-void monster_use (edict_t *self, edict_t *other, edict_t *activator);
-
-void turret_driver_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point)
-{
-	edict_t	*ent;
-
-	// level the gun
-	self->target_ent->move_angles[0] = 0;
-
-	// remove the driver from the end of them team chain
-	for (ent = self->target_ent->teammaster; ent->teamchain != self; ent = ent->teamchain)
-		;
-	ent->teamchain = NULL;
-	self->teammaster = NULL;
-	self->flags &= ~FL_TEAMSLAVE;
-
-	self->target_ent->owner = NULL;
-	self->target_ent->teammaster->owner = NULL;
-
-	infantry_die (self, inflictor, attacker, damage);
-}
-
-qboolean FindTarget (edict_t *self);
-
-void turret_driver_think (edict_t *self)
-{
-	vec3_t	target;
-	vec3_t	dir;
-	float	reaction_time;
-
-	self->nextthink = level.time + FRAMETIME;
-
-	if (self->enemy && (!self->enemy->inuse || self->enemy->health <= 0))
-		self->enemy = NULL;
-
-	if (!self->enemy)
-	{
-		if (!FindTarget (self))
-			return;
-		self->monsterinfo.trail_time = level.time;
-		self->monsterinfo.aiflags &= ~AI_LOST_SIGHT;
-	}
-	else
-	{
-		if (visible (self, self->enemy))
-		{
-			if (self->monsterinfo.aiflags & AI_LOST_SIGHT)
-			{
-				self->monsterinfo.trail_time = level.time;
-				self->monsterinfo.aiflags &= ~AI_LOST_SIGHT;
-			}
-		}
-		else
-		{
-			self->monsterinfo.aiflags |= AI_LOST_SIGHT;
-			return;
-		}
-	}
-
-	// let the turret know where we want it to aim
-	VectorCopy (self->enemy->s.origin, target);
-	target[2] += self->enemy->viewheight;
-	VectorSubtract (target, self->target_ent->s.origin, dir);
-	vectoangles (dir, self->target_ent->move_angles);
-
-	// decide if we should shoot
-	if (level.time < self->monsterinfo.attack_finished)
-		return;
-
-	reaction_time = (3 - skill->value) * 1.0;
-	if ((level.time - self->monsterinfo.trail_time) < reaction_time)
-		return;
-
-	self->monsterinfo.attack_finished = level.time + reaction_time + 1.0;
-	//FIXME how do we really want to pass this along?
-	self->target_ent->spawnflags |= 65536;
-}
-
-void turret_driver_link (edict_t *self)
-{
-	vec3_t	vec;
-	edict_t	*ent;
-
-	self->think = turret_driver_think;
-	self->nextthink = level.time + FRAMETIME;
-
-	self->target_ent = G_PickTarget (self->target);
-	self->target_ent->owner = self;
-	self->target_ent->teammaster->owner = self;
-	VectorCopy (self->target_ent->s.angles, self->s.angles);
-
-	vec[0] = self->target_ent->s.origin[0] - self->s.origin[0];
-	vec[1] = self->target_ent->s.origin[1] - self->s.origin[1];
-	vec[2] = 0;
-	self->move_origin[0] = VectorLength(vec);
-
-	VectorSubtract (self->s.origin, self->target_ent->s.origin, vec);
-	vectoangles (vec, vec);
-	AnglesNormalize(vec);
-	self->move_origin[1] = vec[1];
-
-	self->move_origin[2] = self->s.origin[2] - self->target_ent->s.origin[2];
-
-	// add the driver to the end of them team chain
-	for (ent = self->target_ent->teammaster; ent->teamchain; ent = ent->teamchain)
-		;
-	ent->teamchain = self;
-	self->teammaster = self->target_ent->teammaster;
-	self->flags |= FL_TEAMSLAVE;
-}
-
-void SP_turret_driver (edict_t *self)
-{
-	if (deathmatch->value)
-	{
-		G_FreeEdict (self);
-		return;
-	}
-
-	self->movetype = MOVETYPE_PUSH;
-	self->solid = SOLID_BBOX;
-	self->s.modelindex = gi.modelindex("models/monsters/infantry/tris.md2");
-	VectorSet (self->mins, -16, -16, -24);
-	VectorSet (self->maxs, 16, 16, 32);
-
-	self->health = 100;
-	self->gib_health = 0;
-	self->mass = 200;
-	self->viewheight = 24;
-
-	self->die = turret_driver_die;
-	self->monsterinfo.stand = infantry_stand;
-
-	self->flags |= FL_NO_KNOCKBACK;
-
-	level.total_monsters++;
-
-	self->svflags |= SVF_MONSTER;
-	self->s.renderfx |= RF_FRAMELERP;
-	self->takedamage = DAMAGE_AIM;
-	self->use = monster_use;
-	self->clipmask = MASK_MONSTERSOLID;
-	VectorCopy (self->s.origin, self->s.old_origin);
-	self->monsterinfo.aiflags |= AI_STAND_GROUND|AI_DUCKED;
-
-	if (st.item)
-	{
-		self->item = FindItemByClassname (st.item);
-		if (!self->item)
-			gi.dprintf("%s at %s has bad item: %s\n", self->classname, vtos(self->s.origin), st.item);
-	}
-
-	self->think = turret_driver_link;
-	self->nextthink = level.time + FRAMETIME;
-
-	gi.linkentity (self);
-}
+// The turret_driver block -- turret_driver_die/_think/_link and
+// SP_turret_driver -- is DELETED, not stubbed.

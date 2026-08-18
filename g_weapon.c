@@ -10,6 +10,8 @@ a non-instant attack weapon.  It checks to see if a
 monster's dodge function should be called.
 =================
 */
+// gamex86.dll: 100496A7..100497E5
+// gamei386.so: absent
 static void check_dodge (edict_t *self, vec3_t start, vec3_t dir, int speed)
 {
 	vec3_t	end;
@@ -36,82 +38,13 @@ static void check_dodge (edict_t *self, vec3_t start, vec3_t dir, int speed)
 
 /*
 =================
-fire_hit
-
-Used for all impact (hit/punch/slash) attacks
-=================
-*/
-qboolean fire_hit (edict_t *self, vec3_t aim, int damage, int kick)
-{
-	trace_t		tr;
-	vec3_t		forward, right, up;
-	vec3_t		v;
-	vec3_t		point;
-	float		range;
-	vec3_t		dir;
-
-	//see if enemy is in range
-	VectorSubtract (self->enemy->s.origin, self->s.origin, dir);
-	range = VectorLength(dir);
-	if (range > aim[0])
-		return false;
-
-	if (aim[1] > self->mins[0] && aim[1] < self->maxs[0])
-	{
-		// the hit is straight on so back the range up to the edge of their bbox
-		range -= self->enemy->maxs[0];
-	}
-	else
-	{
-		// this is a side hit so adjust the "right" value out to the edge of their bbox
-		if (aim[1] < 0)
-			aim[1] = self->enemy->mins[0];
-		else
-			aim[1] = self->enemy->maxs[0];
-	}
-
-	VectorMA (self->s.origin, range, dir, point);
-
-	tr = gi.trace (self->s.origin, NULL, NULL, point, self, MASK_SHOT);
-	if (tr.fraction < 1)
-	{
-		if (!tr.ent->takedamage)
-			return false;
-		// if it will hit any client/monster then hit the one we wanted to hit
-		if ((tr.ent->svflags & SVF_MONSTER) || (tr.ent->client))
-			tr.ent = self->enemy;
-	}
-
-	AngleVectors(self->s.angles, forward, right, up);
-	VectorMA (self->s.origin, range, forward, point);
-	VectorMA (point, aim[1], right, point);
-	VectorMA (point, aim[2], up, point);
-	VectorSubtract (point, self->enemy->s.origin, dir);
-
-	// do the damage
-	T_Damage (tr.ent, self, self, dir, point, vec3_origin, damage, kick/2, DAMAGE_NO_KNOCKBACK, MOD_HIT);
-
-	if (!(tr.ent->svflags & SVF_MONSTER) && (!tr.ent->client))
-		return false;
-
-	// do our special form of knockback here
-	VectorMA (self->enemy->absmin, 0.5, self->enemy->size, v);
-	VectorSubtract (v, point, v);
-	VectorNormalize (v);
-	VectorMA (self->enemy->velocity, kick, v, self->enemy->velocity);
-	if (self->enemy->velocity[2] > 0)
-		self->enemy->groundentity = NULL;
-	return true;
-}
-
-
-/*
-=================
 fire_lead
 
 This is an internal support routine used for bullet/pellet based weapons.
 =================
 */
+// gamex86.dll: 1004862F..10048F85
+// gamei386.so: 00032795..00032F98
 static void fire_lead (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int te_impact, int hspread, int vspread, int mod)
 {
 	trace_t		tr;
@@ -204,6 +137,51 @@ static void fire_lead (edict_t *self, vec3_t start, vec3_t aimdir, int damage, i
 			if (tr.ent->takedamage)
 			{
 				T_Damage (tr.ent, self, self, aimdir, tr.endpos, tr.plane.normal, damage, kick, DAMAGE_BULLET, mod);
+
+				// The mod's hit accounting for the four hitscan weapons, keyed
+				// off the MOD this shot was fired with. The per-weapon columns
+				// are behind `sync_stat > 2`; the running damage totals are not.
+				if (tr.ent->client)
+				{
+					if (mod == MOD_SHOTGUN)
+					{
+						if (sync_stat > 2)
+						{
+							p_acc[self->client->resp.clientid].hits[ACC_SHOTGUN]++;
+							p_acc[self->client->resp.clientid].given[ACC_SHOTGUN] += damage;
+							p_acc[tr.ent->client->resp.clientid].taken[ACC_SHOTGUN] += damage;
+						}
+					}
+					else if (mod == MOD_SSHOTGUN)
+					{
+						if (sync_stat > 2)
+						{
+							p_acc[self->client->resp.clientid].hits[ACC_SSHOTGUN]++;
+							p_acc[self->client->resp.clientid].given[ACC_SSHOTGUN] += damage;
+							p_acc[tr.ent->client->resp.clientid].taken[ACC_SSHOTGUN] += damage;
+						}
+					}
+					else if (mod == MOD_MACHINEGUN)
+					{
+						if (sync_stat > 2)
+						{
+							p_acc[self->client->resp.clientid].hits[ACC_MACHINEGUN]++;
+							p_acc[self->client->resp.clientid].given[ACC_MACHINEGUN] += damage;
+							p_acc[tr.ent->client->resp.clientid].taken[ACC_MACHINEGUN] += damage;
+						}
+					}
+					else if (mod == MOD_CHAINGUN)
+					{
+						if (sync_stat > 2)
+						{
+							p_acc[self->client->resp.clientid].hits[ACC_CHAINGUN]++;
+							p_acc[self->client->resp.clientid].given[ACC_CHAINGUN] += damage;
+							p_acc[tr.ent->client->resp.clientid].taken[ACC_CHAINGUN] += damage;
+						}
+					}
+					p_acc[self->client->resp.clientid].dgiven += damage;
+					p_acc[tr.ent->client->resp.clientid].dtaken += damage;
+				}
 			}
 			else
 			{
@@ -255,6 +233,8 @@ Fires a single round.  Used for machinegun and chaingun.  Would be fine for
 pistols, rifles, etc....
 =================
 */
+// gamex86.dll: 10048600..1004862F
+// gamei386.so: 00032F98..00032FCC
 void fire_bullet (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int hspread, int vspread, int mod)
 {
 	fire_lead (self, start, aimdir, damage, kick, TE_GUNSHOT, hspread, vspread, mod);
@@ -268,6 +248,8 @@ fire_shotgun
 Shoots shotgun pellets.  Used by shotgun and super shotgun.
 =================
 */
+// gamex86.dll: 10048F85..10048FD3
+// gamei386.so: 00032FCC..00033017
 void fire_shotgun (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick, int hspread, int vspread, int count, int mod)
 {
 	int		i;
@@ -284,6 +266,8 @@ fire_blaster
 Fires a single blaster bolt.  Used by the blaster and hyper blaster.
 =================
 */
+// gamex86.dll: 10048FD3..100493C7
+// gamei386.so: 00033018..000332F7
 void blaster_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf)
 {
 	int		mod;
@@ -303,9 +287,29 @@ void blaster_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *
 	if (other->takedamage)
 	{
 		if (self->spawnflags & 1)
+		{
 			mod = MOD_HYPERBLASTER;
+			if ((sync_stat > 2) && other->client)
+			{
+				p_acc[self->owner->client->resp.clientid].hits[ACC_HYPERBLASTER]++;
+				p_acc[self->owner->client->resp.clientid].given[ACC_HYPERBLASTER] += self->dmg;
+				p_acc[self->owner->client->resp.clientid].dgiven += self->dmg;
+				p_acc[other->client->resp.clientid].dtaken += self->dmg;
+				p_acc[other->client->resp.clientid].taken[ACC_HYPERBLASTER] += self->dmg;
+			}
+		}
 		else
+		{
 			mod = MOD_BLASTER;
+			if ((sync_stat > 2) && other->client)
+			{
+				p_acc[self->owner->client->resp.clientid].hits[ACC_BLASTER]++;
+				p_acc[self->owner->client->resp.clientid].given[ACC_BLASTER] += self->dmg;
+				p_acc[self->owner->client->resp.clientid].dgiven += self->dmg;
+				p_acc[other->client->resp.clientid].dtaken += self->dmg;
+				p_acc[other->client->resp.clientid].taken[ACC_BLASTER] += self->dmg;
+			}
+		}
 		T_Damage (other, self, self->owner, self->velocity, self->s.origin, plane->normal, self->dmg, 1, DAMAGE_ENERGY, mod);
 	}
 	else
@@ -323,7 +327,9 @@ void blaster_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *
 	G_FreeEdict (self);
 }
 
-void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, int effect, qboolean hyper)
+// gamex86.dll: 100493C7..100496A7
+// gamei386.so: 000332F8..00033638
+void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, int effect, qboolean vhyper)
 {
 	edict_t	*bolt;
 	trace_t	tr;
@@ -355,8 +361,17 @@ void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int spee
 	bolt->think = G_FreeEdict;
 	bolt->dmg = damage;
 	bolt->classname = "bolt";
-	if (hyper)
+	if (vhyper)
+	{
 		bolt->spawnflags = 1;
+		if (sync_stat > 2)
+			p_acc[self->client->resp.clientid].shots[ACC_HYPERBLASTER]++;
+	}
+	else
+	{
+		if (sync_stat > 2)
+			p_acc[self->client->resp.clientid].shots[ACC_BLASTER]++;
+	}
 	gi.linkentity (bolt);
 
 	if (self->client)
@@ -376,11 +391,15 @@ void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int spee
 fire_grenade
 =================
 */
+// gamex86.dll: 10049A5E..1004A059
+// gamei386.so: 00033638..00033A3C
 static void Grenade_Explode (edict_t *ent)
 {
 	vec3_t		origin;
 	int			mod;
+	int			added;	// invented name; dead -- set, never read
 
+	added = 0;
 	if (ent->owner->client)
 		PlayerNoise(ent->owner, ent->s.origin, PNOISE_IMPACT);
 
@@ -396,10 +415,36 @@ static void Grenade_Explode (edict_t *ent)
 		VectorSubtract (ent->s.origin, v, v);
 		points = ent->dmg - 0.5 * VectorLength (v);
 		VectorSubtract (ent->enemy->s.origin, ent->s.origin, dir);
+		// The mod's accuracy accounting, per grenade kind: a hand grenade
+		// scores against ACC_GRENADE, a launched one against
+		// ACC_GRENADELAUNCHER. Ungated -- unlike the weapon-fire sites, this
+		// one has no sync_stat test.
 		if (ent->spawnflags & 1)
+		{
 			mod = MOD_HANDGRENADE;
+			if (ent->enemy != ent->owner && ent->enemy->client)
+			{
+				p_acc[ent->owner->client->resp.clientid].hits[ACC_GRENADE]++;
+				p_acc[ent->owner->client->resp.clientid].given[ACC_GRENADE] += (int)points;
+				p_acc[ent->owner->client->resp.clientid].dgiven += (int)points;
+				p_acc[ent->enemy->client->resp.clientid].dtaken += (int)points;
+				p_acc[ent->enemy->client->resp.clientid].taken[ACC_GRENADE] += (int)points;
+				added = 1;
+			}
+		}
 		else
+		{
 			mod = MOD_GRENADE;
+			if (ent->enemy != ent->owner && ent->enemy->client)
+			{
+				p_acc[ent->owner->client->resp.clientid].hits[ACC_GRENADELAUNCHER]++;
+				p_acc[ent->owner->client->resp.clientid].given[ACC_GRENADELAUNCHER] += (int)points;
+				p_acc[ent->owner->client->resp.clientid].dgiven += (int)points;
+				p_acc[ent->enemy->client->resp.clientid].dtaken += (int)points;
+				p_acc[ent->enemy->client->resp.clientid].taken[ACC_GRENADELAUNCHER] += (int)points;
+				added = 1;
+			}
+		}
 		T_Damage (ent->enemy, ent, ent->owner, dir, ent->s.origin, vec3_origin, (int)points, (int)points, DAMAGE_RADIUS, mod);
 	}
 
@@ -433,6 +478,8 @@ static void Grenade_Explode (edict_t *ent)
 	G_FreeEdict (ent);
 }
 
+// gamex86.dll: 1004A059..1004A177
+// gamei386.so: 00033A3C..00033B34
 static void Grenade_Touch (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf)
 {
 	if (other == ent->owner)
@@ -464,6 +511,8 @@ static void Grenade_Touch (edict_t *ent, edict_t *other, cplane_t *plane, csurfa
 	Grenade_Explode (ent);
 }
 
+// gamex86.dll: 100497E5..10049A5E
+// gamei386.so: 00033B34..00033D5F
 void fire_grenade (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius)
 {
 	edict_t	*grenade;
@@ -494,9 +543,14 @@ void fire_grenade (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int s
 	grenade->dmg_radius = damage_radius;
 	grenade->classname = "grenade";
 
+	if (sync_stat > 2)
+		p_acc[self->client->resp.clientid].shots[ACC_GRENADELAUNCHER]++;
+
 	gi.linkentity (grenade);
 }
 
+// gamex86.dll: 1004A177..1004A46E
+// gamei386.so: 00033D60..0003400C
 void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius, qboolean held)
 {
 	edict_t	*grenade;
@@ -539,6 +593,9 @@ void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int 
 		gi.sound (self, CHAN_WEAPON, gi.soundindex ("weapons/hgrent1a.wav"), 1, ATTN_NORM, 0);
 		gi.linkentity (grenade);
 	}
+
+	if (sync_stat > 2)
+		p_acc[self->client->resp.clientid].shots[ACC_GRENADE]++;
 }
 
 
@@ -547,10 +604,14 @@ void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int 
 fire_rocket
 =================
 */
+// gamex86.dll: 1004A46E..1004A73E
+// gamei386.so: 0003400C..0003420B
 void rocket_touch (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf)
 {
 	vec3_t		origin;
-	int			n;
+	// Dead local: zeroed at entry and set true right after the accuracy-stat
+	// credit block below, never read.  Invented name.
+	qboolean	hit = false;
 
 	if (other == ent->owner)
 		return;
@@ -570,18 +631,14 @@ void rocket_touch (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *su
 	if (other->takedamage)
 	{
 		T_Damage (other, ent, ent->owner, ent->velocity, ent->s.origin, plane->normal, ent->dmg, 0, 0, MOD_ROCKET);
-	}
-	else
-	{
-		// don't throw any debris in net games
-		if (!deathmatch->value && !coop->value)
+		if ((other != ent->owner) && other->client)
 		{
-			if ((surf) && !(surf->flags & (SURF_WARP|SURF_TRANS33|SURF_TRANS66|SURF_FLOWING)))
-			{
-				n = rand() % 5;
-				while(n--)
-					ThrowDebris (ent, "models/objects/debris2/tris.md2", 2, ent->s.origin);
-			}
+			p_acc[ent->owner->client->resp.clientid].hits[ACC_ROCKET]++;
+			p_acc[ent->owner->client->resp.clientid].given[ACC_ROCKET] += ent->dmg;
+			p_acc[ent->owner->client->resp.clientid].dgiven += ent->dmg;
+			p_acc[other->client->resp.clientid].dtaken += ent->dmg;
+			p_acc[other->client->resp.clientid].taken[ACC_ROCKET] += ent->dmg;
+			hit = true;
 		}
 	}
 
@@ -598,6 +655,8 @@ void rocket_touch (edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *su
 	G_FreeEdict (ent);
 }
 
+// gamex86.dll: 1004A73E..1004A95D
+// gamei386.so: 0003420C..000344D4
 void fire_rocket (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, float damage_radius, int radius_damage)
 {
 	edict_t	*rocket;
@@ -627,6 +686,9 @@ void fire_rocket (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed
 	if (self->client)
 		check_dodge (self, rocket->s.origin, dir, speed);
 
+	if (sync_stat > 2)
+		p_acc[self->client->resp.clientid].shots[ACC_ROCKET]++;
+
 	gi.linkentity (rocket);
 }
 
@@ -636,6 +698,8 @@ void fire_rocket (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed
 fire_rail
 =================
 */
+// gamex86.dll: 1004A95D..1004AC94
+// gamei386.so: 000344D4..0003477E
 void fire_rail (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick)
 {
 	vec3_t		from;
@@ -669,7 +733,18 @@ void fire_rail (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick
 				ignore = NULL;
 
 			if ((tr.ent != self) && (tr.ent->takedamage))
+			{
 				T_Damage (tr.ent, self, self, aimdir, tr.endpos, tr.plane.normal, damage, kick, 0, MOD_RAILGUN);
+				if (tr.ent->client)
+				{
+					if (sync_stat > 2)
+						p_acc[self->client->resp.clientid].hits[ACC_RAILGUN]++;
+					p_acc[self->client->resp.clientid].dgiven += damage;
+					p_acc[self->client->resp.clientid].given[ACC_RAILGUN] += damage;
+					p_acc[tr.ent->client->resp.clientid].dtaken += damage;
+					p_acc[tr.ent->client->resp.clientid].taken[ACC_RAILGUN] += damage;
+				}
+			}
 		}
 
 		VectorCopy (tr.endpos, from);
@@ -693,6 +768,9 @@ void fire_rail (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick
 
 	if (self->client)
 		PlayerNoise(self, tr.endpos, PNOISE_IMPACT);
+
+	if (sync_stat > 2)
+		p_acc[self->client->resp.clientid].shots[ACC_RAILGUN]++;
 }
 
 
@@ -701,6 +779,8 @@ void fire_rail (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int kick
 fire_bfg
 =================
 */
+// gamex86.dll: 1004AC94..1004AEBB
+// gamei386.so: 00034780..0003498C
 void bfg_explode (edict_t *self)
 {
 	edict_t	*ent;
@@ -745,8 +825,12 @@ void bfg_explode (edict_t *self)
 		self->think = G_FreeEdict;
 }
 
+// gamex86.dll: 1004AEBB..1004B1CC
+// gamei386.so: 0003498C..00034C0C
 void bfg_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf)
 {
+	int		damage = 200;
+
 	if (other == self->owner)
 		return;
 
@@ -761,8 +845,17 @@ void bfg_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf
 
 	// core explosion - prevents firing it into the wall/floor
 	if (other->takedamage)
-		T_Damage (other, self, self->owner, self->velocity, self->s.origin, plane->normal, 200, 0, 0, MOD_BFG_BLAST);
-	T_RadiusDamage(self, self->owner, 200, other, 100, MOD_BFG_BLAST);
+	{
+		T_Damage (other, self, self->owner, self->velocity, self->s.origin, plane->normal, damage, 0, 0, MOD_BFG_BLAST);
+		if (other->client && self->owner->client)
+		{
+			p_acc[self->owner->client->resp.clientid].dgiven += damage;
+			p_acc[self->owner->client->resp.clientid].given[ACC_BFG] += damage;
+			p_acc[other->client->resp.clientid].dtaken += damage;
+			p_acc[other->client->resp.clientid].taken[ACC_BFG] += damage;
+		}
+	}
+	T_RadiusDamage(self, self->owner, damage, other, 100, MOD_BFG_BLAST);
 
 	gi.sound (self, CHAN_VOICE, gi.soundindex ("weapons/bfg__x1b.wav"), 1, ATTN_NORM, 0);
 	self->solid = SOLID_NOT;
@@ -784,6 +877,8 @@ void bfg_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf
 }
 
 
+// gamex86.dll: 1004B1CC..1004B5A6
+// gamei386.so: 00034C0C..00034F41
 void bfg_think (edict_t *self)
 {
 	edict_t	*ent;
@@ -795,10 +890,7 @@ void bfg_think (edict_t *self)
 	int		dmg;
 	trace_t	tr;
 
-	if (deathmatch->value)
-		dmg = 5;
-	else
-		dmg = 10;
+	dmg = 5;
 
 	ent = NULL;
 	while ((ent = findradius(ent, self->s.origin, 256)) != NULL)
@@ -832,7 +924,16 @@ void bfg_think (edict_t *self)
 
 			// hurt it if we can
 			if ((tr.ent->takedamage) && !(tr.ent->flags & FL_IMMUNE_LASER) && (tr.ent != self->owner))
+			{
 				T_Damage (tr.ent, self, self->owner, dir, tr.endpos, vec3_origin, dmg, 1, DAMAGE_ENERGY, MOD_BFG_LASER);
+				if (self->owner->client && tr.ent->client)
+				{
+					p_acc[self->owner->client->resp.clientid].dgiven += dmg;
+					p_acc[self->owner->client->resp.clientid].given[ACC_BFG] += dmg;
+					p_acc[tr.ent->client->resp.clientid].dtaken += dmg;
+					p_acc[tr.ent->client->resp.clientid].taken[ACC_BFG] += dmg;
+				}
+			}
 
 			// if we hit something that's not a monster or player we're done
 			if (!(tr.ent->svflags & SVF_MONSTER) && (!tr.ent->client))
@@ -862,6 +963,8 @@ void bfg_think (edict_t *self)
 }
 
 
+// gamex86.dll: 1004B5A6..1004B7C0
+// gamei386.so: 00034F44..000351F0
 void fire_bfg (edict_t *self, vec3_t start, vec3_t dir, int damage, int speed, float damage_radius)
 {
 	edict_t	*bfg;

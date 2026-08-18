@@ -10,6 +10,8 @@ INTERMISSION
 ======================================================================
 */
 
+// gamex86.dll: 10058E30..1005903E
+// gamei386.so: 0003EF84..0003F1A6
 void MoveClientToIntermission (edict_t *ent)
 {
 	if (deathmatch->value || coop->value)
@@ -43,7 +45,7 @@ void MoveClientToIntermission (edict_t *ent)
 
 	// add the layout
 
-	if (deathmatch->value || coop->value)
+	if (!(ent->flags & FL_BOT) && !ent->client->resp.osp_r2dc)
 	{
 		DeathmatchScoreboardMessage (ent, NULL);
 		gi.unicast (ent, true);
@@ -51,9 +53,11 @@ void MoveClientToIntermission (edict_t *ent)
 
 }
 
+// gamex86.dll: 1005903E..10059287
+// gamei386.so: 0003F1A8..0003F43A
 void BeginIntermission (edict_t *targ)
 {
-	int		i, n;
+	int		i;
 	edict_t	*ent, *client;
 
 	if (level.intermissiontime)
@@ -67,38 +71,17 @@ void BeginIntermission (edict_t *targ)
 		client = g_edicts + 1 + i;
 		if (!client->inuse)
 			continue;
-		if (client->health <= 0)
+		if (client->health <= 0 && client->client->resp.entered == ENTERED_ENTERED)
 			respawn(client);
 	}
 
 	level.intermissiontime = level.time;
 	level.changemap = targ->map;
 
-	if (strstr(level.changemap, "*"))
+	if (!connected_clients)
 	{
-		if (coop->value)
-		{
-			for (i=0 ; i<maxclients->value ; i++)
-			{
-				client = g_edicts + 1 + i;
-				if (!client->inuse)
-					continue;
-				// strip players of all keys between units
-				for (n = 0; n < MAX_ITEMS; n++)
-				{
-					if (itemlist[n].flags & IT_KEY)
-						client->client->pers.inventory[n] = 0;
-				}
-			}
-		}
-	}
-	else
-	{
-		if (!deathmatch->value)
-		{
-			level.exitintermission = 1;		// go immediately to the next level
-			return;
-		}
+		level.exitintermission = 1;		// go immediately to the next level
+		return;
 	}
 
 	level.exitintermission = 0;
@@ -131,6 +114,9 @@ void BeginIntermission (edict_t *targ)
 		client = g_edicts + 1 + i;
 		if (!client->inuse)
 			continue;
+		client->client->resp.osp_r2dc = 2;
+		client->client->resp.osp_r034 = 0;
+		OSP_zeroRuneStats (client);
 		MoveClientToIntermission (client);
 	}
 }
@@ -142,93 +128,139 @@ DeathmatchScoreboardMessage
 
 ==================
 */
+// gamex86.dll: 10059287..100597B6
+// gamei386.so: 0003F43C..0003F931
 void DeathmatchScoreboardMessage (edict_t *ent, edict_t *killer)
 {
-	char	entry[1024];
-	char	string[1400];
-	int		stringlength;
-	int		i, j, k;
 	int		sorted[MAX_CLIENTS];
 	int		sortedscores[MAX_CLIENTS];
-	int		score, total;
-	int		picnum;
-	int		x, y;
-	gclient_t	*cl;
-	edict_t		*cl_ent;
-	char	*tag;
+	int		i;
+	int		score;
+	int		total;
+	int		j;
+	int		k;
+	edict_t	*cl_ent;
 
-	// sort the clients by score
+	if (ent->client->resp.osp_r24c == 8)
+	{
+		OSP_showPlayer (ent);
+		return;
+	}
+	if (ent->client->resp.osp_r24c == 2)
+	{
+		OSP_showMOTD ();
+		return;
+	}
+	if (ent->client->resp.osp_r24c == 4)
+	{
+		OSP_showParams ();
+		return;
+	}
+	if (ent->client->resp.osp_r24c == 1)
+	{
+		OSP_oldscores_cmd (ent);
+		return;
+	}
+
+	if (m_mode == 2)
+	{
+		OSP_showTeamScores (ent);
+		return;
+	}
+	if (m_mode == 3)
+	{
+		OSP_show1v1Scores (ent);
+		return;
+	}
+
+	if (hs_mode && (int)client_highscores->value &&
+		level.intermissiontime != 0)
+	{
+		if (level.framenum > ent->client->resp.osp_r244)
+		{
+			if (ent->client->resp.osp_r034)
+				ent->client->resp.osp_r244 = level.framenum + 40;
+			else
+				ent->client->resp.osp_r244 = level.framenum + 100;
+			ent->client->resp.osp_r034 = 1 - ent->client->resp.osp_r034;
+		}
+
+		if (!ent->client->resp.osp_r034)
+		{
+			OSP_showHighScores (ent);
+			return;
+		}
+	}
+
 	total = 0;
-	for (i=0 ; i<game.maxclients ; i++)
+	if (sync_stat < 4)
 	{
-		cl_ent = g_edicts + 1 + i;
-		if (!cl_ent->inuse || game.clients[i].resp.spectator)
-			continue;
-		score = game.clients[i].resp.score;
-		for (j=0 ; j<total ; j++)
+		for (i = 0; i < game.maxclients; i++)
 		{
-			if (score > sortedscores[j])
-				break;
+			cl_ent = g_edicts + i + 1;
+			if (!cl_ent->inuse || !cl_ent->client)
+				continue;
+
+			for (j = 0; j < total; j++)
+			{
+				if (!cl_ent->client->resp.osp_r20c && cl_ent->osp_e39c != 1)
+					break;
+				// The bracketed form at this site, unlike the loop head above.
+				if (cl_ent->osp_e39c == 1 &&
+					(g_edicts[j + 1].osp_e39c == 1 ||
+					 game.clients[j].resp.osp_r20c))
+					break;
+			}
+
+			for (k = total; k > j; k--)
+				sorted[k] = sorted[k - 1];
+			sorted[j] = i;
+			total++;
 		}
-		for (k=total ; k>j ; k--)
-		{
-			sorted[k] = sorted[k-1];
-			sortedscores[k] = sortedscores[k-1];
-		}
-		sorted[j] = i;
-		sortedscores[j] = score;
-		total++;
+
+		OSP_showScores (sorted, total, ent);
 	}
-
-	// print level name and exit rules
-	string[0] = 0;
-
-	stringlength = strlen(string);
-
-	// add the clients in sorted order
-	if (total > 12)
-		total = 12;
-
-	for (i=0 ; i<total ; i++)
+	else
 	{
-		cl = &game.clients[sorted[i]];
-		cl_ent = g_edicts + 1 + sorted[i];
-
-		picnum = gi.imageindex ("i_fixme");
-		x = (i>=6) ? 160 : 0;
-		y = 32 + 32 * (i%6);
-
-		// add a dogtag
-		if (cl_ent == ent)
-			tag = "tag1";
-		else if (cl_ent == killer)
-			tag = "tag2";
-		else
-			tag = NULL;
-		if (tag)
+		for (i = 0; i < game.maxclients; i++)
 		{
-			Com_sprintf (entry, sizeof(entry),
-				"xv %i yv %i picn %s ",x+32, y, tag);
-			j = strlen(entry);
-			if (stringlength + j > 1024)
-				break;
-			strcpy (string + stringlength, entry);
-			stringlength += j;
+			cl_ent = g_edicts + i + 1;
+			if (!cl_ent->inuse)
+				continue;
+
+			score = cl_ent->client->resp.score;
+			for (j = 0; j < total; j++)
+			{
+				if (score > sortedscores[j])
+					break;
+				if (score == sortedscores[j])
+				{
+					if (game.clients[i].resp.osp_r014 <
+						game.clients[sorted[j]].resp.osp_r014)
+						break;
+					if (game.clients[i].resp.osp_r014 ==
+						game.clients[sorted[j]].resp.osp_r014)
+					{
+						if (game.clients[i].resp.osp_r2c0 <
+							game.clients[sorted[j]].resp.osp_r2c0)
+							break;
+					}
+				}
+			}
+
+			for (k = total; k > j; k--)
+			{
+				sorted[k] = sorted[k - 1];
+				sortedscores[k] = sortedscores[k - 1];
+			}
+			sorted[j] = i;
+			sortedscores[j] = score;
+			total++;
 		}
 
-		// send the layout
-		Com_sprintf (entry, sizeof(entry),
-			"client %i %i %i %i %i %i ",
-			x, y, sorted[i], cl->resp.score, cl->ping, (level.framenum - cl->resp.enterframe)/600);
-		j = strlen(entry);
-		if (stringlength + j > 1024)
-			break;
-		strcpy (string + stringlength, entry);
-		stringlength += j;
+		// The call is written out in BOTH arms.
+		OSP_showScores (sorted, total, ent);
 	}
-
-	gi.WriteByte (svc_layout);
-	gi.WriteString (string);
 }
 
 
@@ -240,10 +272,18 @@ Draw instead of help message.
 Note that it isn't that hard to overflow the 1400 byte message limit!
 ==================
 */
+// gamex86.dll: 100597B6..10059801
+// gamei386.so: 0003F934..0003F97E
 void DeathmatchScoreboard (edict_t *ent)
 {
-	DeathmatchScoreboardMessage (ent, ent->enemy);
-	gi.unicast (ent, true);
+	if (!ent->client->resp.osp_r2dc)
+	{
+		if (!(ent->flags & FL_BOT))
+		{
+			DeathmatchScoreboardMessage (ent, ent->enemy);
+			gi.unicast (ent, true);
+		}
+	}
 }
 
 
@@ -254,21 +294,36 @@ Cmd_Score_f
 Display the scoreboard
 ==================
 */
+// gamex86.dll: 10059801..10059935
+// gamei386.so: 0003F980..0003FAA1
 void Cmd_Score_f (edict_t *ent)
 {
 	ent->client->showinventory = false;
 	ent->client->showhelp = false;
 
-	if (!deathmatch->value && !coop->value)
-		return;
-
-	if (ent->client->showscores)
+	if ((ent->client->resp.osp_r24c == 0 || ent->client->resp.osp_r24c == 1) &&
+		ent->client->showscores)
 	{
 		ent->client->showscores = false;
+		ent->client->update_chase = true;
+		ent->client->ps.stats[STAT_OSP_LAYOUT1] = 0;
+		ent->client->ps.stats[STAT_OSP_LAYOUT2] = 0;
+		ent->client->resp.osp_r2ac = -1;
 		return;
 	}
 
+	if (ent->client->resp.osp_r24c == 4)
+	{
+		ent->client->resp.osp_r0ac = level.framenum - 100;
+		if (ent->client->resp.osp_r0ac < 0)
+			ent->client->resp.osp_r0ac = 0;
+	}
+
+	ent->client->resp.osp_r24c = 0;
 	ent->client->showscores = true;
+	ent->client->resp.osp_r034 = 1;
+	ent->client->resp.osp_r244 = 0;
+
 	DeathmatchScoreboard (ent);
 }
 
@@ -280,6 +335,8 @@ HelpComputer
 Draw help computer.
 ==================
 */
+// gamex86.dll: 10059935..10059A32
+// gamei386.so: 0003FAA4..0003FBA6
 void HelpComputer (edict_t *ent)
 {
 	char	string[1024];
@@ -324,27 +381,17 @@ Cmd_Help_f
 Display the current help message
 ==================
 */
+// gamex86.dll: 10059A32..10059A82
+// gamei386.so: 0003FBA8..0003FD29
 void Cmd_Help_f (edict_t *ent)
 {
-	// this is for backwards compatability
-	if (deathmatch->value)
+	if (ent->client->resp.osp_r010 <= level.framenum)
 	{
+		ent->client->resp.osp_r010 = level.framenum + 2;
 		Cmd_Score_f (ent);
-		return;
 	}
-
-	ent->client->showinventory = false;
-	ent->client->showscores = false;
-
-	if (ent->client->showhelp && (ent->client->pers.game_helpchanged == game.helpchanged))
-	{
-		ent->client->showhelp = false;
-		return;
-	}
-
-	ent->client->showhelp = true;
-	ent->client->pers.helpchanged = 0;
-	HelpComputer (ent);
+	else if (match_paused)
+		Cmd_Score_f (ent);
 }
 
 
@@ -355,31 +402,63 @@ void Cmd_Help_f (edict_t *ent)
 G_SetStats
 ===============
 */
+// gamex86.dll: 10059A82..10059FB0
+// gamei386.so: 0003FD2C..0004023A
 void G_SetStats (edict_t *ent)
 {
 	gitem_t		*item;
 	int			index, cells;
 	int			power_armor_type;
+	// Declared AFTER the three above -- declaration order is spill-slot order.
+	gclient_t	*cl = ent->client;
+	// A SECOND client pointer, and it is the majority user: one reaches only
+	// `ps.fov` and `ps.stats[]`, the other only `pers`/`resp`.
+	player_state_t	*ps = &ent->client->ps;
+
+	//
+	// layouts
+	//
+	ps->stats[STAT_LAYOUTS] = 0;
+
+	if (!cl->resp.osp_r2dc)
+	{
+		if (cl->pers.health <= 0 || level.intermissiontime
+			|| cl->showscores)
+			ps->stats[STAT_LAYOUTS] |= 1;
+		if (cl->showinventory && cl->pers.health > 0)
+			ps->stats[STAT_LAYOUTS] |= 2;
+	}
+
+	//
+	// frags
+	//
+	if (cl->resp.entered == ENTERED_ENTERED)
+		ps->stats[STAT_FRAGS] = cl->resp.score;
+	else
+		ps->stats[STAT_FRAGS] = 0;
+
+	if (!cl->resp.osp_r2bc)
+		return;
 
 	//
 	// health
 	//
-	ent->client->ps.stats[STAT_HEALTH_ICON] = level.pic_health;
-	ent->client->ps.stats[STAT_HEALTH] = ent->health;
+	ps->stats[STAT_HEALTH_ICON] = level.pic_health;
+	ps->stats[STAT_HEALTH] = ent->health;
 
 	//
 	// ammo
 	//
-	if (!ent->client->ammo_index /* || !ent->client->pers.inventory[ent->client->ammo_index] */)
+	if (!cl->ammo_index /* || !cl->pers.inventory[cl->ammo_index] */)
 	{
-		ent->client->ps.stats[STAT_AMMO_ICON] = 0;
-		ent->client->ps.stats[STAT_AMMO] = 0;
+		ps->stats[STAT_AMMO_ICON] = 0;
+		ps->stats[STAT_AMMO] = 0;
 	}
 	else
 	{
-		item = &itemlist[ent->client->ammo_index];
-		ent->client->ps.stats[STAT_AMMO_ICON] = gi.imageindex (item->icon);
-		ent->client->ps.stats[STAT_AMMO] = ent->client->pers.inventory[ent->client->ammo_index];
+		item = &itemlist[cl->ammo_index];
+		ps->stats[STAT_AMMO_ICON] = gi.imageindex (item->icon);
+		ps->stats[STAT_AMMO] = cl->pers.inventory[cl->ammo_index];
 	}
 	
 	//
@@ -388,7 +467,7 @@ void G_SetStats (edict_t *ent)
 	power_armor_type = PowerArmorType (ent);
 	if (power_armor_type)
 	{
-		cells = ent->client->pers.inventory[ITEM_INDEX(FindItem ("cells"))];
+		cells = cl->pers.inventory[ITEM_INDEX(FindItem ("cells"))];
 		if (cells == 0)
 		{	// ran out of cells for power armor
 			ent->flags &= ~FL_POWER_ARMOR;
@@ -400,153 +479,79 @@ void G_SetStats (edict_t *ent)
 	index = ArmorIndex (ent);
 	if (power_armor_type && (!index || (level.framenum & 8) ) )
 	{	// flash between power armor and other armor icon
-		ent->client->ps.stats[STAT_ARMOR_ICON] = gi.imageindex ("i_powershield");
-		ent->client->ps.stats[STAT_ARMOR] = cells;
+		ps->stats[STAT_ARMOR_ICON] = gi.imageindex ("i_powershield");
+		ps->stats[STAT_ARMOR] = cells;
 	}
 	else if (index)
 	{
 		item = GetItemByIndex (index);
-		ent->client->ps.stats[STAT_ARMOR_ICON] = gi.imageindex (item->icon);
-		ent->client->ps.stats[STAT_ARMOR] = ent->client->pers.inventory[index];
+		ps->stats[STAT_ARMOR_ICON] = gi.imageindex (item->icon);
+		ps->stats[STAT_ARMOR] = cl->pers.inventory[index];
 	}
 	else
 	{
-		ent->client->ps.stats[STAT_ARMOR_ICON] = 0;
-		ent->client->ps.stats[STAT_ARMOR] = 0;
+		ps->stats[STAT_ARMOR_ICON] = 0;
+		ps->stats[STAT_ARMOR] = 0;
 	}
 
 	//
 	// pickup message
 	//
-	if (level.time > ent->client->pickup_msg_time)
+	if (level.time > cl->pickup_msg_time)
 	{
-		ent->client->ps.stats[STAT_PICKUP_ICON] = 0;
-		ent->client->ps.stats[STAT_PICKUP_STRING] = 0;
+		ps->stats[STAT_PICKUP_ICON] = 0;
+		ps->stats[STAT_PICKUP_STRING] = 0;
 	}
 
 	//
 	// timers
 	//
-	if (ent->client->quad_framenum > level.framenum)
+	if (cl->quad_framenum > level.framenum)
 	{
-		ent->client->ps.stats[STAT_TIMER_ICON] = gi.imageindex ("p_quad");
-		ent->client->ps.stats[STAT_TIMER] = (ent->client->quad_framenum - level.framenum)/10;
+		ps->stats[STAT_TIMER_ICON] = gi.imageindex ("p_quad");
+		ps->stats[STAT_TIMER] = (cl->quad_framenum - level.framenum)/10;
 	}
-	else if (ent->client->invincible_framenum > level.framenum)
+	else if (cl->invincible_framenum > level.framenum)
 	{
-		ent->client->ps.stats[STAT_TIMER_ICON] = gi.imageindex ("p_invulnerability");
-		ent->client->ps.stats[STAT_TIMER] = (ent->client->invincible_framenum - level.framenum)/10;
+		ps->stats[STAT_TIMER_ICON] = gi.imageindex ("p_invulnerability");
+		ps->stats[STAT_TIMER] = (cl->invincible_framenum - level.framenum)/10;
 	}
-	else if (ent->client->enviro_framenum > level.framenum)
+	else if (cl->enviro_framenum > level.framenum)
 	{
-		ent->client->ps.stats[STAT_TIMER_ICON] = gi.imageindex ("p_envirosuit");
-		ent->client->ps.stats[STAT_TIMER] = (ent->client->enviro_framenum - level.framenum)/10;
+		ps->stats[STAT_TIMER_ICON] = gi.imageindex ("p_envirosuit");
+		ps->stats[STAT_TIMER] = (cl->enviro_framenum - level.framenum)/10;
 	}
-	else if (ent->client->breather_framenum > level.framenum)
+	else if (cl->breather_framenum > level.framenum)
 	{
-		ent->client->ps.stats[STAT_TIMER_ICON] = gi.imageindex ("p_rebreather");
-		ent->client->ps.stats[STAT_TIMER] = (ent->client->breather_framenum - level.framenum)/10;
+		ps->stats[STAT_TIMER_ICON] = gi.imageindex ("p_rebreather");
+		ps->stats[STAT_TIMER] = (cl->breather_framenum - level.framenum)/10;
 	}
 	else
 	{
-		ent->client->ps.stats[STAT_TIMER_ICON] = 0;
-		ent->client->ps.stats[STAT_TIMER] = 0;
+		ps->stats[STAT_TIMER_ICON] = 0;
+		ps->stats[STAT_TIMER] = 0;
 	}
 
 	//
 	// selected item
 	//
-	if (ent->client->pers.selected_item == -1)
-		ent->client->ps.stats[STAT_SELECTED_ICON] = 0;
+	if (cl->pers.selected_item == -1)
+		ps->stats[STAT_SELECTED_ICON] = 0;
 	else
-		ent->client->ps.stats[STAT_SELECTED_ICON] = gi.imageindex (itemlist[ent->client->pers.selected_item].icon);
+		ps->stats[STAT_SELECTED_ICON] = gi.imageindex (itemlist[cl->pers.selected_item].icon);
 
-	ent->client->ps.stats[STAT_SELECTED_ITEM] = ent->client->pers.selected_item;
-
-	//
-	// layouts
-	//
-	ent->client->ps.stats[STAT_LAYOUTS] = 0;
-
-	if (deathmatch->value)
-	{
-		if (ent->client->pers.health <= 0 || level.intermissiontime
-			|| ent->client->showscores)
-			ent->client->ps.stats[STAT_LAYOUTS] |= 1;
-		if (ent->client->showinventory && ent->client->pers.health > 0)
-			ent->client->ps.stats[STAT_LAYOUTS] |= 2;
-	}
-	else
-	{
-		if (ent->client->showscores || ent->client->showhelp)
-			ent->client->ps.stats[STAT_LAYOUTS] |= 1;
-		if (ent->client->showinventory && ent->client->pers.health > 0)
-			ent->client->ps.stats[STAT_LAYOUTS] |= 2;
-	}
-
-	//
-	// frags
-	//
-	ent->client->ps.stats[STAT_FRAGS] = ent->client->resp.score;
+	ps->stats[STAT_SELECTED_ITEM] = cl->pers.selected_item;
 
 	//
 	// help icon / current weapon if not shown
 	//
-	if (ent->client->pers.helpchanged && (level.framenum&8) )
-		ent->client->ps.stats[STAT_HELPICON] = gi.imageindex ("i_help");
-	else if ( (ent->client->pers.hand == CENTER_HANDED || ent->client->ps.fov > 91)
+	if (cl->resp.helpchanged && (level.framenum&8) )
+		ps->stats[STAT_HELPICON] = gi.imageindex ("i_help");
+	else if ( (cl->pers.hand == CENTER_HANDED || ps->fov > 91)
 		&& ent->client->pers.weapon)
-		ent->client->ps.stats[STAT_HELPICON] = gi.imageindex (ent->client->pers.weapon->icon);
+		ps->stats[STAT_HELPICON] = gi.imageindex (cl->pers.weapon->icon);
 	else
-		ent->client->ps.stats[STAT_HELPICON] = 0;
+		ps->stats[STAT_HELPICON] = 0;
 
-	ent->client->ps.stats[STAT_SPECTATOR] = 0;
+	cl->resp.osp_r2bc = 0;
 }
-
-/*
-===============
-G_CheckChaseStats
-===============
-*/
-void G_CheckChaseStats (edict_t *ent)
-{
-	int i;
-	gclient_t *cl;
-
-	for (i = 1; i <= maxclients->value; i++) {
-		cl = g_edicts[i].client;
-		if (!g_edicts[i].inuse || cl->chase_target != ent)
-			continue;
-		memcpy(cl->ps.stats, ent->client->ps.stats, sizeof(cl->ps.stats));
-		G_SetSpectatorStats(g_edicts + i);
-	}
-}
-
-/*
-===============
-G_SetSpectatorStats
-===============
-*/
-void G_SetSpectatorStats (edict_t *ent)
-{
-	gclient_t *cl = ent->client;
-
-	if (!cl->chase_target)
-		G_SetStats (ent);
-
-	cl->ps.stats[STAT_SPECTATOR] = 1;
-
-	// layouts are independant in spectator
-	cl->ps.stats[STAT_LAYOUTS] = 0;
-	if (cl->pers.health <= 0 || level.intermissiontime || cl->showscores)
-		cl->ps.stats[STAT_LAYOUTS] |= 1;
-	if (cl->showinventory && cl->pers.health > 0)
-		cl->ps.stats[STAT_LAYOUTS] |= 2;
-
-	if (cl->chase_target && cl->chase_target->inuse)
-		cl->ps.stats[STAT_CHASE] = CS_PLAYERSKINS + 
-			(cl->chase_target - g_edicts) - 1;
-	else
-		cl->ps.stats[STAT_CHASE] = 0;
-}
-

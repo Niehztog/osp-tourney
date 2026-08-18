@@ -1,11 +1,36 @@
+# OSP Tourney DM -- native Makefile.
+#
+# Same variables, same debug/release split, same
+# $(BUILDDIR)/game$(ARCH).$(SHLIBEXT) target as id's Quake II 3.20 game SDK
+# Makefile, which this mod was built from. `make` alone builds debug only;
+# `make all` builds both. GAME_OBJS is listed in the link order of the
+# original v2.75 release.
+
 BUILD_DEBUG_DIR=debug
 BUILD_RELEASE_DIR=release
 
+ARCH:=$(shell uname -m | sed -e 's/i.86/i386/' -e 's/^armv.*/arm/')
+
 CC=gcc
 BASE_CFLAGS=-Dstricmp=strcasecmp
-RELEASE_CFLAGS=$(BASE_CFLAGS) -ffast-math -funroll-loops \
-	-fomit-frame-pointer -fexpensive-optimizations
-DEBUG_CFLAGS=$(BASE_CFLAGS) -g
+
+# Matches the original release's compiler flags.
+RELEASE_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -O3
+DEBUG_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -g
+
+# Not in the 1999 Makefile; required to build 1999 C with a current gcc.
+#  -std=gnu99                    the tree predates C99-by-default diagnostics
+#  -fno-strict-aliasing -fwrapv  the workspace standard for this era of code
+#  -fno-stack-protector,
+#  -D_FORTIFY_SOURCE=0           this tree DELIBERATELY reproduces the mod's own
+#                                buffer overruns (OSP_defaultteam_cmd strncpy's
+#                                with a 128 limit into 80 bytes;
+#                                OSP_startDemos writes name[2][16] at index 2).
+#                                They are faithful, not defects, and modern
+#                                glibc aborts on the first one during map spawn.
+MODERN_CFLAGS=-std=gnu99 -fno-strict-aliasing -fwrapv -w \
+	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector
+
 LDFLAGS=-ldl -lm
 
 SHLIBEXT=so
@@ -16,7 +41,7 @@ SHLIBLDFLAGS=-shared
 DO_CC=$(CC) $(CFLAGS) -o $@ -c $<
 DO_SHLIB_CC=$(CC) $(CFLAGS) $(SHLIBCFLAGS) -o $@ -c $<
 
-TARGETS=$(BUILDDIR)/game$(ARCH).$(SHLIBEXT) \
+TARGETS=$(BUILDDIR)/game$(ARCH).$(SHLIBEXT)
 
 build_debug:
 	@-mkdir $(BUILD_DEBUG_DIR)
@@ -31,200 +56,224 @@ all: build_debug build_release
 targets: $(TARGETS)
 
 GAME_OBJS = \
-	$(BUILDDIR)/q_shared.o \
 	$(BUILDDIR)/g_ai.o \
-	$(BUILDDIR)/p_client.o \
 	$(BUILDDIR)/g_cmds.o \
-	$(BUILDDIR)/g_svcmds.o \
-	$(BUILDDIR)/g_chase.o \
 	$(BUILDDIR)/g_combat.o \
 	$(BUILDDIR)/g_func.o \
 	$(BUILDDIR)/g_items.o \
 	$(BUILDDIR)/g_main.o \
+	$(BUILDDIR)/g_monsters.o \
 	$(BUILDDIR)/g_misc.o \
 	$(BUILDDIR)/g_monster.o \
 	$(BUILDDIR)/g_phys.o \
 	$(BUILDDIR)/g_save.o \
 	$(BUILDDIR)/g_spawn.o \
+	$(BUILDDIR)/g_svcmds.o \
 	$(BUILDDIR)/g_target.o \
 	$(BUILDDIR)/g_trigger.o \
 	$(BUILDDIR)/g_turret.o \
 	$(BUILDDIR)/g_utils.o \
 	$(BUILDDIR)/g_weapon.o \
-	$(BUILDDIR)/m_actor.o \
-	$(BUILDDIR)/m_berserk.o \
-	$(BUILDDIR)/m_boss2.o \
-	$(BUILDDIR)/m_boss3.o \
-	$(BUILDDIR)/m_boss31.o \
-	$(BUILDDIR)/m_boss32.o \
-	$(BUILDDIR)/m_brain.o \
-	$(BUILDDIR)/m_chick.o \
-	$(BUILDDIR)/m_flipper.o \
-	$(BUILDDIR)/m_float.o \
-	$(BUILDDIR)/m_flyer.o \
-	$(BUILDDIR)/m_gladiator.o \
-	$(BUILDDIR)/m_gunner.o \
-	$(BUILDDIR)/m_hover.o \
-	$(BUILDDIR)/m_infantry.o \
-	$(BUILDDIR)/m_insane.o \
-	$(BUILDDIR)/m_medic.o \
 	$(BUILDDIR)/m_move.o \
-	$(BUILDDIR)/m_mutant.o \
-	$(BUILDDIR)/m_parasite.o \
-	$(BUILDDIR)/m_soldier.o \
-	$(BUILDDIR)/m_supertank.o \
-	$(BUILDDIR)/m_tank.o \
+	$(BUILDDIR)/p_camera.o \
+	$(BUILDDIR)/p_client.o \
 	$(BUILDDIR)/p_hud.o \
 	$(BUILDDIR)/p_trail.o \
 	$(BUILDDIR)/p_view.o \
 	$(BUILDDIR)/p_weapon.o \
-	$(BUILDDIR)/m_flash.o
+	$(BUILDDIR)/q_shared.o \
+	$(BUILDDIR)/osp_config.o \
+	$(BUILDDIR)/osp_main.o \
+	$(BUILDDIR)/osp_display.o \
+	$(BUILDDIR)/osp_observe.o \
+	$(BUILDDIR)/g_chase.o \
+	$(BUILDDIR)/osp_cmds.o \
+	$(BUILDDIR)/osp_hook.o \
+	$(BUILDDIR)/osp_hiscore.o \
+	$(BUILDDIR)/osp_menus.o \
+	$(BUILDDIR)/osp_runes.o \
+	$(BUILDDIR)/osp_teams.o \
+	$(BUILDDIR)/osp_players.o \
+	$(BUILDDIR)/osp_plist.o \
+	$(BUILDDIR)/osp_maps.o \
+	$(BUILDDIR)/nglog.o \
+	$(BUILDDIR)/ngmark.o \
+	$(BUILDDIR)/md5c.o \
+	$(BUILDDIR)/osp_detect.o \
+	$(BUILDDIR)/q2log.o \
+	$(BUILDDIR)/stdlog.o \
+	$(BUILDDIR)/sl_write.o \
+	$(BUILDDIR)/p_menu.o \
+	$(BUILDDIR)/bl_botcfg.o \
+	$(BUILDDIR)/bl_cmd.o \
+	$(BUILDDIR)/bl_debug.o \
+	$(BUILDDIR)/bl_main.o \
+	$(BUILDDIR)/bl_redirgi.o \
+	$(BUILDDIR)/bl_spawn.o
 
 $(BUILDDIR)/game$(ARCH).$(SHLIBEXT) : $(GAME_OBJS)
-	$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(GAME_OBJS)
+	$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(GAME_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/g_ai.o :        g_ai.c
+$(BUILDDIR)/g_ai.o :         g_ai.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/p_client.o :    p_client.c
+$(BUILDDIR)/g_cmds.o :       g_cmds.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_cmds.o :      g_cmds.c
+$(BUILDDIR)/g_combat.o :     g_combat.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_svcmds.o :    g_svcmds.c
+$(BUILDDIR)/g_func.o :       g_func.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_chase.o :     g_chase.c
+$(BUILDDIR)/g_items.o :      g_items.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_combat.o :    g_combat.c
+$(BUILDDIR)/g_main.o :       g_main.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_func.o :      g_func.c
+$(BUILDDIR)/g_monsters.o :   g_monsters.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_items.o :     g_items.c
+$(BUILDDIR)/g_misc.o :       g_misc.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_main.o :      g_main.c
+$(BUILDDIR)/g_monster.o :    g_monster.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_misc.o :      g_misc.c
+$(BUILDDIR)/g_phys.o :       g_phys.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_monster.o :   g_monster.c
+$(BUILDDIR)/g_save.o :       g_save.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_phys.o :      g_phys.c
+$(BUILDDIR)/g_spawn.o :      g_spawn.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_save.o :      g_save.c
+$(BUILDDIR)/g_svcmds.o :     g_svcmds.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_spawn.o :     g_spawn.c
+$(BUILDDIR)/g_target.o :     g_target.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_target.o :    g_target.c
+$(BUILDDIR)/g_trigger.o :    g_trigger.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_trigger.o :   g_trigger.c
+$(BUILDDIR)/g_turret.o :     g_turret.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_turret.o :    g_turret.c
+$(BUILDDIR)/g_utils.o :      g_utils.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_utils.o :     g_utils.c
+$(BUILDDIR)/g_weapon.o :     g_weapon.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/g_weapon.o :    g_weapon.c
+$(BUILDDIR)/m_move.o :       m_move.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_actor.o :     m_actor.c
+$(BUILDDIR)/p_camera.o :     p_camera.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_berserk.o :   m_berserk.c
+$(BUILDDIR)/p_client.o :     p_client.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_boss2.o :     m_boss2.c
+$(BUILDDIR)/p_hud.o :        p_hud.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_boss3.o :     m_boss3.c
+$(BUILDDIR)/p_trail.o :      p_trail.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_boss31.o :    m_boss31.c
+$(BUILDDIR)/p_view.o :       p_view.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_boss32.o :    m_boss32.c
+$(BUILDDIR)/p_weapon.o :     p_weapon.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_brain.o :     m_brain.c
+$(BUILDDIR)/q_shared.o :     q_shared.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_chick.o :     m_chick.c
+$(BUILDDIR)/osp_config.o :   osp_config.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_flipper.o :   m_flipper.c
+$(BUILDDIR)/osp_display.o :  osp_display.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_float.o :     m_float.c
+$(BUILDDIR)/osp_main.o :     osp_main.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_flyer.o :     m_flyer.c
+$(BUILDDIR)/osp_observe.o :  osp_observe.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_gladiator.o : m_gladiator.c
+$(BUILDDIR)/g_chase.o :      g_chase.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_gunner.o :    m_gunner.c
+$(BUILDDIR)/osp_cmds.o :     osp_cmds.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_hover.o :     m_hover.c
+$(BUILDDIR)/osp_hook.o :     osp_hook.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_infantry.o :  m_infantry.c
+$(BUILDDIR)/osp_hiscore.o :  osp_hiscore.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_insane.o :    m_insane.c
+$(BUILDDIR)/osp_menus.o :    osp_menus.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_medic.o :     m_medic.c
+$(BUILDDIR)/osp_runes.o :    osp_runes.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_move.o :      m_move.c
+$(BUILDDIR)/osp_teams.o :    osp_teams.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_mutant.o :    m_mutant.c
+$(BUILDDIR)/osp_players.o :  osp_players.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_parasite.o :  m_parasite.c
+$(BUILDDIR)/osp_plist.o :    osp_plist.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_soldier.o :   m_soldier.c
+$(BUILDDIR)/osp_maps.o :     osp_maps.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_supertank.o : m_supertank.c
+$(BUILDDIR)/ngmark.o :       ngmark.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_tank.o :      m_tank.c
+$(BUILDDIR)/nglog.o :        nglog.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/p_hud.o :       p_hud.c
+$(BUILDDIR)/md5c.o :         md5c.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/p_trail.o :     p_trail.c
+$(BUILDDIR)/osp_detect.o :   osp_detect.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/p_view.o :      p_view.c
+$(BUILDDIR)/q2log.o :        q2log.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/p_weapon.o :    p_weapon.c
+$(BUILDDIR)/sl_write.o :     sl_write.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/q_shared.o :    q_shared.c
+$(BUILDDIR)/stdlog.o :       stdlog.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/m_flash.o :     m_flash.c
+$(BUILDDIR)/p_menu.o :       p_menu.c
+	$(DO_SHLIB_CC)
+
+$(BUILDDIR)/bl_botcfg.o :    bl_botcfg.c
+	$(DO_SHLIB_CC)
+
+$(BUILDDIR)/bl_cmd.o :       bl_cmd.c
+	$(DO_SHLIB_CC)
+
+$(BUILDDIR)/bl_debug.o :     bl_debug.c
+	$(DO_SHLIB_CC)
+
+$(BUILDDIR)/bl_main.o :      bl_main.c
+	$(DO_SHLIB_CC)
+
+$(BUILDDIR)/bl_redirgi.o :   bl_redirgi.c
+	$(DO_SHLIB_CC)
+
+$(BUILDDIR)/bl_spawn.o :     bl_spawn.c
 	$(DO_SHLIB_CC)
 
 #####
@@ -235,7 +284,7 @@ clean-debug:
 	$(MAKE) clean2 BUILDDIR=$(BUILD_DEBUG_DIR) CFLAGS="$(DEBUG_CFLAGS)"
 
 clean-release:
-	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(DEBUG_CFLAGS)"
+	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(RELEASE_CFLAGS)"
 
 clean2:
-	-rm -f $(GAME_OBJS)
+	-rm -f $(GAME_OBJS) $(TARGETS)

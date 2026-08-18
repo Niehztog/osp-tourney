@@ -20,6 +20,8 @@ SV_CalcRoll
 
 ===============
 */
+// gamex86.dll: 1005A930..1005A9D8
+// gamei386.so: 00040554..000405DF
 float SV_CalcRoll (vec3_t angles, vec3_t velocity)
 {
 	float	sign;
@@ -49,6 +51,8 @@ P_DamageFeedback
 Handles color blends and view kicks
 ===============
 */
+// gamex86.dll: 1005A9D8..1005AF45
+// gamei386.so: 000405E0..00040ADA
 void P_DamageFeedback (edict_t *player)
 {
 	gclient_t	*client;
@@ -200,6 +204,8 @@ Auto pitching on slopes?
 
 ===============
 */
+// gamex86.dll: 1005AF45..1005B377
+// gamei386.so: 00040ADC..00040E8D
 void SV_CalcViewOffset (edict_t *ent)
 {
 	float		*angles;
@@ -323,6 +329,8 @@ void SV_CalcViewOffset (edict_t *ent)
 SV_CalcGunOffset
 ==============
 */
+// gamex86.dll: 1005B377..1005B5C5
+// gamei386.so: 00040E90..0004105C
 void SV_CalcGunOffset (edict_t *ent)
 {
 	int		i;
@@ -375,6 +383,8 @@ void SV_CalcGunOffset (edict_t *ent)
 SV_AddBlend
 =============
 */
+// gamex86.dll: 1005B5C5..1005B666
+// gamei386.so: 0004105C..000410C0
 void SV_AddBlend (float r, float g, float b, float a, float *v_blend)
 {
 	float	a2, a3;
@@ -396,6 +406,8 @@ void SV_AddBlend (float r, float g, float b, float a, float *v_blend)
 SV_CalcBlend
 =============
 */
+// gamex86.dll: 1005B666..1005BB4D
+// gamei386.so: 000410C0..0004169C
 void SV_CalcBlend (edict_t *ent)
 {
 	int		contents;
@@ -479,6 +491,8 @@ void SV_CalcBlend (edict_t *ent)
 P_FallingDamage
 =================
 */
+// gamex86.dll: 1005BB4D..1005BE08
+// gamei386.so: 0004169C..00041952
 void P_FallingDamage (edict_t *ent)
 {
 	float	delta;
@@ -502,6 +516,12 @@ void P_FallingDamage (edict_t *ent)
 		delta = ent->velocity[2] - ent->client->oldvelocity[2];
 	}
 	delta = delta*delta * 0.0001;
+
+	// never take damage if just released the grapple or on the grapple (CTF)
+	if (level.time - ent->client->grapplereleasetime <= FRAMETIME * 2 ||
+		(ent->client->grapple &&
+		ent->client->grapplestate > CTF_GRAPPLE_STATE_FLY))
+		return;
 
 	// never take falling damage if completely underwater
 	if (ent->waterlevel == 3)
@@ -557,6 +577,8 @@ void P_FallingDamage (edict_t *ent)
 P_WorldEffects
 =============
 */
+// gamex86.dll: 1005BE08..1005C5E9
+// gamei386.so: 00041954..00041FB8
 void P_WorldEffects (void)
 {
 	qboolean	breather;
@@ -723,6 +745,8 @@ void P_WorldEffects (void)
 G_SetClientEffects
 ===============
 */
+// gamex86.dll: 1005C5E9..1005C8C9
+// gamei386.so: 00041FB8..00042201
 void G_SetClientEffects (edict_t *ent)
 {
 	int		pa_type;
@@ -768,6 +792,41 @@ void G_SetClientEffects (edict_t *ent)
 		ent->s.effects |= EF_COLOR_SHELL;
 		ent->s.renderfx |= (RF_SHELL_RED|RF_SHELL_GREEN|RF_SHELL_BLUE);
 	}
+
+	if (ent->client->resp.osp_r23c > level.framenum)
+	{
+		ent->s.effects |= EF_COLOR_SHELL;
+		ent->s.renderfx |= (RF_SHELL_RED|RF_SHELL_GREEN);
+	}
+
+	if ((int)runes_flash->value)
+	{
+		if (ent->client->osp_t074 > level.time)
+		{
+			ent->s.effects |= EF_COLOR_SHELL;
+			ent->s.renderfx |= RF_SHELL_BLUE;
+		}
+		else if (ent->client->osp_t078 > level.time)
+		{
+			ent->s.effects |= EF_COLOR_SHELL;
+			ent->s.renderfx |= RF_SHELL_RED;
+		}
+		else if (ent->client->osp_t07c > level.time)
+		{
+			ent->s.effects |= EF_COLOR_SHELL;
+			ent->s.renderfx |= (RF_SHELL_RED|RF_SHELL_GREEN);
+		}
+		else if (ent->client->osp_t080 > level.time)
+		{
+			ent->s.effects |= EF_COLOR_SHELL;
+			ent->s.renderfx |= RF_SHELL_GREEN;
+		}
+		else if (ent->client->osp_t084 > level.time)
+		{
+			ent->s.effects |= EF_COLOR_SHELL;
+			ent->s.renderfx |= (RF_SHELL_BLUE|RF_SHELL_RED);
+		}
+	}
 }
 
 
@@ -776,6 +835,8 @@ void G_SetClientEffects (edict_t *ent)
 G_SetClientEvent
 ===============
 */
+// gamex86.dll: 1005C8C9..1005C921
+// gamei386.so: 00042204..00042285
 void G_SetClientEvent (edict_t *ent)
 {
 	if (ent->s.event)
@@ -793,20 +854,22 @@ void G_SetClientEvent (edict_t *ent)
 G_SetClientSound
 ===============
 */
+// gamex86.dll: 1005C921..1005CAA7
+// gamei386.so: 00042288..000423D6
 void G_SetClientSound (edict_t *ent)
 {
 	char	*weap;
 
-	if (ent->client->pers.game_helpchanged != game.helpchanged)
+	if (ent->client->resp.game_helpchanged != game.helpchanged)
 	{
-		ent->client->pers.game_helpchanged = game.helpchanged;
-		ent->client->pers.helpchanged = 1;
+		ent->client->resp.game_helpchanged = game.helpchanged;
+		ent->client->resp.helpchanged = 1;
 	}
 
 	// help beep (no more than three times)
-	if (ent->client->pers.helpchanged && ent->client->pers.helpchanged <= 3 && !(level.framenum&63) )
+	if (ent->client->resp.helpchanged && ent->client->resp.helpchanged <= 3 && !(level.framenum&63) )
 	{
-		ent->client->pers.helpchanged++;
+		ent->client->resp.helpchanged++;
 		gi.sound (ent, CHAN_VOICE, gi.soundindex ("misc/pc_up.wav"), 1, ATTN_STATIC, 0);
 	}
 
@@ -833,6 +896,8 @@ void G_SetClientSound (edict_t *ent)
 G_SetClientFrame
 ===============
 */
+// gamex86.dll: 1005CAA7..1005CD16
+// gamei386.so: 000423D8..00042581
 void G_SetClientFrame (edict_t *ent)
 {
 	gclient_t	*client;
@@ -894,10 +959,16 @@ newanim:
 
 	if (!ent->groundentity)
 	{
+		// if on grapple, don't go into the jump frame, go into standing (CTF)
+		if (client->grapple) {
+			ent->s.frame = FRAME_stand01;
+			client->anim_end = FRAME_stand40;
+		} else {
 		client->anim_priority = ANIM_JUMP;
 		if (ent->s.frame != FRAME_jump2)
 			ent->s.frame = FRAME_jump1;
 		client->anim_end = FRAME_jump2;
+		}
 	}
 	else if (run)
 	{	// running
@@ -936,10 +1007,15 @@ Called for each player at the end of the server frame
 and right after spawning
 =================
 */
+// gamex86.dll: 1005CD16..1005D550
+// gamei386.so: 00042584..00042E17
 void ClientEndServerFrame (edict_t *ent)
 {
 	float	bobtime;
 	int		i;
+	// `other` is FUNCTION-scope in the original, not block-scoped with
+	// `count` below.
+	edict_t	*other;
 
 	current_player = ent;
 	current_client = ent->client;
@@ -968,10 +1044,19 @@ void ClientEndServerFrame (edict_t *ent)
 		current_client->ps.blend[3] = 0;
 		current_client->ps.fov = 90;
 		G_SetStats (ent);
+		OSP_clearStats (ent);
+
+		// One &&-ed condition -- all four guards fall into the body.
+		if (current_client->showscores && !(level.framenum & 31) && hs_mode &&
+			!(ent->flags & FL_OSP_NOCMD))
+		{
+			DeathmatchScoreboardMessage (ent, ent->enemy);
+			gi.unicast (ent, false);
+		}
 		return;
 	}
 
-	AngleVectors (ent->client->v_angle, forward, right, up);
+	AngleVectors (current_client->v_angle, forward, right, up);
 
 	// burn from lava, etc
 	P_WorldEffects ();
@@ -980,11 +1065,11 @@ void ClientEndServerFrame (edict_t *ent)
 	// set model angles from view angles so other things in
 	// the world can tell which direction you are looking
 	//
-	if (ent->client->v_angle[PITCH] > 180)
-		ent->s.angles[PITCH] = (-360 + ent->client->v_angle[PITCH])/3;
+	if (current_client->v_angle[PITCH] > 180)
+		ent->s.angles[PITCH] = (-360 + current_client->v_angle[PITCH])/3;
 	else
-		ent->s.angles[PITCH] = ent->client->v_angle[PITCH]/3;
-	ent->s.angles[YAW] = ent->client->v_angle[YAW];
+		ent->s.angles[PITCH] = current_client->v_angle[PITCH]/3;
+	ent->s.angles[YAW] = current_client->v_angle[YAW];
 	ent->s.angles[ROLL] = 0;
 	ent->s.angles[ROLL] = SV_CalcRoll (ent->s.angles, ent->velocity)*4;
 
@@ -994,7 +1079,8 @@ void ClientEndServerFrame (edict_t *ent)
 	//
 	xyspeed = sqrt(ent->velocity[0]*ent->velocity[0] + ent->velocity[1]*ent->velocity[1]);
 
-	if (xyspeed < 5)
+	if (xyspeed < 5 || current_client->grapple ||
+		current_client->resp.entered != ENTERED_ENTERED)
 	{
 		bobmove = 0;
 		current_client->bobtime = 0;	// start at beginning of cycle again
@@ -1036,12 +1122,67 @@ void ClientEndServerFrame (edict_t *ent)
 	// should be determined by the client
 	SV_CalcBlend (ent);
 
-	// chase cam stuff
-	if (ent->client->resp.spectator)
-		G_SetSpectatorStats(ent);
-	else
+	if (!current_client->chase_target && !current_client->osp_t03c)
 		G_SetStats (ent);
-	G_CheckChaseStats(ent);
+
+	if (current_client->resp.osp_r2dc)
+		OSP_clearStats (ent);
+	else if (level.framenum - current_client->resp.enterframe > 10 &&
+		!(current_client->resp.osp_r01c & 0x10) &&
+		!(ent->flags & FL_OSP_NOCMD))
+		OSP_setStats (ent);
+
+	if (ent->client->resp.entered == ENTERED_ENTERED &&
+		ent->client->resp.osp_r000 && !level.intermissiontime)
+	{
+		// No cached `gclient_t *client`, and the viewer bound is folded into
+		// the `for`'s own condition.
+		int count;
+
+		count = 0;
+		for (i = 1; i <= game.maxclients &&
+			count < ent->client->resp.osp_r000; i++)
+		{
+			other = g_edicts + i;
+			if (!other->inuse || !other->client ||
+				(other->client->chase_target != ent &&
+				 other->client->osp_t03c != ent))
+				continue;
+
+			count++;
+			memcpy (other->client->ps.stats, ent->client->ps.stats,
+				sizeof(other->client->ps.stats));
+			other->client->ps.stats[STAT_LAYOUTS] = 1;
+			other->client->ps.stats[STAT_FRAGS] = 0;
+			other->client->ps.stats[STAT_HELPICON] = 0;
+			if (other->client->osp_t03c && m_mode < 2)
+				other->client->ps.stats[20] = 0;
+		}
+		ent->client->resp.osp_r000 = count;
+	}
+
+	if (current_client->resp.osp_r200)
+	{
+		if (current_client->quad_framenum &&
+			current_client->quad_framenum < level.framenum)
+		{
+			q2log_expireItem ("Quad", ent, ent->client->resp.osp_r200);
+			if (!current_client->invincible_framenum)
+				ent->client->resp.osp_r200 = 0;
+			current_client->quad_framenum = 0;
+		}
+
+		if (current_client->resp.osp_r200 &&
+			current_client->invincible_framenum &&
+			current_client->invincible_framenum < level.framenum)
+		{
+			q2log_expireItem ("Invulnerability", ent,
+				ent->client->resp.osp_r200);
+			if (!current_client->quad_framenum)
+				ent->client->resp.osp_r200 = 0;
+			current_client->invincible_framenum = 0;
+		}
+	}
 
 	G_SetClientEvent (ent);
 
@@ -1051,18 +1192,22 @@ void ClientEndServerFrame (edict_t *ent)
 
 	G_SetClientFrame (ent);
 
-	VectorCopy (ent->velocity, ent->client->oldvelocity);
-	VectorCopy (ent->client->ps.viewangles, ent->client->oldviewangles);
+	VectorCopy (ent->velocity, current_client->oldvelocity);
+	VectorCopy (current_client->ps.viewangles, ent->client->oldviewangles);
 
 	// clear weapon kicks
-	VectorClear (ent->client->kick_origin);
-	VectorClear (ent->client->kick_angles);
+	VectorClear (current_client->kick_origin);
+	VectorClear (current_client->kick_angles);
 
-	// if the scoreboard is up, update it
-	if (ent->client->showscores && !(level.framenum & 31) )
+	// The whole tail is ONE condition, and this block is the LAST statement
+	// in the function.
+	if (current_client->showscores && !current_client->menu &&
+		(!(level.framenum & 31) ||
+		 (match_paused && (pause_time - (int)pause_time < FRAMETIME) &&
+		  !((int)pause_time % 3))) &&
+		!(ent->flags & FL_OSP_NOCMD))
 	{
 		DeathmatchScoreboardMessage (ent, ent->enemy);
 		gi.unicast (ent, false);
 	}
 }
-

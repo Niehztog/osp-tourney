@@ -123,7 +123,7 @@ void SP_monster_commander_body (edict_t *self);
 
 void SP_turret_breach (edict_t *self);
 void SP_turret_base (edict_t *self);
-void SP_turret_driver (edict_t *self);
+void SP_bot (edict_t *self);
 
 
 spawn_t	spawns[] = {
@@ -244,7 +244,10 @@ spawn_t	spawns[] = {
 
 	{"turret_breach", SP_turret_breach},
 	{"turret_base", SP_turret_base},
-	{"turret_driver", SP_turret_driver},
+
+	// The Gladiator SDK's BOT row, and the last real entry in the image's own
+	// 109-row table.
+	{"bot", SP_bot},
 
 	{NULL, NULL}
 };
@@ -256,6 +259,8 @@ ED_CallSpawn
 Finds the spawn function for the entity and calls it
 ===============
 */
+// gamex86.dll: 10042830..1004291F
+// gamei386.so: 0002C138..0002C212
 void ED_CallSpawn (edict_t *ent)
 {
 	spawn_t	*s;
@@ -297,6 +302,8 @@ void ED_CallSpawn (edict_t *ent)
 ED_NewString
 =============
 */
+// gamex86.dll: 1004291F..100429DD
+// gamei386.so: 0002C214..0002C2A3
 char *ED_NewString (char *string)
 {
 	char	*newb, *new_p;
@@ -336,6 +343,8 @@ Takes a key/value pair and sets the binary values
 in an edict
 ===============
 */
+// gamex86.dll: 100429DD..10042B79
+// gamei386.so: 0002C2A4..0002C4BD
 void ED_ParseField (char *key, char *value, edict_t *ent)
 {
 	field_t	*f;
@@ -392,6 +401,8 @@ Parses an edict out of the given string, returning the new position
 ed should be a properly initialized empty edict.
 ====================
 */
+// gamex86.dll: 10042B79..10042C82
+// gamei386.so: 0002C4C0..0002C5C9
 char *ED_ParseEdict (char *data, edict_t *ent)
 {
 	qboolean	init;
@@ -448,6 +459,8 @@ All but the first will have the FL_TEAMSLAVE flag set.
 All but the last will have the teamchain field set to the next one
 ================
 */
+// gamex86.dll: 10042C82..10042E10
+// gamei386.so: 0002C5CC..0002C720
 void G_FindTeams (void)
 {
 	edict_t	*e, *e2, *chain;
@@ -498,6 +511,8 @@ Creates a server's entity / program execution context by
 parsing textual entity definitions out of an ent file.
 ==============
 */
+// gamex86.dll: 10042E10..100433E1
+// gamei386.so: 0002C720..0002CD3B
 void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 {
 	edict_t		*ent;
@@ -505,6 +520,13 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 	char		*com_token;
 	int			i;
 	float		skill_level;
+	char		address[32];
+	char		teamname[16];
+	char		teamskin[128];
+	int			referee;
+	int			osp_dead;			// invented name; unreferenced, but present in real's frame
+	extern int		botglobals;
+	cvar_t		*player_reload;
 
 	skill_level = floor (skill->value);
 	if (skill_level < 0)
@@ -519,10 +541,38 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 	gi.FreeTags (TAG_LEVEL);
 
 	memset (&level, 0, sizeof(level));
-	memset (g_edicts, 0, game.maxentities * sizeof (g_edicts[0]));
+	memset (g_edicts + game.maxclients + 1, 0,
+		(game.maxentities - game.maxclients - 1) * sizeof (g_edicts[0]));
+
+	for (i=0 ; i<=game.maxclients ; i++)
+	{
+		if (!i)
+		{
+			memset (g_edicts, 0, sizeof (g_edicts[0]));
+		}
+		else
+		{
+			referee = g_edicts[i].osp_e39c;
+			strncpy (address, g_edicts[i].osp_e37c, 31);
+			strncpy (teamname, g_edicts[i].osp_e3a0, 15);
+			strncpy (teamskin, g_edicts[i].osp_e3b0, 127);
+			address[31] = 0;
+			teamname[15] = 0;
+			teamskin[127] = 0;
+
+			memset (&g_edicts[i], 0, sizeof (g_edicts[0]));
+
+			g_edicts[i].osp_e39c = referee;
+			strncpy (g_edicts[i].osp_e37c, address, 31);
+			strncpy (g_edicts[i].osp_e3a0, teamname, 15);
+			strncpy (g_edicts[i].osp_e3b0, teamskin, 127);
+		}
+	}
 
 	strncpy (level.mapname, mapname, sizeof(level.mapname)-1);
 	strncpy (game.spawnpoint, spawnpoint, sizeof(game.spawnpoint)-1);
+
+	ClearIndexes ();
 
 	// set client fields on player ents
 	for (i=0 ; i<game.maxclients ; i++)
@@ -598,6 +648,27 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 	G_FindTeams ();
 
 	PlayerTrail_Init ();
+
+	m_mode = (int)match_mode->value;
+	player_reload = gi.cvar ("player_reload", "0", 0);
+	if ((int)player_reload->value)
+		OSP_playerlist_svcmd ();
+
+	if ((int)runes_enable->value)
+	{
+		runespawn = 0;
+		OSP_setupRuneSpawn (0);
+	}
+
+	botglobals = 0;
+	BotInitMuzzleFlashToSoundindex ();
+	BotSpawn ();
+	BotLib_BotLoadMap (mapname);
+	q2log_gameInit (1);
+	sl_GameStart (&gi, level);
+	if (m_mode < 1)
+		q2log_gameStart ();
+	console_stampcount = 0;
 }
 
 
@@ -741,27 +812,19 @@ char *dm_statusbar =
 "	pic	11 "
 "endif "
 
-//  frags
-"xr	-50 "
-"yt 2 "
-"num 3 14 "
-
-// spectator
-"if 17 "
-  "xv 0 "
-  "yb -58 "
-  "string2 \"SPECTATOR MODE\" "
-"endif "
-
-// chase camera
-"if 16 "
-  "xv 0 "
-  "yb -68 "
-  "string \"Chasing\" "
-  "xv 64 "
-  "stat_string 16 "
-"endif "
+// OSP's own tail: the two popup-menu stat_strings, the match-status cell,
+// the frags/time/rank block and the five rune indicators.
+"xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 18 \txr -44 \tyt 2 \tstring2 \"Frags\" \txr -68 \tyt 10 \tstat_string 18 \tyt 18 \tstat_string 19 endif if 17 \txr -44 \tyt 66 \tstat_string 17 \txr -36 \tyt 58 \tstring2 \"Time\" endif if 20 \tyt 34 \tstring2 \"Rank\" \txr -44 \tyt 42 \tstat_string 20 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif "
 ;
+
+// The three alternate status bars, in real's own .data order right after
+// dm_statusbar.
+char * dm_statusbar_alt =
+	"yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 18 \txr -44 \tyt 2 \tstring2 \"Frags\" \txr -68 \tyt 10 \tstat_string 18 \tyt 18 \tstat_string 19 endif if 17 \txv 180 \tyb -38 \tstat_string 17 \txv 188 \tyb -46 \tstring2 \"Time\" endif if 20 \txr -36 \tyt 34 \tstring2 \"Rank\" \txr -44 \tyt 42 \tstat_string 20 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
+char * team_statusbar =
+	"yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 17 \txr -36 \tyt 50 \tstring2 \"Time\" \txr -44 \tyt 58 \tstat_string 17 endif if 18 \txr -124 \tyt 2 \tstat_string 18 \txr -108 \tyt 10 \tstat_string 19 endif if 20 \txr -124 \tyt 26 \tstat_string 20 \txr -108 \tyt 34 \tstat_string 21 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
+char * team_statusbar_alt =
+	"yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 17 \txv 180 \tyb -38 \tstat_string 17 \txv 188 \tyb -46 \tstring2 \"Time\" endif if 18 \txr -124 \tyt 2 \tstat_string 18 \txr -108 \tyt 10 \tstat_string 19 endif if 20 \txr -124 \tyt 26 \tstat_string 20 \txr -108 \tyt 34 \tstat_string 21 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
 
 
 /*QUAKED worldspawn (0 0 0) ?
@@ -774,14 +837,22 @@ Only used for the world.
 "gravity"	800 is default gravity
 "message"	text to print at user logon
 */
+// gamex86.dll: 100433E1..10043E00
+// gamei386.so: 0002CD3C..0002D7DF
 void SP_worldspawn (edict_t *ent)
 {
+	char		buf[256];
+	int			i;
+
 	ent->movetype = MOVETYPE_PUSH;
 	ent->solid = SOLID_BSP;
 	ent->inuse = true;			// since the world doesn't use G_Spawn()
 	ent->s.modelindex = 1;		// world model is always index 1
 
 	//---------------
+
+	match_mode = gi.cvar ("match_mode", "0", 0);
+	m_mode = (int)match_mode->value;
 
 	// reserve some spots for dead player bodies for coop / deathmatch
 	InitBodyQue ();
@@ -791,6 +862,60 @@ void SP_worldspawn (edict_t *ent)
 
 	if (st.nextmap)
 		strcpy (level.nextmap, st.nextmap);
+
+	gi.dprintf ("Loading map: %s\n", level.mapname);
+	if (server_log)
+	{
+		char	date[64];
+
+		ngLog_getDateInfo (date, 0);
+		OSP_logAdminLog ("Map: %s (%s)", level.mapname, date);
+	}
+
+	OSP_initHighScores ();
+
+	if (m_mode)
+		sync_stat = 0;
+	else
+		sync_stat = 8;
+
+	OSP_setMOTD ();
+	overtime_timer = 0;
+	frag_offset = 0;
+
+	if (m_mode > 1)
+	{
+		sprintf (buf, "%15s", teams[0].greenname);
+		gi.configstring (0x625, buf);
+		sprintf (buf, "%15s", teams[1].greenname);
+		gi.configstring (0x627, buf);
+		OSP_teamReset ();
+	}
+
+	sprintf (buf, "%s", "OSP Tourney DM v(2.75)");
+	for (i=0 ; i<strlen(buf) ; i++)
+		buf[i] |= 128;
+	gi.configstring (0x629, buf);
+
+	sprintf (buf, "%s", match_endinfo->string);
+	for (i=0 ; i<strlen(buf) ; i++)
+		buf[i] |= 128;
+	buf[63] = 0;
+	gi.configstring (0x62a, buf);
+
+	sprintf (buf, "Stats at: http://Quake2.ngWorldStats.com");
+	for (i=0 ; i<strlen(buf) ; i++)
+		buf[i] |= 128;
+	gi.configstring (0x62b, buf);
+
+	if (!match_endmusic || !match_endmusic->string[0] ||
+		!strcmp (match_endmusic->string, "default"))
+	{
+		for (i=0 ; i<5 ; i++)
+			gi.soundindex (wav_file + i * 25);
+	}
+	else
+		gi.soundindex (match_endmusic->string);
 
 	// make some data visible to the server
 
@@ -818,7 +943,22 @@ void SP_worldspawn (edict_t *ent)
 
 	// status bar program
 	if (deathmatch->value)
-		gi.configstring (CS_STATUSBAR, dm_statusbar);
+	{
+		if (m_mode < 2)
+		{
+			if (!(int)client_hud->value)
+				gi.configstring (CS_STATUSBAR, dm_statusbar);
+			else
+				gi.configstring (CS_STATUSBAR, dm_statusbar_alt);
+		}
+		else
+		{
+			if (!(int)client_hud->value)
+				gi.configstring (CS_STATUSBAR, team_statusbar);
+			else
+				gi.configstring (CS_STATUSBAR, team_statusbar_alt);
+		}
+	}
 	else
 		gi.configstring (CS_STATUSBAR, single_statusbar);
 
@@ -962,4 +1102,3 @@ void SP_worldspawn (edict_t *ent)
 	// 63 testing
 	gi.configstring(CS_LIGHTS+63, "a");
 }
-

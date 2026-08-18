@@ -3,10 +3,16 @@
 
 #define Function(f) {#f, f}
 
-mmove_t mmove_reloc;
+// Vanilla's `mmove_reloc` is NOT here: real's .bss has no static run at all
+// between g_items.c's and g_trigger.c's, so the 16 bytes it would occupy are
+// absent.  Consistent with F_MMOVE appearing in neither of this file's tables.
 
 field_t fields[] = {
+// OSP: named spawn keys only.  Vanilla mixes two jobs in this one table --
+// keys the map parser looks up, and FFL_NOSPAWN rows that exist purely so
+// WriteEdict/ReadEdict can relocate pointers -- and tourney splits them.
 	{"classname", FOFS(classname), F_LSTRING},
+	{"origin", FOFS(s.origin), F_VECTOR},
 	{"model", FOFS(model), F_LSTRING},
 	{"spawnflags", FOFS(spawnflags), F_INT},
 	{"speed", FOFS(speed), F_FLOAT},
@@ -31,61 +37,18 @@ field_t fields[] = {
 	{"sounds", FOFS(sounds), F_INT},
 	{"light", 0, F_IGNORE},
 	{"dmg", FOFS(dmg), F_INT},
+	{"angles", FOFS(s.angles), F_VECTOR},
+	{"angle", FOFS(s.angles), F_ANGLEHACK},
 	{"mass", FOFS(mass), F_INT},
 	{"volume", FOFS(volume), F_FLOAT},
 	{"attenuation", FOFS(attenuation), F_FLOAT},
 	{"map", FOFS(map), F_LSTRING},
-	{"origin", FOFS(s.origin), F_VECTOR},
-	{"angles", FOFS(s.angles), F_VECTOR},
-	{"angle", FOFS(s.angles), F_ANGLEHACK},
-
-	{"goalentity", FOFS(goalentity), F_EDICT, FFL_NOSPAWN},
-	{"movetarget", FOFS(movetarget), F_EDICT, FFL_NOSPAWN},
-	{"enemy", FOFS(enemy), F_EDICT, FFL_NOSPAWN},
-	{"oldenemy", FOFS(oldenemy), F_EDICT, FFL_NOSPAWN},
-	{"activator", FOFS(activator), F_EDICT, FFL_NOSPAWN},
-	{"groundentity", FOFS(groundentity), F_EDICT, FFL_NOSPAWN},
-	{"teamchain", FOFS(teamchain), F_EDICT, FFL_NOSPAWN},
-	{"teammaster", FOFS(teammaster), F_EDICT, FFL_NOSPAWN},
-	{"owner", FOFS(owner), F_EDICT, FFL_NOSPAWN},
-	{"mynoise", FOFS(mynoise), F_EDICT, FFL_NOSPAWN},
-	{"mynoise2", FOFS(mynoise2), F_EDICT, FFL_NOSPAWN},
-	{"target_ent", FOFS(target_ent), F_EDICT, FFL_NOSPAWN},
-	{"chain", FOFS(chain), F_EDICT, FFL_NOSPAWN},
-
-	{"prethink", FOFS(prethink), F_FUNCTION, FFL_NOSPAWN},
-	{"think", FOFS(think), F_FUNCTION, FFL_NOSPAWN},
-	{"blocked", FOFS(blocked), F_FUNCTION, FFL_NOSPAWN},
-	{"touch", FOFS(touch), F_FUNCTION, FFL_NOSPAWN},
-	{"use", FOFS(use), F_FUNCTION, FFL_NOSPAWN},
-	{"pain", FOFS(pain), F_FUNCTION, FFL_NOSPAWN},
-	{"die", FOFS(die), F_FUNCTION, FFL_NOSPAWN},
-
-	{"stand", FOFS(monsterinfo.stand), F_FUNCTION, FFL_NOSPAWN},
-	{"idle", FOFS(monsterinfo.idle), F_FUNCTION, FFL_NOSPAWN},
-	{"search", FOFS(monsterinfo.search), F_FUNCTION, FFL_NOSPAWN},
-	{"walk", FOFS(monsterinfo.walk), F_FUNCTION, FFL_NOSPAWN},
-	{"run", FOFS(monsterinfo.run), F_FUNCTION, FFL_NOSPAWN},
-	{"dodge", FOFS(monsterinfo.dodge), F_FUNCTION, FFL_NOSPAWN},
-	{"attack", FOFS(monsterinfo.attack), F_FUNCTION, FFL_NOSPAWN},
-	{"melee", FOFS(monsterinfo.melee), F_FUNCTION, FFL_NOSPAWN},
-	{"sight", FOFS(monsterinfo.sight), F_FUNCTION, FFL_NOSPAWN},
-	{"checkattack", FOFS(monsterinfo.checkattack), F_FUNCTION, FFL_NOSPAWN},
-	{"currentmove", FOFS(monsterinfo.currentmove), F_MMOVE, FFL_NOSPAWN},
-
-	{"endfunc", FOFS(moveinfo.endfunc), F_FUNCTION, FFL_NOSPAWN},
-
-	// temp spawn vars -- only valid when the spawn function is called
 	{"lip", STOFS(lip), F_INT, FFL_SPAWNTEMP},
 	{"distance", STOFS(distance), F_INT, FFL_SPAWNTEMP},
 	{"height", STOFS(height), F_INT, FFL_SPAWNTEMP},
 	{"noise", STOFS(noise), F_LSTRING, FFL_SPAWNTEMP},
 	{"pausetime", STOFS(pausetime), F_FLOAT, FFL_SPAWNTEMP},
 	{"item", STOFS(item), F_LSTRING, FFL_SPAWNTEMP},
-
-//need for item field in edict struct, FFL_SPAWNTEMP item will be skipped on saves
-	{"item", FOFS(item), F_ITEM},
-
 	{"gravity", STOFS(gravity), F_LSTRING, FFL_SPAWNTEMP},
 	{"sky", STOFS(sky), F_LSTRING, FFL_SPAWNTEMP},
 	{"skyrotate", STOFS(skyrotate), F_FLOAT, FFL_SPAWNTEMP},
@@ -95,31 +58,73 @@ field_t fields[] = {
 	{"minpitch", STOFS(minpitch), F_FLOAT, FFL_SPAWNTEMP},
 	{"maxpitch", STOFS(maxpitch), F_FLOAT, FFL_SPAWNTEMP},
 	{"nextmap", STOFS(nextmap), F_LSTRING, FFL_SPAWNTEMP},
-
+	{"botlib", STOFS(botlib), F_LSTRING, FFL_SPAWNTEMP},
+	{"name", STOFS(name), F_LSTRING, FFL_SPAWNTEMP},
+	{"skin", STOFS(skin), F_LSTRING, FFL_SPAWNTEMP},
+	{"charfile", STOFS(charfile), F_LSTRING, FFL_SPAWNTEMP},
+	{"charname", STOFS(charname), F_LSTRING, FFL_SPAWNTEMP},
 	{0, 0, 0, 0}
-
 };
+
+// OSP: the relocatable-pointer set, a table vanilla does not have.  Walked by
+// WriteEdict/ReadEdict, which is why they need no FFL_SPAWNTEMP test.
+//
+// F_FUNCTION and F_MMOVE appear in NEITHER table: vanilla's 18
+// function-pointer rows and its one mmove row are simply gone.  Consistent
+// with a pure-PvP mod that never restores a saved game.
+field_t savefields[] = {
+	{"", FOFS(classname), F_LSTRING},
+	{"", FOFS(target), F_LSTRING},
+	{"", FOFS(targetname), F_LSTRING},
+	{"", FOFS(killtarget), F_LSTRING},
+	{"", FOFS(team), F_LSTRING},
+	{"", FOFS(pathtarget), F_LSTRING},
+	{"", FOFS(deathtarget), F_LSTRING},
+	{"", FOFS(combattarget), F_LSTRING},
+	{"", FOFS(model), F_LSTRING},
+	{"", FOFS(map), F_LSTRING},
+	{"", FOFS(message), F_LSTRING},
+	{"", FOFS(client), F_CLIENT},
+	{"", FOFS(item), F_ITEM},
+	{"", FOFS(goalentity), F_EDICT},
+	{"", FOFS(movetarget), F_EDICT},
+	{"", FOFS(enemy), F_EDICT},
+	{"", FOFS(oldenemy), F_EDICT},
+	{"", FOFS(activator), F_EDICT},
+	{"", FOFS(groundentity), F_EDICT},
+	{"", FOFS(teamchain), F_EDICT},
+	{"", FOFS(teammaster), F_EDICT},
+	{"", FOFS(owner), F_EDICT},
+	{"", FOFS(mynoise), F_EDICT},
+	{"", FOFS(mynoise2), F_EDICT},
+	{"", FOFS(target_ent), F_EDICT},
+	{"", FOFS(chain), F_EDICT},
+	{0, 0, 0, 0}
+};
+
 
 field_t		levelfields[] =
 {
-	{"changemap", LLOFS(changemap), F_LSTRING},
+	{"", LLOFS(changemap), F_LSTRING},
                    
-	{"sight_client", LLOFS(sight_client), F_EDICT},
-	{"sight_entity", LLOFS(sight_entity), F_EDICT},
-	{"sound_entity", LLOFS(sound_entity), F_EDICT},
-	{"sound2_entity", LLOFS(sound2_entity), F_EDICT},
+	{"", LLOFS(sight_client), F_EDICT},
+	{"", LLOFS(sight_entity), F_EDICT},
+	{"", LLOFS(sound_entity), F_EDICT},
+	{"", LLOFS(sound2_entity), F_EDICT},
 
 	{NULL, 0, F_INT}
 };
 
 field_t		clientfields[] =
 {
-	{"pers.weapon", CLOFS(pers.weapon), F_ITEM},
-	{"pers.lastweapon", CLOFS(pers.lastweapon), F_ITEM},
-	{"newweapon", CLOFS(newweapon), F_ITEM},
+	{"", CLOFS(pers.weapon), F_ITEM},
+	{"", CLOFS(pers.lastweapon), F_ITEM},
+	{"", CLOFS(newweapon), F_ITEM},
 
 	{NULL, 0, F_INT}
 };
+
+#include "bl_main.h"
 
 /*
 ============
@@ -130,6 +135,8 @@ only happens when a new game is started or a save game
 is loaded.
 ============
 */
+// gamex86.dll: 100418A0..10041C80
+// gamei386.so: 0002ABD4..0002B0FC
 void InitGame (void)
 {
 	gi.dprintf ("==== InitGame ====\n");
@@ -152,9 +159,9 @@ void InitGame (void)
 	gi.cvar ("gamename", GAMEVERSION , CVAR_SERVERINFO | CVAR_LATCH);
 	gi.cvar ("gamedate", __DATE__ , CVAR_SERVERINFO | CVAR_LATCH);
 
-	maxclients = gi.cvar ("maxclients", "4", CVAR_SERVERINFO | CVAR_LATCH);
-	maxspectators = gi.cvar ("maxspectators", "4", CVAR_SERVERINFO);
-	deathmatch = gi.cvar ("deathmatch", "0", CVAR_LATCH);
+	maxclients = gi.cvar ("maxclients", "8", CVAR_SERVERINFO);
+	deathmatch = gi.cvar ("deathmatch", "1", 0);
+	gi.cvar_set ("deathmatch", "1");
 	coop = gi.cvar ("coop", "0", CVAR_LATCH);
 	skill = gi.cvar ("skill", "1", CVAR_LATCH);
 	maxentities = gi.cvar ("maxentities", "1024", CVAR_LATCH);
@@ -164,8 +171,6 @@ void InitGame (void)
 	fraglimit = gi.cvar ("fraglimit", "0", CVAR_SERVERINFO);
 	timelimit = gi.cvar ("timelimit", "0", CVAR_SERVERINFO);
 	password = gi.cvar ("password", "", CVAR_USERINFO);
-	spectator_password = gi.cvar ("spectator_password", "", CVAR_USERINFO);
-	needpass = gi.cvar ("needpass", "0", CVAR_SERVERINFO);
 	filterban = gi.cvar ("filterban", "1", 0);
 
 	g_select_empty = gi.cvar ("g_select_empty", "0", CVAR_ARCHIVE);
@@ -175,14 +180,6 @@ void InitGame (void)
 	bob_up  = gi.cvar ("bob_up", "0.005", 0);
 	bob_pitch = gi.cvar ("bob_pitch", "0.002", 0);
 	bob_roll = gi.cvar ("bob_roll", "0.002", 0);
-
-	// flood control
-	flood_msgs = gi.cvar ("flood_msgs", "4", 0);
-	flood_persecond = gi.cvar ("flood_persecond", "4", 0);
-	flood_waitdelay = gi.cvar ("flood_waitdelay", "10", 0);
-
-	// dm map list
-	sv_maplist = gi.cvar ("sv_maplist", "", 0);
 
 	// items
 	InitItems ();
@@ -201,18 +198,27 @@ void InitGame (void)
 	game.maxclients = maxclients->value;
 	game.clients = gi.TagMalloc (game.maxclients * sizeof(game.clients[0]), TAG_GAME);
 	globals.num_edicts = game.maxclients+1;
+
+	BotSetup ();
+	OSP_loadMaps ();
+	OSP_gameInit ();
+
+	sl_Logging (&gi, "OSP Tourney DM");
+
+	gi.dprintf ("\n=============================\n");
+	gi.dprintf (" Gladiator Bot by Mr Elusive\n");
+	gi.dprintf ("=============================\n\n");
 }
 
 //=========================================================
 
+// gamex86.dll: 10041C80..10041DBA
+// gamei386.so: 0002B0FC..0002B226
 void WriteField1 (FILE *f, field_t *field, byte *base)
 {
 	void		*p;
 	int			len;
 	int			index;
-
-	if (field->flags & FFL_SPAWNTEMP)
-		return;
 
 	p = (void *)(base + field->ofs);
 	switch (field->type)
@@ -254,42 +260,24 @@ void WriteField1 (FILE *f, field_t *field, byte *base)
 		*(int *)p = index;
 		break;
 
-	//relative to code segment
-	case F_FUNCTION:
-		if (*(byte **)p == NULL)
-			index = 0;
-		else
-			index = *(byte **)p - ((byte *)InitGame);
-		*(int *)p = index;
-		break;
-
-	//relative to data segment
-	case F_MMOVE:
-		if (*(byte **)p == NULL)
-			index = 0;
-		else
-			index = *(byte **)p - (byte *)&mmove_reloc;
-		*(int *)p = index;
-		break;
-
 	default:
 		gi.error ("WriteEdict: unknown field type");
 	}
 }
 
 
+// gamex86.dll: 10041DBA..10041E1B
+// gamei386.so: 0002B228..0002B278
 void WriteField2 (FILE *f, field_t *field, byte *base)
 {
 	int			len;
 	void		*p;
 
-	if (field->flags & FFL_SPAWNTEMP)
-		return;
-
 	p = (void *)(base + field->ofs);
 	switch (field->type)
 	{
 	case F_LSTRING:
+	case F_GSTRING:
 		if ( *(char **)p )
 		{
 			len = strlen(*(char **)p) + 1;
@@ -299,14 +287,13 @@ void WriteField2 (FILE *f, field_t *field, byte *base)
 	}
 }
 
+// gamex86.dll: 10041E1B..10041FB8
+// gamei386.so: 0002B278..0002B3AA
 void ReadField (FILE *f, field_t *field, byte *base)
 {
 	void		*p;
 	int			len;
 	int			index;
-
-	if (field->flags & FFL_SPAWNTEMP)
-		return;
 
 	p = (void *)(base + field->ofs);
 	switch (field->type)
@@ -325,6 +312,16 @@ void ReadField (FILE *f, field_t *field, byte *base)
 		else
 		{
 			*(char **)p = gi.TagMalloc (len, TAG_LEVEL);
+			fread (*(char **)p, len, 1, f);
+		}
+		break;
+	case F_GSTRING:
+		len = *(int *)p;
+		if (!len)
+			*(char **)p = NULL;
+		else
+		{
+			*(char **)p = gi.TagMalloc (len, TAG_GAME);
 			fread (*(char **)p, len, 1, f);
 		}
 		break;
@@ -350,24 +347,6 @@ void ReadField (FILE *f, field_t *field, byte *base)
 			*(gitem_t **)p = &itemlist[index];
 		break;
 
-	//relative to code segment
-	case F_FUNCTION:
-		index = *(int *)p;
-		if ( index == 0 )
-			*(byte **)p = NULL;
-		else
-			*(byte **)p = ((byte *)InitGame) + index;
-		break;
-
-	//relative to data segment
-	case F_MMOVE:
-		index = *(int *)p;
-		if (index == 0)
-			*(byte **)p = NULL;
-		else
-			*(byte **)p = (byte *)&mmove_reloc + index;
-		break;
-
 	default:
 		gi.error ("ReadEdict: unknown field type");
 	}
@@ -382,6 +361,8 @@ WriteClient
 All pointer variables (except function pointers) must be handled specially.
 ==============
 */
+// gamex86.dll: 10041FB8..1004205A
+// gamei386.so: 0002B3AC..0002B48C
 void WriteClient (FILE *f, gclient_t *client)
 {
 	field_t		*field;
@@ -413,6 +394,8 @@ ReadClient
 All pointer variables (except function pointers) must be handled specially.
 ==============
 */
+// gamex86.dll: 1004205A..100420A9
+// gamei386.so: 0002B48C..0002B4DD
 void ReadClient (FILE *f, gclient_t *client)
 {
 	field_t		*field;
@@ -439,6 +422,8 @@ A single player death will automatically restore from the
 last save position.
 ============
 */
+// gamex86.dll: 100420A9..10042192
+// gamei386.so: 0002B4E0..0002B6F9
 void WriteGame (char *filename, qboolean autosave)
 {
 	FILE	*f;
@@ -466,6 +451,8 @@ void WriteGame (char *filename, qboolean autosave)
 	fclose (f);
 }
 
+// gamex86.dll: 10042192..100422C4
+// gamei386.so: 0002B6FC..0002B8B8
 void ReadGame (char *filename)
 {
 	FILE	*f;
@@ -506,6 +493,8 @@ WriteEdict
 All pointer variables (except function pointers) must be handled specially.
 ==============
 */
+// gamex86.dll: 100422C4..10042362
+// gamei386.so: 0002B8B8..0002B998
 void WriteEdict (FILE *f, edict_t *ent)
 {
 	field_t		*field;
@@ -515,7 +504,7 @@ void WriteEdict (FILE *f, edict_t *ent)
 	temp = *ent;
 
 	// change the pointers to lengths or indexes
-	for (field=fields ; field->name ; field++)
+	for (field=savefields ; field->name ; field++)
 	{
 		WriteField1 (f, field, (byte *)&temp);
 	}
@@ -524,7 +513,7 @@ void WriteEdict (FILE *f, edict_t *ent)
 	fwrite (&temp, sizeof(temp), 1, f);
 
 	// now write any allocated data following the edict
-	for (field=fields ; field->name ; field++)
+	for (field=savefields ; field->name ; field++)
 	{
 		WriteField2 (f, field, (byte *)ent);
 	}
@@ -538,6 +527,8 @@ WriteLevelLocals
 All pointer variables (except function pointers) must be handled specially.
 ==============
 */
+// gamex86.dll: 10042362..10042403
+// gamei386.so: 0002B998..0002BA7F
 void WriteLevelLocals (FILE *f)
 {
 	field_t		*field;
@@ -570,13 +561,15 @@ ReadEdict
 All pointer variables (except function pointers) must be handled specially.
 ==============
 */
+// gamex86.dll: 10042403..10042452
+// gamei386.so: 0002BA80..0002BAD1
 void ReadEdict (FILE *f, edict_t *ent)
 {
 	field_t		*field;
 
 	fread (ent, sizeof(*ent), 1, f);
 
-	for (field=fields ; field->name ; field++)
+	for (field=savefields ; field->name ; field++)
 	{
 		ReadField (f, field, (byte *)ent);
 	}
@@ -589,6 +582,8 @@ ReadLevelLocals
 All pointer variables (except function pointers) must be handled specially.
 ==============
 */
+// gamex86.dll: 10042452..100424A3
+// gamei386.so: 0002BAD4..0002BB2C
 void ReadLevelLocals (FILE *f)
 {
 	field_t		*field;
@@ -607,6 +602,8 @@ WriteLevel
 
 =================
 */
+// gamex86.dll: 100424A3..100425A4
+// gamei386.so: 0002BB2C..0002BDFE
 void WriteLevel (char *filename)
 {
 	int		i;
@@ -661,6 +658,8 @@ calling ReadLevel.
 No clients are connected yet.
 =================
 */
+// gamex86.dll: 100425A4..10042830
+// gamei386.so: 0002BE00..0002C138
 void ReadLevel (char *filename)
 {
 	int		entnum;
@@ -691,15 +690,11 @@ void ReadLevel (char *filename)
 
 	// check function pointer base address
 	fread (&base, sizeof(base), 1, f);
-#ifdef _WIN32
 	if (base != (void *)InitGame)
 	{
 		fclose (f);
 		gi.error ("ReadLevel: function pointers have moved");
 	}
-#else
-	gi.dprintf("Function offsets %d\n", ((byte *)base) - ((byte *)InitGame));
-#endif
 
 	// load the level locals
 	ReadLevelLocals (f);

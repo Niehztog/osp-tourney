@@ -11,7 +11,9 @@ static byte		is_silenced;
 void weapon_grenade_fire (edict_t *ent, qboolean held);
 
 
-static void P_ProjectSource (gclient_t *client, vec3_t point, vec3_t distance, vec3_t forward, vec3_t right, vec3_t result)
+// gamex86.dll: 1005D550..1005D5BD
+// gamei386.so: 00042E18..00042E7E
+void P_ProjectSource (gclient_t *client, vec3_t point, vec3_t distance, vec3_t forward, vec3_t right, vec3_t result)
 {
 	vec3_t	_distance;
 
@@ -36,6 +38,8 @@ Monsters that don't directly see the player can move
 to a noise in hopes of seeing the player from there.
 ===============
 */
+// gamex86.dll: 1005D5BD..1005D865
+// gamei386.so: 00042E80..00043087
 void PlayerNoise(edict_t *who, vec3_t where, int type)
 {
 	edict_t		*noise;
@@ -96,6 +100,8 @@ void PlayerNoise(edict_t *who, vec3_t where, int type)
 }
 
 
+// gamex86.dll: 1005D865..1005DA52
+// gamei386.so: 00043088..0004325E
 qboolean Pickup_Weapon (edict_t *ent, edict_t *other)
 {
 	int			index;
@@ -123,22 +129,25 @@ qboolean Pickup_Weapon (edict_t *ent, edict_t *other)
 
 		if (! (ent->spawnflags & DROPPED_PLAYER_ITEM) )
 		{
-			if (deathmatch->value)
-			{
-				if ((int)(dmflags->value) & DF_WEAPONS_STAY)
-					ent->flags |= FL_RESPAWN;
-				else
-					SetRespawn (ent, 30);
-			}
-			if (coop->value)
+			if ((int)(dmflags->value) & DF_WEAPONS_STAY)
 				ent->flags |= FL_RESPAWN;
+			else
+				SetRespawn (ent, 30);
 		}
 	}
 
-	if (other->client->pers.weapon != ent->item && 
+	// Only the newweapon assignment is guarded: the shell-timer clear and the
+	// pickup log run on EVERY weapon pickup, not just on the one that
+	// auto-switches away from the blaster.
+	if (other->client->pers.weapon != ent->item &&
 		(other->client->pers.inventory[index] == 1) &&
-		( !deathmatch->value || other->client->pers.weapon == FindItem("blaster") ) )
+		other->client->pers.weapon == FindItem("blaster"))
+	{
 		other->client->newweapon = ent->item;
+	}
+
+	other->client->resp.osp_r23c = 0;
+	q2log_pickupItem (ent->item->pickup_name, 0, other);
 
 	return true;
 }
@@ -152,6 +161,8 @@ The old weapon has been dropped all the way, so make the new one
 current
 ===============
 */
+// gamex86.dll: 1005DA52..1005DC98
+// gamei386.so: 00043260..0004344B
 void ChangeWeapon (edict_t *ent)
 {
 	int i;
@@ -191,7 +202,10 @@ void ChangeWeapon (edict_t *ent)
 
 	ent->client->weaponstate = WEAPON_ACTIVATING;
 	ent->client->ps.gunframe = 0;
-	ent->client->ps.gunindex = gi.modelindex(ent->client->pers.weapon->view_model);
+	if (ent->client->resp.osp_r240 == 2)
+		ent->client->ps.gunindex = gi.modelindex(ent->client->pers.weapon->view_model);
+	else
+		ent->client->ps.gunindex = 0;
 
 	ent->client->anim_priority = ANIM_PAIN;
 	if(ent->client->ps.pmove.pm_flags & PMF_DUCKED)
@@ -212,12 +226,28 @@ void ChangeWeapon (edict_t *ent)
 NoAmmoWeaponChange
 =================
 */
+// gamex86.dll: 1005DC98..1005DF61
+// gamei386.so: 0004344C..0004376B
 void NoAmmoWeaponChange (edict_t *ent)
 {
 	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("slugs"))]
 		&&  ent->client->pers.inventory[ITEM_INDEX(FindItem("railgun"))] )
 	{
 		ent->client->newweapon = FindItem ("railgun");
+		return;
+	}
+	// The mod reorders vanilla's fallback chain: chaingun and super shotgun
+	// move up ahead of the hyperblaster.
+	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("bullets"))]
+		&&  ent->client->pers.inventory[ITEM_INDEX(FindItem("chaingun"))] )
+	{
+		ent->client->newweapon = FindItem ("chaingun");
+		return;
+	}
+	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("shells"))] > 1
+		&&  ent->client->pers.inventory[ITEM_INDEX(FindItem("super shotgun"))] )
+	{
+		ent->client->newweapon = FindItem ("super shotgun");
 		return;
 	}
 	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("cells"))]
@@ -227,21 +257,9 @@ void NoAmmoWeaponChange (edict_t *ent)
 		return;
 	}
 	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("bullets"))]
-		&&  ent->client->pers.inventory[ITEM_INDEX(FindItem("chaingun"))] )
-	{
-		ent->client->newweapon = FindItem ("chaingun");
-		return;
-	}
-	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("bullets"))]
 		&&  ent->client->pers.inventory[ITEM_INDEX(FindItem("machinegun"))] )
 	{
 		ent->client->newweapon = FindItem ("machinegun");
-		return;
-	}
-	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("shells"))] > 1
-		&&  ent->client->pers.inventory[ITEM_INDEX(FindItem("super shotgun"))] )
-	{
-		ent->client->newweapon = FindItem ("super shotgun");
 		return;
 	}
 	if ( ent->client->pers.inventory[ITEM_INDEX(FindItem("shells"))]
@@ -260,6 +278,8 @@ Think_Weapon
 Called by ClientBeginServerFrame and ClientThink
 =================
 */
+// gamex86.dll: 1005DF61..1005E019
+// gamei386.so: 0004376C..00043809
 void Think_Weapon (edict_t *ent)
 {
 	// if just died, put the weapon away
@@ -289,6 +309,8 @@ Use_Weapon
 Make the weapon ready if there is ammo
 ================
 */
+// gamex86.dll: 1005E019..1005E118
+// gamei386.so: 0004380C..000438E1
 void Use_Weapon (edict_t *ent, gitem_t *item)
 {
 	int			ammo_index;
@@ -327,6 +349,8 @@ void Use_Weapon (edict_t *ent, gitem_t *item)
 Drop_Weapon
 ================
 */
+// gamex86.dll: 1005E118..1005E1CA
+// gamei386.so: 000438E4..00043999
 void Drop_Weapon (edict_t *ent, gitem_t *item)
 {
 	int		index;
@@ -358,7 +382,9 @@ A generic function to handle the basics of weapon thinking
 #define FRAME_IDLE_FIRST		(FRAME_FIRE_LAST + 1)
 #define FRAME_DEACTIVATE_FIRST	(FRAME_IDLE_LAST + 1)
 
-void Weapon_Generic (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST, int FRAME_IDLE_LAST, int FRAME_DEACTIVATE_LAST, int *pause_frames, int *fire_frames, void (*fire)(edict_t *ent))
+// gamex86.dll: 1005E1CA..1005E741
+// gamei386.so: 0004399C..00043DCD
+void Weapon_Generic2 (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST, int FRAME_IDLE_LAST, int FRAME_DEACTIVATE_LAST, int *pause_frames, int *fire_frames, void (*fire)(edict_t *ent))
 {
 	int		n;
 
@@ -390,7 +416,14 @@ void Weapon_Generic (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST,
 			}
 		}
 
-		ent->client->ps.gunframe++;
+		if ((int)client_fastweap->value)
+		{
+			ent->client->ps.gunframe += 3;
+			if (ent->client->ps.gunframe > FRAME_DEACTIVATE_LAST)
+				ent->client->ps.gunframe = FRAME_DEACTIVATE_LAST;
+		}
+		else
+			ent->client->ps.gunframe++;
 		return;
 	}
 
@@ -403,7 +436,14 @@ void Weapon_Generic (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST,
 			return;
 		}
 
-		ent->client->ps.gunframe++;
+		if ((int)client_fastweap->value)
+		{
+			ent->client->ps.gunframe += 3;
+			if (ent->client->ps.gunframe > FRAME_ACTIVATE_LAST)
+				ent->client->ps.gunframe = FRAME_ACTIVATE_LAST;
+		}
+		else
+			ent->client->ps.gunframe++;
 		return;
 	}
 
@@ -497,7 +537,10 @@ void Weapon_Generic (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST,
 			{
 				if (ent->client->quad_framenum > level.framenum)
 					gi.sound(ent, CHAN_ITEM, gi.soundindex("items/damage3.wav"), 1, ATTN_NORM, 0);
-
+				else if (rune_stat & RUNE_STRENGTH)
+					OSP_runesApplyStrengthSound (ent);
+				if (rune_stat & RUNE_HASTE)
+					OSP_runesApplyHasteSound (ent);
 				fire (ent);
 				break;
 			}
@@ -509,6 +552,33 @@ void Weapon_Generic (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST,
 		if (ent->client->ps.gunframe == FRAME_IDLE_FIRST+1)
 			ent->client->weaponstate = WEAPON_READY;
 	}
+}
+
+/*
+================
+Weapon_Generic
+
+The Haste rune runs the whole weapon state machine a second time in the same
+frame, but only if the first pass left weaponstate alone -- i.e. it doubles the
+rate of whatever the weapon was already doing rather than skipping ahead.
+
+Vanilla's body was renamed to Weapon_Generic2 and this took over the name.
+It has no call site of its own -- every one of the ten Weapon_* wrappers has
+this body inlined -- and exists standalone only because it is not static.
+================
+*/
+// gamex86.dll: 1005E741..1005E7D6
+// gamei386.so: 00043DD0..00043E52
+void Weapon_Generic (edict_t *ent, int FRAME_ACTIVATE_LAST, int FRAME_FIRE_LAST, int FRAME_IDLE_LAST, int FRAME_DEACTIVATE_LAST, int *pause_frames, int *fire_frames, void (*fire)(edict_t *ent))
+{
+	int		oldstate;
+
+	oldstate = ent->client->weaponstate;
+	Weapon_Generic2 (ent, FRAME_ACTIVATE_LAST, FRAME_FIRE_LAST, FRAME_IDLE_LAST, FRAME_DEACTIVATE_LAST, pause_frames, fire_frames, fire);
+	if (rune_stat & RUNE_HASTE)
+		if (OSP_runesHasHaste (ent))
+			if (oldstate == ent->client->weaponstate)
+				Weapon_Generic2 (ent, FRAME_ACTIVATE_LAST, FRAME_FIRE_LAST, FRAME_IDLE_LAST, FRAME_DEACTIVATE_LAST, pause_frames, fire_frames, fire);
 }
 
 
@@ -524,6 +594,8 @@ GRENADE
 #define GRENADE_MINSPEED	400
 #define GRENADE_MAXSPEED	800
 
+// gamex86.dll: 1005E7D6..1005E9C1
+// gamei386.so: 00043E54..00044060
 void weapon_grenade_fire (edict_t *ent, qboolean held)
 {
 	vec3_t	offset;
@@ -546,11 +618,6 @@ void weapon_grenade_fire (edict_t *ent, qboolean held)
 	speed = GRENADE_MINSPEED + (GRENADE_TIMER - timer) * ((GRENADE_MAXSPEED - GRENADE_MINSPEED) / GRENADE_TIMER);
 	fire_grenade2 (ent, start, forward, damage, speed, timer, radius, held);
 
-	if (! ( (int)dmflags->value & DF_INFINITE_AMMO ) )
-		ent->client->pers.inventory[ent->client->ammo_index]--;
-
-	ent->client->grenade_time = level.time + 1.0;
-
 	if(ent->deadflag || ent->s.modelindex != 255) // VWep animations screw up corpses
 	{
 		return;
@@ -571,8 +638,18 @@ void weapon_grenade_fire (edict_t *ent, qboolean held)
 		ent->s.frame = FRAME_wave08;
 		ent->client->anim_end = FRAME_wave01;
 	}
+
+	// After the three early returns and the animation blocks, which is where
+	// the real image has it: a corpse neither loses the grenade nor gets its
+	// grenade_time reset.  A behaviour change from vanilla.
+	if (! ( (int)dmflags->value & DF_INFINITE_AMMO ) )
+		ent->client->pers.inventory[ent->client->ammo_index]--;
+
+	ent->client->grenade_time = level.time + 1.0;
 }
 
+// gamex86.dll: 1005E9C1..1005ED92
+// gamei386.so: 00044060..0004436E
 void Weapon_Grenade (edict_t *ent)
 {
 	if ((ent->client->newweapon) && (ent->client->weaponstate == WEAPON_READY))
@@ -687,6 +764,8 @@ GRENADE LAUNCHER
 ======================================================================
 */
 
+// gamex86.dll: 1005ED92..1005EF40
+// gamei386.so: 00044370..00044540
 void weapon_grenadelauncher_fire (edict_t *ent)
 {
 	vec3_t	offset;
@@ -721,6 +800,8 @@ void weapon_grenadelauncher_fire (edict_t *ent)
 		ent->client->pers.inventory[ent->client->ammo_index]--;
 }
 
+// gamex86.dll: 1005EF40..1005EF68
+// gamei386.so: 00044540..000445D5
 void Weapon_GrenadeLauncher (edict_t *ent)
 {
 	static int	pause_frames[]	= {34, 51, 59, 0};
@@ -737,6 +818,8 @@ ROCKET
 ======================================================================
 */
 
+// gamex86.dll: 1005EF68..1005F13D
+// gamei386.so: 000445D8..000447E5
 void Weapon_RocketLauncher_Fire (edict_t *ent)
 {
 	vec3_t	offset, start;
@@ -777,6 +860,8 @@ void Weapon_RocketLauncher_Fire (edict_t *ent)
 		ent->client->pers.inventory[ent->client->ammo_index]--;
 }
 
+// gamex86.dll: 1005F13D..1005F165
+// gamei386.so: 000447E8..0004487D
 void Weapon_RocketLauncher (edict_t *ent)
 {
 	static int	pause_frames[]	= {25, 33, 42, 50, 0};
@@ -794,7 +879,9 @@ BLASTER / HYPERBLASTER
 ======================================================================
 */
 
-void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, qboolean hyper, int effect)
+// gamex86.dll: 1005F165..1005F2D6
+// gamei386.so: 00044880..00044A3E
+void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, qboolean vhyper, int effect)
 {
 	vec3_t	forward, right;
 	vec3_t	start;
@@ -810,12 +897,12 @@ void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, qboolean hyper, in
 	VectorScale (forward, -2, ent->client->kick_origin);
 	ent->client->kick_angles[0] = -1;
 
-	fire_blaster (ent, start, forward, damage, 1000, effect, hyper);
+	fire_blaster (ent, start, forward, damage, 1000, effect, vhyper);
 
 	// send muzzle flash
 	gi.WriteByte (svc_muzzleflash);
 	gi.WriteShort (ent-g_edicts);
-	if (hyper)
+	if (vhyper)
 		gi.WriteByte (MZ_HYPERBLASTER | is_silenced);
 	else
 		gi.WriteByte (MZ_BLASTER | is_silenced);
@@ -825,18 +912,19 @@ void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, qboolean hyper, in
 }
 
 
+// gamex86.dll: 1005F2D6..1005F313
+// gamei386.so: 00044A40..00044A73
 void Weapon_Blaster_Fire (edict_t *ent)
 {
 	int		damage;
 
-	if (deathmatch->value)
-		damage = 15;
-	else
-		damage = 10;
+	damage = 15;
 	Blaster_Fire (ent, vec3_origin, damage, false, EF_BLASTER);
 	ent->client->ps.gunframe++;
 }
 
+// gamex86.dll: 1005F313..1005F33B
+// gamei386.so: 00044A74..00044B09
 void Weapon_Blaster (edict_t *ent)
 {
 	static int	pause_frames[]	= {19, 32, 0};
@@ -846,6 +934,8 @@ void Weapon_Blaster (edict_t *ent)
 }
 
 
+// gamex86.dll: 1005F33B..1005F5E4
+// gamei386.so: 00044B0C..00044D4E
 void Weapon_HyperBlaster_Fire (edict_t *ent)
 {
 	float	rotation;
@@ -881,10 +971,7 @@ void Weapon_HyperBlaster_Fire (edict_t *ent)
 				effect = EF_HYPERBLASTER;
 			else
 				effect = 0;
-			if (deathmatch->value)
-				damage = 15;
-			else
-				damage = 20;
+			damage = 15;
 			Blaster_Fire (ent, offset, damage, true, effect);
 			if (! ( (int)dmflags->value & DF_INFINITE_AMMO ) )
 				ent->client->pers.inventory[ent->client->ammo_index]--;
@@ -915,6 +1002,8 @@ void Weapon_HyperBlaster_Fire (edict_t *ent)
 
 }
 
+// gamex86.dll: 1005F5E4..1005F60C
+// gamei386.so: 00044D50..00044DE5
 void Weapon_HyperBlaster (edict_t *ent)
 {
 	static int	pause_frames[]	= {0};
@@ -931,6 +1020,8 @@ MACHINEGUN / CHAINGUN
 ======================================================================
 */
 
+// gamex86.dll: 1005F60C..1005FA61
+// gamei386.so: 00044DE8..00045255
 void Machinegun_Fire (edict_t *ent)
 {
 	int	i;
@@ -979,20 +1070,15 @@ void Machinegun_Fire (edict_t *ent)
 	ent->client->kick_origin[0] = crandom() * 0.35;
 	ent->client->kick_angles[0] = ent->client->machinegun_shots * -1.5;
 
-	// raise the gun as it is firing
-	if (!deathmatch->value)
-	{
-		ent->client->machinegun_shots++;
-		if (ent->client->machinegun_shots > 9)
-			ent->client->machinegun_shots = 9;
-	}
-
 	// get start / end positions
 	VectorAdd (ent->client->v_angle, ent->client->kick_angles, angles);
 	AngleVectors (angles, forward, right, NULL);
 	VectorSet(offset, 0, 8, ent->viewheight-8);
 	P_ProjectSource (ent->client, ent->s.origin, offset, forward, right, start);
 	fire_bullet (ent, start, forward, damage, kick, DEFAULT_BULLET_HSPREAD, DEFAULT_BULLET_VSPREAD, MOD_MACHINEGUN);
+
+	if (sync_stat > 2)
+		p_acc[ent->client->resp.clientid].shots[ACC_MACHINEGUN] += 1;
 
 	gi.WriteByte (svc_muzzleflash);
 	gi.WriteShort (ent-g_edicts);
@@ -1017,6 +1103,8 @@ void Machinegun_Fire (edict_t *ent)
 	}
 }
 
+// gamex86.dll: 1005FA61..1005FA89
+// gamei386.so: 00045258..000452ED
 void Weapon_Machinegun (edict_t *ent)
 {
 	static int	pause_frames[]	= {23, 45, 0};
@@ -1025,6 +1113,8 @@ void Weapon_Machinegun (edict_t *ent)
 	Weapon_Generic (ent, 3, 5, 45, 49, pause_frames, fire_frames, Machinegun_Fire);
 }
 
+// gamex86.dll: 1005FA89..1005FFD2
+// gamei386.so: 000452F0..000457F5
 void Chaingun_Fire (edict_t *ent)
 {
 	int			i;
@@ -1036,10 +1126,7 @@ void Chaingun_Fire (edict_t *ent)
 	int			damage;
 	int			kick = 2;
 
-	if (deathmatch->value)
-		damage = 6;
-	else
-		damage = 8;
+	damage = 6;
 
 	if (ent->client->ps.gunframe == 5)
 		gi.sound(ent, CHAN_AUTO, gi.soundindex("weapons/chngnu1a.wav"), 1, ATTN_IDLE, 0);
@@ -1130,6 +1217,9 @@ void Chaingun_Fire (edict_t *ent)
 		P_ProjectSource (ent->client, ent->s.origin, offset, forward, right, start);
 
 		fire_bullet (ent, start, forward, damage, kick, DEFAULT_BULLET_HSPREAD, DEFAULT_BULLET_VSPREAD, MOD_CHAINGUN);
+
+		if (sync_stat > 2)
+			p_acc[ent->client->resp.clientid].shots[ACC_CHAINGUN] += 1;
 	}
 
 	// send muzzle flash
@@ -1145,6 +1235,8 @@ void Chaingun_Fire (edict_t *ent)
 }
 
 
+// gamex86.dll: 1005FFD2..1005FFFA
+// gamei386.so: 000457F8..0004588D
 void Weapon_Chaingun (edict_t *ent)
 {
 	static int	pause_frames[]	= {38, 43, 51, 61, 0};
@@ -1162,6 +1254,8 @@ SHOTGUN / SUPERSHOTGUN
 ======================================================================
 */
 
+// gamex86.dll: 1005FFFA..1006020E
+// gamei386.so: 00045890..00045AA5
 void weapon_shotgun_fire (edict_t *ent)
 {
 	vec3_t		start;
@@ -1190,10 +1284,10 @@ void weapon_shotgun_fire (edict_t *ent)
 		kick *= 4;
 	}
 
-	if (deathmatch->value)
-		fire_shotgun (ent, start, forward, damage, kick, 500, 500, DEFAULT_DEATHMATCH_SHOTGUN_COUNT, MOD_SHOTGUN);
-	else
-		fire_shotgun (ent, start, forward, damage, kick, 500, 500, DEFAULT_SHOTGUN_COUNT, MOD_SHOTGUN);
+	fire_shotgun (ent, start, forward, damage, kick, 500, 500, DEFAULT_DEATHMATCH_SHOTGUN_COUNT, MOD_SHOTGUN);
+
+	if (sync_stat > 2)
+		p_acc[ent->client->resp.clientid].shots[ACC_SHOTGUN] += DEFAULT_DEATHMATCH_SHOTGUN_COUNT;
 
 	// send muzzle flash
 	gi.WriteByte (svc_muzzleflash);
@@ -1208,6 +1302,8 @@ void weapon_shotgun_fire (edict_t *ent)
 		ent->client->pers.inventory[ent->client->ammo_index]--;
 }
 
+// gamex86.dll: 1006020E..10060236
+// gamei386.so: 00045AA8..00045B3D
 void Weapon_Shotgun (edict_t *ent)
 {
 	static int	pause_frames[]	= {22, 28, 34, 0};
@@ -1217,6 +1313,8 @@ void Weapon_Shotgun (edict_t *ent)
 }
 
 
+// gamex86.dll: 10060236..100604BE
+// gamei386.so: 00045B40..00045DCC
 void weapon_supershotgun_fire (edict_t *ent)
 {
 	vec3_t		start;
@@ -1249,6 +1347,9 @@ void weapon_supershotgun_fire (edict_t *ent)
 	AngleVectors (v, forward, NULL, NULL);
 	fire_shotgun (ent, start, forward, damage, kick, DEFAULT_SHOTGUN_HSPREAD, DEFAULT_SHOTGUN_VSPREAD, DEFAULT_SSHOTGUN_COUNT/2, MOD_SSHOTGUN);
 
+	if (sync_stat > 2)
+		p_acc[ent->client->resp.clientid].shots[ACC_SSHOTGUN] += DEFAULT_SSHOTGUN_COUNT;
+
 	// send muzzle flash
 	gi.WriteByte (svc_muzzleflash);
 	gi.WriteShort (ent-g_edicts);
@@ -1262,6 +1363,8 @@ void weapon_supershotgun_fire (edict_t *ent)
 		ent->client->pers.inventory[ent->client->ammo_index] -= 2;
 }
 
+// gamex86.dll: 100604BE..100604E6
+// gamei386.so: 00045DCC..00045E61
 void Weapon_SuperShotgun (edict_t *ent)
 {
 	static int	pause_frames[]	= {29, 42, 57, 0};
@@ -1280,6 +1383,8 @@ RAILGUN
 ======================================================================
 */
 
+// gamex86.dll: 100604E6..10060693
+// gamei386.so: 00045E64..00046047
 void weapon_railgun_fire (edict_t *ent)
 {
 	vec3_t		start;
@@ -1288,16 +1393,8 @@ void weapon_railgun_fire (edict_t *ent)
 	int			damage;
 	int			kick;
 
-	if (deathmatch->value)
-	{	// normal damage is too extreme in dm
-		damage = 100;
-		kick = 200;
-	}
-	else
-	{
-		damage = 150;
-		kick = 250;
-	}
+	damage = damage_railgun->value;
+	kick = 200;
 
 	if (is_quad)
 	{
@@ -1328,6 +1425,8 @@ void weapon_railgun_fire (edict_t *ent)
 }
 
 
+// gamex86.dll: 10060693..100606BB
+// gamei386.so: 00046048..000460DD
 void Weapon_Railgun (edict_t *ent)
 {
 	static int	pause_frames[]	= {56, 0};
@@ -1345,6 +1444,8 @@ BFG10K
 ======================================================================
 */
 
+// gamex86.dll: 100606BB..10060911
+// gamei386.so: 000460E0..00046332
 void weapon_bfg_fire (edict_t *ent)
 {
 	vec3_t	offset, start;
@@ -1352,10 +1453,7 @@ void weapon_bfg_fire (edict_t *ent)
 	int		damage;
 	float	damage_radius = 1000;
 
-	if (deathmatch->value)
-		damage = 200;
-	else
-		damage = 500;
+	damage = 200;
 
 	if (ent->client->ps.gunframe == 9)
 	{
@@ -1403,6 +1501,8 @@ void weapon_bfg_fire (edict_t *ent)
 		ent->client->pers.inventory[ent->client->ammo_index] -= 50;
 }
 
+// gamex86.dll: 10060911..10060940
+// gamei386.so: 00046334..000463C9
 void Weapon_BFG (edict_t *ent)
 {
 	static int	pause_frames[]	= {39, 45, 50, 55, 0};

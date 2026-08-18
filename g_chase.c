@@ -1,5 +1,7 @@
 #include "g_local.h"
 
+// gamex86.dll: 1001CD50..1001D49B
+// gamei386.so: 00054E80..0005550C
 void UpdateChaseCam(edict_t *ent)
 {
 	vec3_t o, ownerv, goal;
@@ -9,18 +11,7 @@ void UpdateChaseCam(edict_t *ent)
 	int i;
 	vec3_t oldgoal;
 	vec3_t angles;
-
-	// is our chase target gone?
-	if (!ent->client->chase_target->inuse
-		|| ent->client->chase_target->client->resp.spectator) {
-		edict_t *old = ent->client->chase_target;
-		ChaseNext(ent);
-		if (ent->client->chase_target == old) {
-			ent->client->chase_target = NULL;
-			ent->client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
-			return;
-		}
-	}
+	vec3_t vangles;			// <INVENTED NAME>
 
 	targ = ent->client->chase_target;
 
@@ -30,14 +21,66 @@ void UpdateChaseCam(edict_t *ent)
 	ownerv[2] += targ->viewheight;
 
 	VectorCopy(targ->client->v_angle, angles);
-	if (angles[PITCH] > 56)
-		angles[PITCH] = 56;
+	VectorCopy(targ->client->v_angle, vangles);
+
+	if (ent->client->resp.entered == 4)
+	{
+		if (angles[PITCH] > 56)
+			angles[PITCH] = 56;
+	}
+	else
+	{
+		if (angles[PITCH] > 1)
+			angles[PITCH] = 1;
+	}
+
+	// chained chasecam: ent's own velocity/avelocity are unused while it is
+	// frozen for chasecam, so they are repurposed as the previous frame's
+	// cmd_angles, giving the frame-to-frame delta in avelocity.
+	VectorSubtract(ent->velocity, ent->client->resp.cmd_angles, ent->avelocity);
+	VectorCopy(ent->client->resp.cmd_angles, ent->velocity);
+
+	// ent's own movedir/speed are likewise unused, and hold the free-look
+	// pitch/yaw offset and zoom distance while chasecamming (entered==4);
+	// in in-eyes mode (entered==8) there is no free-look and no zoom.
+	if (ent->client->resp.entered == 4)
+		ent->movedir[0] = camera_pitch->value;
+	else
+		ent->movedir[0] = 0;
+
+	if (ent->client->resp.entered == 4)
+		ent->movedir[1] = *(float *)&ent->client->osp_t018;
+	else
+	{
+		ent->movedir[1] = 0;
+		ent->speed = -12;
+	}
+
+	angles[PITCH] += ent->movedir[0];
+	if (angles[PITCH] > 90)
+		angles[PITCH] = 90;
+	if (angles[PITCH] < -90)
+		angles[PITCH] = -90;
+
+	angles[YAW] += ent->movedir[1];
+
+	vangles[PITCH] += ent->movedir[0];
+	if (vangles[PITCH] > 90)
+		vangles[PITCH] = 90;
+	if (vangles[PITCH] < -90)
+		vangles[PITCH] = -90;
+
+	vangles[YAW] += ent->movedir[1];
+
 	AngleVectors (angles, forward, right, NULL);
 	VectorNormalize(forward);
-	VectorMA(ownerv, -30, forward, o);
+	VectorMA(ownerv, -ent->speed, forward, o);
 
-	if (o[2] < targ->s.origin[2] + 20)
-		o[2] = targ->s.origin[2] + 20;
+	if (ent->client->resp.entered == 4)
+	{
+		if (o[2] < targ->s.origin[2] + 30)
+			o[2] = targ->s.origin[2] + 30;
+	}
 
 	// jump animation lifts
 	if (!targ->groundentity)
@@ -66,29 +109,52 @@ void UpdateChaseCam(edict_t *ent)
 		goal[2] += 6;
 	}
 
-	if (targ->deadflag)
-		ent->client->ps.pmove.pm_type = PM_DEAD;
-	else
-		ent->client->ps.pmove.pm_type = PM_FREEZE;
+	ent->client->ps.pmove.pm_type = PM_FREEZE;
 
 	VectorCopy(goal, ent->s.origin);
 	for (i=0 ; i<3 ; i++)
 		ent->client->ps.pmove.delta_angles[i] = ANGLE2SHORT(targ->client->v_angle[i] - ent->client->resp.cmd_angles[i]);
 
-	if (targ->deadflag) {
-		ent->client->ps.viewangles[ROLL] = 40;
-		ent->client->ps.viewangles[PITCH] = -15;
-		ent->client->ps.viewangles[YAW] = targ->client->killer_yaw;
-	} else {
-		VectorCopy(targ->client->v_angle, ent->client->ps.viewangles);
-		VectorCopy(targ->client->v_angle, ent->client->v_angle);
-	}
+	VectorCopy(vangles, ent->client->ps.viewangles);
+	VectorCopy(vangles, ent->client->v_angle);
 
 	ent->viewheight = 0;
 	ent->client->ps.pmove.pm_flags |= PMF_NO_PREDICTION;
 	gi.linkentity(ent);
+
+	if ((!ent->client->showscores && !ent->client->showinventory &&
+		 !ent->client->showhelp && !(level.framenum & 0x1f)) ||
+		ent->client->update_chase)
+	{
+		char string[1024];			// <INVENTED SIZE>
+
+		ent->client->update_chase = false;
+
+		if (m_mode != 2)
+		{
+			sprintf (string, "xv 44 yb -59 string \"Chasing `%s'\"",
+				targ->client->pers.netname);
+		}
+		else if (sync_stat > 2)
+		{
+			sprintf (string, "xv 44 yb -59 string \"Chasing `%s' [%d] (%s)\"",
+				targ->client->pers.netname, targ->client->resp.score,
+				teams[targ->client->resp.team].netname);
+		}
+		else
+		{
+			sprintf (string, "xv 44 yb -59 string \"Chasing `%s' (%s)\"",
+				targ->client->pers.netname, teams[targ->client->resp.team].netname);
+		}
+
+		gi.WriteByte (svc_layout);
+		gi.WriteString (string);
+		gi.unicast (ent, false);
+	}
 }
 
+// gamex86.dll: 1001D49B..1001D5C4
+// gamei386.so: 0005550C..0005562E
 void ChaseNext(edict_t *ent)
 {
 	int i;
@@ -96,6 +162,10 @@ void ChaseNext(edict_t *ent)
 
 	if (!ent->client->chase_target)
 		return;
+
+	VectorSet (ent->movedir, 0, 0, 0);
+	ent->speed = camera_depth->value;
+	ent->client->osp_t018 = 0;
 
 	i = ent->client->chase_target - g_edicts;
 	do {
@@ -105,14 +175,18 @@ void ChaseNext(edict_t *ent)
 		e = g_edicts + i;
 		if (!e->inuse)
 			continue;
-		if (!e->client->resp.spectator)
+		if (e->solid)
 			break;
 	} while (e != ent->client->chase_target);
 
 	ent->client->chase_target = e;
+	e->client->resp.osp_r000++;
 	ent->client->update_chase = true;
+	UpdateChaseCam (ent);
 }
 
+// gamex86.dll: 1001D5C4..1001D6F0
+// gamei386.so: 00055630..0005574B
 void ChasePrev(edict_t *ent)
 {
 	int i;
@@ -120,6 +194,10 @@ void ChasePrev(edict_t *ent)
 
 	if (!ent->client->chase_target)
 		return;
+
+	VectorSet (ent->movedir, 0, 0, 0);
+	ent->speed = camera_depth->value;
+	ent->client->osp_t018 = 0;
 
 	i = ent->client->chase_target - g_edicts;
 	do {
@@ -129,28 +207,12 @@ void ChasePrev(edict_t *ent)
 		e = g_edicts + i;
 		if (!e->inuse)
 			continue;
-		if (!e->client->resp.spectator)
+		if (e->solid)
 			break;
 	} while (e != ent->client->chase_target);
 
 	ent->client->chase_target = e;
+	e->client->resp.osp_r000++;
 	ent->client->update_chase = true;
+	UpdateChaseCam (ent);
 }
-
-void GetChaseTarget(edict_t *ent)
-{
-	int i;
-	edict_t *other;
-
-	for (i = 1; i <= maxclients->value; i++) {
-		other = g_edicts + i;
-		if (other->inuse && !other->client->resp.spectator) {
-			ent->client->chase_target = other;
-			ent->client->update_chase = true;
-			UpdateChaseCam(ent);
-			return;
-		}
-	}
-	gi.centerprintf(ent, "No other players to chase.");
-}
-

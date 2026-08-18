@@ -4,6 +4,8 @@
 Fire an origin based temp entity event to the clients.
 "style"		type byte
 */
+// gamex86.dll: 10044590..100445D5
+// gamei386.so: 0002E000..0002E052
 void Use_Target_Tent (edict_t *ent, edict_t *other, edict_t *activator)
 {
 	gi.WriteByte (svc_temp_entity);
@@ -12,6 +14,8 @@ void Use_Target_Tent (edict_t *ent, edict_t *other, edict_t *activator)
 	gi.multicast (ent->s.origin, MULTICAST_PVS);
 }
 
+// gamex86.dll: 100445D5..100445E7
+// gamei386.so: 0002E054..0002E078
 void SP_target_temp_entity (edict_t *ent)
 {
 	ent->use = Use_Target_Tent;
@@ -36,6 +40,8 @@ Normal sounds play each time the target is used.  The reliable flag can be set f
 Looped sounds are always atten 3 / vol 1, and the use function toggles it on/off.
 Multiple identical looping sounds will just increase volume without any speed cost.
 */
+// gamex86.dll: 100445E7..1004467D
+// gamei386.so: 0002E078..0002E0F0
 void Use_Target_Speaker (edict_t *ent, edict_t *other, edict_t *activator)
 {
 	int		chan;
@@ -59,6 +65,8 @@ void Use_Target_Speaker (edict_t *ent, edict_t *other, edict_t *activator)
 	}
 }
 
+// gamex86.dll: 1004467D..100447B6
+// gamei386.so: 0002E0F0..0002E224
 void SP_target_speaker (edict_t *ent)
 {
 	char	buffer[MAX_QPATH];
@@ -96,6 +104,8 @@ void SP_target_speaker (edict_t *ent)
 
 //==========================================================
 
+// gamex86.dll: 100447B6..10044812
+// gamei386.so: 0002E224..0002E281
 void Use_Target_Help (edict_t *ent, edict_t *other, edict_t *activator)
 {
 	if (ent->spawnflags & 1)
@@ -109,6 +119,8 @@ void Use_Target_Help (edict_t *ent, edict_t *other, edict_t *activator)
 /*QUAKED target_help (1 0 1) (-16 -16 -24) (16 16 24) help1
 When fired, the "message" key becomes the current personal computer string, and the message light will be set on all clients status bars.
 */
+// gamex86.dll: 10044812..10044889
+// gamei386.so: 0002E284..0002E2FC
 void SP_target_help(edict_t *ent)
 {
 	if (deathmatch->value)
@@ -132,6 +144,8 @@ void SP_target_help(edict_t *ent)
 Counts a secret found.
 These are single use targets.
 */
+// gamex86.dll: 10044889..100448DC
+// gamei386.so: 0002E2FC..0002E358
 void use_target_secret (edict_t *ent, edict_t *other, edict_t *activator)
 {
 	gi.sound (ent, CHAN_VOICE, ent->noise_index, 1, ATTN_NORM, 0);
@@ -142,6 +156,8 @@ void use_target_secret (edict_t *ent, edict_t *other, edict_t *activator)
 	G_FreeEdict (ent);
 }
 
+// gamex86.dll: 100448DC..100449B5
+// gamei386.so: 0002E358..0002E44D
 void SP_target_secret (edict_t *ent)
 {
 	if (deathmatch->value)
@@ -167,6 +183,8 @@ void SP_target_secret (edict_t *ent)
 Counts a goal completed.
 These are single use targets.
 */
+// gamex86.dll: 100449B5..10044A26
+// gamei386.so: 0002E450..0002E4D8
 void use_target_goal (edict_t *ent, edict_t *other, edict_t *activator)
 {
 	gi.sound (ent, CHAN_VOICE, ent->noise_index, 1, ATTN_NORM, 0);
@@ -180,6 +198,8 @@ void use_target_goal (edict_t *ent, edict_t *other, edict_t *activator)
 	G_FreeEdict (ent);
 }
 
+// gamex86.dll: 10044A26..10044AA0
+// gamei386.so: 0002E4D8..0002E562
 void SP_target_goal (edict_t *ent)
 {
 	if (deathmatch->value)
@@ -205,6 +225,8 @@ Spawns an explosion temporary entity when used.
 "delay"		wait this long before going off
 "dmg"		how much radius damage should be done, defaults to 0
 */
+// gamex86.dll: 10044AA0..10044B5A
+// gamei386.so: 0002E564..0002E613
 void target_explosion_explode (edict_t *self)
 {
 	float		save;
@@ -222,6 +244,8 @@ void target_explosion_explode (edict_t *self)
 	self->delay = save;
 }
 
+// gamex86.dll: 10044B5A..10044BB4
+// gamei386.so: 0002E614..0002E709
 void use_target_explosion (edict_t *self, edict_t *other, edict_t *activator)
 {
 	self->activator = activator;
@@ -236,6 +260,8 @@ void use_target_explosion (edict_t *self, edict_t *other, edict_t *activator)
 	self->nextthink = level.time + self->delay;
 }
 
+// gamex86.dll: 10044BB4..10044BD3
+// gamei386.so: 0002E70C..0002E73A
 void SP_target_explosion (edict_t *ent)
 {
 	ent->use = use_target_explosion;
@@ -248,6 +274,8 @@ void SP_target_explosion (edict_t *ent)
 /*QUAKED target_changelevel (1 0 0) (-8 -8 -8) (8 8 8)
 Changes level to "map" when fired
 */
+// gamex86.dll: 10044BD3..10044D16
+// gamei386.so: 0002E73C..0002E8A6
 void use_target_changelevel (edict_t *self, edict_t *other, edict_t *activator)
 {
 	if (level.intermissiontime)
@@ -280,6 +308,8 @@ void use_target_changelevel (edict_t *self, edict_t *other, edict_t *activator)
 	BeginIntermission (self);
 }
 
+// gamex86.dll: 10044D16..10044DAB
+// gamei386.so: 0002E8A8..0002E949
 void SP_target_changelevel (edict_t *ent)
 {
 	if (!ent->map)
@@ -316,6 +346,8 @@ Set "sounds" to one of the following:
 		useful for lava/sparks
 */
 
+// gamex86.dll: 10044DAB..10044E66
+// gamei386.so: 0002E94C..0002EA04
 void use_target_splash (edict_t *self, edict_t *other, edict_t *activator)
 {
 	gi.WriteByte (svc_temp_entity);
@@ -330,6 +362,8 @@ void use_target_splash (edict_t *self, edict_t *other, edict_t *activator)
 		T_RadiusDamage (self, activator, self->dmg, NULL, self->dmg+40, MOD_SPLASH);
 }
 
+// gamex86.dll: 10044E66..10044EB7
+// gamei386.so: 0002EA04..0002EA58
 void SP_target_splash (edict_t *self)
 {
 	self->use = use_target_splash;
@@ -358,6 +392,8 @@ For gibs:
 */
 void ED_CallSpawn (edict_t *ent);
 
+// gamex86.dll: 10044EB7..10044F9F
+// gamei386.so: 0002EA58..0002EB08
 void use_target_spawner (edict_t *self, edict_t *other, edict_t *activator)
 {
 	edict_t	*ent;
@@ -374,6 +410,8 @@ void use_target_spawner (edict_t *self, edict_t *other, edict_t *activator)
 		VectorCopy (self->movedir, ent->velocity);
 }
 
+// gamex86.dll: 10044F9F..10045012
+// gamei386.so: 0002EB08..0002EB6D
 void SP_target_spawner (edict_t *self)
 {
 	self->use = use_target_spawner;
@@ -394,6 +432,8 @@ dmg		default is 15
 speed	default is 1000
 */
 
+// gamex86.dll: 10045012..100450B2
+// gamei386.so: 0002EB70..0002EBE8
 void use_target_blaster (edict_t *self, edict_t *other, edict_t *activator)
 {
 	int effect;
@@ -409,6 +449,8 @@ void use_target_blaster (edict_t *self, edict_t *other, edict_t *activator)
 	gi.sound (self, CHAN_VOICE, self->noise_index, 1, ATTN_NORM, 0);
 }
 
+// gamex86.dll: 100450B2..1004513D
+// gamei386.so: 0002EBE8..0002EC72
 void SP_target_blaster (edict_t *self)
 {
 	self->use = use_target_blaster;
@@ -429,12 +471,16 @@ void SP_target_blaster (edict_t *self)
 /*QUAKED target_crosslevel_trigger (.5 .5 .5) (-8 -8 -8) (8 8 8) trigger1 trigger2 trigger3 trigger4 trigger5 trigger6 trigger7 trigger8
 Once this trigger is touched/used, any trigger_crosslevel_target with the same trigger number is automatically used when a level is started within the same unit.  It is OK to check multiple triggers.  Message, delay, target, and killtarget also work.
 */
+// gamex86.dll: 1004513D..10045163
+// gamei386.so: 0002EC74..0002ECA4
 void trigger_crosslevel_trigger_use (edict_t *self, edict_t *other, edict_t *activator)
 {
 	game.serverflags |= self->spawnflags;
 	G_FreeEdict (self);
 }
 
+// gamex86.dll: 10045163..10045182
+// gamei386.so: 0002ECA4..0002ECD2
 void SP_target_crosslevel_trigger (edict_t *self)
 {
 	self->svflags = SVF_NOCLIENT;
@@ -447,6 +493,8 @@ killtarget also work.
 
 "delay"		delay before using targets if the trigger has been activated (default 1)
 */
+// gamex86.dll: 10045182..100451C1
+// gamei386.so: 0002ECD4..0002ED15
 void target_crosslevel_target_think (edict_t *self)
 {
 	if (self->spawnflags == (game.serverflags & SFL_CROSS_TRIGGER_MASK & self->spawnflags))
@@ -456,6 +504,8 @@ void target_crosslevel_target_think (edict_t *self)
 	}
 }
 
+// gamex86.dll: 100451C1..1004521B
+// gamei386.so: 0002ED18..0002ED79
 void SP_target_crosslevel_target (edict_t *self)
 {
 	if (! self->delay)
@@ -473,6 +523,8 @@ When triggered, fires a laser.  You can either set a target
 or a direction.
 */
 
+// gamex86.dll: 1004521B..10045508
+// gamei386.so: 0002ED7C..0002EFB8
 void target_laser_think (edict_t *self)
 {
 	edict_t	*ignore;
@@ -538,6 +590,8 @@ void target_laser_think (edict_t *self)
 	self->nextthink = level.time + FRAMETIME;
 }
 
+// gamex86.dll: 10045508..1004555E
+// gamei386.so: 0002EFB8..0002EFF6
 void target_laser_on (edict_t *self)
 {
 	if (!self->activator)
@@ -547,6 +601,8 @@ void target_laser_on (edict_t *self)
 	target_laser_think (self);
 }
 
+// gamex86.dll: 1004555E..1004559A
+// gamei386.so: 0002EFF8..0002F018
 void target_laser_off (edict_t *self)
 {
 	self->spawnflags &= ~1;
@@ -554,6 +610,8 @@ void target_laser_off (edict_t *self)
 	self->nextthink = 0;
 }
 
+// gamex86.dll: 1004559A..100455D5
+// gamei386.so: 0002F018..0002F082
 void target_laser_use (edict_t *self, edict_t *other, edict_t *activator)
 {
 	self->activator = activator;
@@ -563,6 +621,8 @@ void target_laser_use (edict_t *self, edict_t *other, edict_t *activator)
 		target_laser_on (self);
 }
 
+// gamex86.dll: 100455D5..1004580D
+// gamei386.so: 0002F084..0002F269
 void target_laser_start (edict_t *self)
 {
 	edict_t *ent;
@@ -620,6 +680,8 @@ void target_laser_start (edict_t *self)
 		target_laser_off (self);
 }
 
+// gamex86.dll: 1004580D..10045834
+// gamei386.so: 0002F26C..0002F2A1
 void SP_target_laser (edict_t *self)
 {
 	// let everything else get spawned before we start firing
@@ -634,6 +696,8 @@ speed		How many seconds the ramping will take
 message		two letters; starting lightlevel and ending lightlevel
 */
 
+// gamex86.dll: 10045834..1004592F
+// gamei386.so: 0002F2A4..0002F3B7
 void target_lightramp_think (edict_t *self)
 {
 	char	style[2];
@@ -657,6 +721,8 @@ void target_lightramp_think (edict_t *self)
 	}
 }
 
+// gamex86.dll: 1004592F..10045A73
+// gamei386.so: 0002F3B8..0002F5F2
 void target_lightramp_use (edict_t *self, edict_t *other, edict_t *activator)
 {
 	if (!self->enemy)
@@ -693,6 +759,8 @@ void target_lightramp_use (edict_t *self, edict_t *other, edict_t *activator)
 	target_lightramp_think (self);
 }
 
+// gamex86.dll: 10045A73..10045C40
+// gamei386.so: 0002F5F4..0002F740
 void SP_target_lightramp (edict_t *self)
 {
 	if (!self->message || strlen(self->message) != 2 || self->message[0] < 'a' || self->message[0] > 'z' || self->message[1] < 'a' || self->message[1] > 'z' || self->message[0] == self->message[1])
@@ -733,6 +801,8 @@ All players and monsters are affected.
 "count"		duration of the quake (default:5)
 */
 
+// gamex86.dll: 10045C40..10045DDA
+// gamei386.so: 0002F740..0002F8CA
 void target_earthquake_think (edict_t *self)
 {
 	int		i;
@@ -763,6 +833,8 @@ void target_earthquake_think (edict_t *self)
 		self->nextthink = level.time + FRAMETIME;
 }
 
+// gamex86.dll: 10045DDA..10045E25
+// gamei386.so: 0002F8CC..0002F923
 void target_earthquake_use (edict_t *self, edict_t *other, edict_t *activator)
 {
 	self->timestamp = level.time + self->count;
@@ -771,6 +843,8 @@ void target_earthquake_use (edict_t *self, edict_t *other, edict_t *activator)
 	self->last_move_time = 0;
 }
 
+// gamex86.dll: 10045E25..10045EE0
+// gamei386.so: 0002F924..0002F9D7
 void SP_target_earthquake (edict_t *self)
 {
 	if (!self->targetname)

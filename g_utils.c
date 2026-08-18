@@ -3,6 +3,8 @@
 #include "g_local.h"
 
 
+// gamex86.dll: 100478F0..10047966
+// gamei386.so: 000317E8..0003183B
 void G_ProjectSource (vec3_t point, vec3_t distance, vec3_t forward, vec3_t right, vec3_t result)
 {
 	result[0] = point[0] + forward[0] * distance[0] + right[0] * distance[1];
@@ -23,6 +25,8 @@ NULL will be returned if the end of the list is reached.
 
 =============
 */
+// gamex86.dll: 10047966..100479EB
+// gamei386.so: 0003183C..000318B4
 edict_t *G_Find (edict_t *from, int fieldofs, char *match)
 {
 	char	*s;
@@ -56,6 +60,8 @@ Returns entities that have origins within a spherical area
 findradius (origin, radius)
 =================
 */
+// gamex86.dll: 100479EB..10047AD0
+// gamei386.so: 000318B4..000319A4
 edict_t *findradius (edict_t *from, vec3_t org, float rad)
 {
 	vec3_t	eorg;
@@ -96,6 +102,8 @@ NULL will be returned if the end of the list is reached.
 */
 #define MAXCHOICES	8
 
+// gamex86.dll: 10047AD0..10047B6F
+// gamei386.so: 000319A4..00031ABD
 edict_t *G_PickTarget (char *targetname)
 {
 	edict_t	*ent = NULL;
@@ -129,6 +137,8 @@ edict_t *G_PickTarget (char *targetname)
 
 
 
+// gamex86.dll: 10047B6F..10047B96
+// gamei386.so: 00031AC0..00031AED
 void Think_Delay (edict_t *ent)
 {
 	G_UseTargets (ent, ent->activator);
@@ -151,6 +161,8 @@ match (string)self.target and call their .use function
 
 ==============================
 */
+// gamex86.dll: 10047B96..10047E33
+// gamei386.so: 00031AF0..00031E69
 void G_UseTargets (edict_t *ent, edict_t *activator)
 {
 	edict_t		*t;
@@ -244,6 +256,8 @@ This is just a convenience function
 for making temporary vectors for function calls
 =============
 */
+// gamex86.dll: 10047E33..10047E7A
+// gamei386.so: 00031E6C..00031EB2
 float	*tv (float x, float y, float z)
 {
 	static	int		index;
@@ -271,6 +285,8 @@ This is just a convenience function
 for printing vectors
 =============
 */
+// gamex86.dll: 10047E7A..10047EDD
+// gamei386.so: 00031EB4..00031F52
 char	*vtos (vec3_t v)
 {
 	static	int		index;
@@ -292,6 +308,8 @@ vec3_t MOVEDIR_UP	= {0, 0, 1};
 vec3_t VEC_DOWN		= {0, -2, 0};
 vec3_t MOVEDIR_DOWN	= {0, 0, -1};
 
+// gamex86.dll: 10047EDD..10047F85
+// gamei386.so: 00031F54..00032003
 void G_SetMovedir (vec3_t angles, vec3_t movedir)
 {
 	if (VectorCompare (angles, VEC_UP))
@@ -311,18 +329,16 @@ void G_SetMovedir (vec3_t angles, vec3_t movedir)
 }
 
 
+// gamex86.dll: 10047F85..10048012
+// gamei386.so: 00032004..000320A0
 float vectoyaw (vec3_t vec)
 {
 	float	yaw;
 	
-	if (/*vec[YAW] == 0 &&*/ vec[PITCH] == 0) 
+	if (vec[YAW] == 0 && vec[PITCH] == 0)
 	{
 		yaw = 0;
-		if (vec[YAW] > 0)
-			yaw = 90;
-		else if (vec[YAW] < 0)
-			yaw = -90;
-	} 
+	}
 	else
 	{
 		yaw = (int) (atan2(vec[YAW], vec[PITCH]) * 180 / M_PI);
@@ -334,6 +350,8 @@ float vectoyaw (vec3_t vec)
 }
 
 
+// gamex86.dll: 10048012..10048155
+// gamei386.so: 000320A0..00032230
 void vectoangles (vec3_t value1, vec3_t angles)
 {
 	float	forward;
@@ -349,12 +367,7 @@ void vectoangles (vec3_t value1, vec3_t angles)
 	}
 	else
 	{
-		if (value1[0])
-			yaw = (int) (atan2(value1[1], value1[0]) * 180 / M_PI);
-		else if (value1[1] > 0)
-			yaw = 90;
-		else
-			yaw = -90;
+		yaw = (int) (atan2(value1[1], value1[0]) * 180 / M_PI);
 		if (yaw < 0)
 			yaw += 360;
 
@@ -369,6 +382,8 @@ void vectoangles (vec3_t value1, vec3_t angles)
 	angles[ROLL] = 0;
 }
 
+// gamex86.dll: 10048155..10048191
+// gamei386.so: 00032230..00032287
 char *G_CopyString (char *in)
 {
 	char	*out;
@@ -379,6 +394,8 @@ char *G_CopyString (char *in)
 }
 
 
+// gamex86.dll: 10048191..100481D0
+// gamei386.so: 00032288..000322EB
 void G_InitEdict (edict_t *e)
 {
 	e->inuse = true;
@@ -398,6 +415,8 @@ instead of being removed and recreated, which can cause interpolated
 angles and bad trails.
 =================
 */
+// gamex86.dll: 100481D0..100482B9
+// gamei386.so: 000322EC..00032462
 edict_t *G_Spawn (void)
 {
 	int			i;
@@ -430,8 +449,18 @@ G_FreeEdict
 Marks the edict as free
 =================
 */
+// gamex86.dll: 100482B9..100483D9
+// gamei386.so: 00032464..000325DC
 void G_FreeEdict (edict_t *ed)
 {
+	if (ed->item)
+	{
+		if (ed->item->use == Use_Quad && ed->nextthink <= level.time)
+			q2log_expireItem ("Quad", 0, ed - g_edicts);
+		if (ed->item->use == Use_Invulnerability && ed->nextthink <= level.time)
+			q2log_expireItem ("Invulnerability", 0, ed - g_edicts);
+	}
+
 	gi.unlinkentity (ed);		// unlink from world
 
 	if ((ed - g_edicts) <= (maxclients->value + BODY_QUEUE_SIZE))
@@ -453,6 +482,8 @@ G_TouchTriggers
 
 ============
 */
+// gamex86.dll: 100483D9..100484A1
+// gamei386.so: 000325DC..0003267C
 void	G_TouchTriggers (edict_t *ent)
 {
 	int			i, num;
@@ -486,6 +517,8 @@ Call after linking a new trigger in during gameplay
 to force all entities it covers to immediately touch it
 ============
 */
+// gamex86.dll: 100484A1..10048549
+// gamei386.so: 0003267C..0003270C
 void	G_TouchSolids (edict_t *ent)
 {
 	int			i, num;
@@ -527,6 +560,8 @@ Kills all entities that would touch the proposed new positioning
 of ent.  Ent should be unlinked before calling this!
 =================
 */
+// gamex86.dll: 10048549..10048600
+// gamei386.so: 0003270C..00032795
 qboolean KillBox (edict_t *ent)
 {
 	trace_t		tr;

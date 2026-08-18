@@ -1,5 +1,13 @@
 
 #include "g_local.h"
+#include "bl_main.h"
+
+int	endlvl_frame = 0;
+int	end_timeout = -1;
+int	match_paused = 0;
+int	ot_count = 0;
+float	pause_time = 0;
+
 
 game_locals_t	game;
 level_locals_t	level;
@@ -20,10 +28,7 @@ cvar_t	*skill;
 cvar_t	*fraglimit;
 cvar_t	*timelimit;
 cvar_t	*password;
-cvar_t	*spectator_password;
-cvar_t	*needpass;
 cvar_t	*maxclients;
-cvar_t	*maxspectators;
 cvar_t	*maxentities;
 cvar_t	*g_select_empty;
 cvar_t	*dedicated;
@@ -51,8 +56,6 @@ cvar_t	*flood_msgs;
 cvar_t	*flood_persecond;
 cvar_t	*flood_waitdelay;
 
-cvar_t	*sv_maplist;
-
 void SpawnEntities (char *mapname, char *entities, char *spawnpoint);
 void ClientThink (edict_t *ent, usercmd_t *cmd);
 qboolean ClientConnect (edict_t *ent, char *userinfo);
@@ -72,9 +75,60 @@ void G_RunFrame (void);
 //===================================================================
 
 
+// gamex86.dll: 10015960..10015B51
+// gamei386.so: 00022254..00022534
 void ShutdownGame (void)
 {
+	char	reason[128];
+
+	BotUnloadAllLibraries ();
 	gi.dprintf ("==== ShutdownGame ====\n");
+
+	sl_GameEnd (&gi, level);
+
+	if (!level.intermissiontime)
+		q2log_logAccuracy ();
+
+	if (gi.argc ())
+	{
+		if (strcmp (gi.argv (0), "map") != 0)
+		{
+			if ((int)nglog_ngstats_browser->value &&
+				(int)nglog_logstyle->value == 4)
+				q2log_gameEnd (gi.argv (0), 1);
+			else
+				q2log_gameEnd (gi.argv (0), 0);
+
+			strcpy (reason, gi.argv (0));
+		}
+		else
+		{
+			q2log_gameEnd ("manual_map", 0);
+			strcpy (reason, "manual_map");
+		}
+	}
+	else
+	{
+		if ((int)nglog_ngstats_browser->value &&
+			(int)nglog_logstyle->value == 4)
+			q2log_gameEnd ("server", 1);
+		else
+			q2log_gameEnd ("server", 0);
+
+		strcpy (reason, "server");
+	}
+
+	if (server_log)
+	{
+		char		date[32];
+		time_t		now;
+		struct tm	*tm;
+
+		time (&now);
+		tm = localtime (&now);
+		sprintf (date, "%.19s", asctime (tm));
+		OSP_logAdminLog ("Shutdown: %s (%s)", reason, date);
+	}
 
 	gi.FreeTags (TAG_LEVEL);
 	gi.FreeTags (TAG_GAME);
@@ -89,9 +143,14 @@ Returns a pointer to the structure with all entry points
 and global variables
 =================
 */
+// gamex86.dll: 10015B51..10015C22
+// gamei386.so: 00022534..00022669
 game_export_t *GetGameAPI (game_import_t *import)
 {
 	gi = *import;
+
+	BotRedirectGameImport ();
+	Swap_Init ();
 
 	globals.apiversion = GAME_API_VERSION;
 	globals.Init = InitGame;
@@ -121,6 +180,8 @@ game_export_t *GetGameAPI (game_import_t *import)
 
 #ifndef GAME_HARD_LINKED
 // this is only here so the functions in q_shared.c and q_shwin.c can link
+// gamex86.dll: 10015C22..10015C73
+// gamei386.so: 0002266C..000226B5
 void Sys_Error (char *error, ...)
 {
 	va_list		argptr;
@@ -133,6 +194,8 @@ void Sys_Error (char *error, ...)
 	gi.error (ERR_FATAL, "%s", text);
 }
 
+// gamex86.dll: 10015C73..10015CC2
+// gamei386.so: 000226B8..000226FF
 void Com_Printf (char *msg, ...)
 {
 	va_list		argptr;
@@ -155,6 +218,8 @@ void Com_Printf (char *msg, ...)
 ClientEndServerFrames
 =================
 */
+// gamex86.dll: 10015CC2..10015D26
+// gamei386.so: 00022700..0002277F
 void ClientEndServerFrames (void)
 {
 	int		i;
@@ -162,33 +227,19 @@ void ClientEndServerFrames (void)
 
 	// calc the player views now that all pushing
 	// and damage has been added
-	for (i=0 ; i<maxclients->value ; i++)
+	for (i=1 ; i<=maxclients->value ; i++)
 	{
-		ent = g_edicts + 1 + i;
+		ent = g_edicts + i;
 		if (!ent->inuse || !ent->client)
 			continue;
 		ClientEndServerFrame (ent);
 	}
-
 }
 
-/*
-=================
-CreateTargetChangeLevel
+// vanilla's CreateTargetChangeLevel helper is gone from the real source:
+// each of the three sites in EndDMLevel is G_Spawn / classname / map written
+// out.
 
-Returns the created target changelevel
-=================
-*/
-edict_t *CreateTargetChangeLevel(char *map)
-{
-	edict_t *ent;
-
-	ent = G_Spawn ();
-	ent->classname = "target_changelevel";
-	Com_sprintf(level.nextmap, sizeof(level.nextmap), "%s", map);
-	ent->map = level.nextmap;
-	return ent;
-}
 
 /*
 =================
@@ -197,84 +248,56 @@ EndDMLevel
 The timelimit or fraglimit has been exceeded
 =================
 */
+// gamex86.dll: 10015D26..10015E29
+// gamei386.so: 00022780..000228A2
 void EndDMLevel (void)
 {
 	edict_t		*ent;
-	char *s, *t, *f;
-	static const char *seps = " ,\n\r";
+
+	ent = NULL;
+	EnitityListClean ();
+	endlvl_frame = level.framenum;
+
+	if (hs_mode && !manual_map)
+		OSP_updateHighScores ();
 
 	// stay on same level flag
-	if ((int)dmflags->value & DF_SAME_LEVEL)
+	if (((int)dmflags->value & DF_SAME_LEVEL) && manual_map != 1)
 	{
-		BeginIntermission (CreateTargetChangeLevel (level.mapname) );
-		return;
+		ent = G_Spawn ();
+		ent->classname = "target_changelevel";
+		ent->map = level.mapname;
 	}
 
-	// see if it's in the map list
-	if (*sv_maplist->string) {
-		s = strdup(sv_maplist->string);
-		f = NULL;
-		t = strtok(s, seps);
-		while (t != NULL) {
-			if (Q_stricmp(t, level.mapname) == 0) {
-				// it's in the list, go to the next one
-				t = strtok(NULL, seps);
-				if (t == NULL) { // end of list, go to first one
-					if (f == NULL) // there isn't a first one, same level
-						BeginIntermission (CreateTargetChangeLevel (level.mapname) );
-					else
-						BeginIntermission (CreateTargetChangeLevel (f) );
-				} else
-					BeginIntermission (CreateTargetChangeLevel (t) );
-				free(s);
-				return;
-			}
-			if (!f)
-				f = t;
-			t = strtok(NULL, seps);
-		}
-		free(s);
-	}
+	if (!ent)
+	{
+		ent = NextMap ();
 
-	if (level.nextmap[0]) // go to a specific map
-		BeginIntermission (CreateTargetChangeLevel (level.nextmap) );
-	else {	// search for a changelevel
-		ent = G_Find (NULL, FOFS(classname), "target_changelevel");
 		if (!ent)
-		{	// the map designer didn't include a changelevel,
-			// so create a fake ent that goes back to the same level
-			BeginIntermission (CreateTargetChangeLevel (level.mapname) );
-			return;
+		{
+			if (level.nextmap[0])		// go to a specific map
+			{
+				ent = G_Spawn ();
+				ent->classname = "target_changelevel";
+				ent->map = level.nextmap;
+			}
+			else
+			{	// search for a changelevel
+				ent = G_Find (NULL, FOFS(classname), "target_changelevel");
+
+				if (!ent)
+				{	// the map designer didn't include a changelevel, so create
+					// a fake ent that goes back to the same level
+					ent = G_Spawn ();
+					ent->classname = "target_changelevel";
+					ent->map = level.mapname;
+				}
+			}
+
 		}
-		BeginIntermission (ent);
 	}
-}
 
-
-/*
-=================
-CheckNeedPass
-=================
-*/
-void CheckNeedPass (void)
-{
-	int need;
-
-	// if password or spectator_password has changed, update needpass
-	// as needed
-	if (password->modified || spectator_password->modified) 
-	{
-		password->modified = spectator_password->modified = false;
-
-		need = 0;
-
-		if (*password->string && Q_stricmp(password->string, "none"))
-			need |= 1;
-		if (*spectator_password->string && Q_stricmp(spectator_password->string, "none"))
-			need |= 2;
-
-		gi.cvar_set("needpass", va("%d", need));
-	}
+	BeginIntermission (ent);
 }
 
 /*
@@ -282,40 +305,111 @@ void CheckNeedPass (void)
 CheckDMRules
 =================
 */
+// gamex86.dll: 10015E29..100161D0
+// gamei386.so: 000228A4..00022CB0
 void CheckDMRules (void)
 {
 	int			i;
-	gclient_t	*cl;
 
 	if (level.intermissiontime)
 		return;
 
-	if (!deathmatch->value)
-		return;
-
 	if (timelimit->value)
 	{
-		if (level.time >= timelimit->value*60)
+		if (sync_stat > 2)
 		{
-			gi.bprintf (PRINT_HIGH, "Timelimit hit.\n");
-			EndDMLevel ();
-			return;
+			if (level.time - sync_time >=
+				(timelimit->value + overtime_timer) * 60 &&
+				!frag_offset)
+			{
+				if (m_mode > 1)
+				{
+					if (teams[0].osp_m0f8 == teams[1].osp_m0f8)
+					{
+						if (OSP_overtimeWork (ot_count))
+						{
+							ot_count++;
+							return;
+						}
+					}
+
+					OSP_findTeamWinner ();
+				}
+
+				ot_count = 0;
+				gi.bprintf (PRINT_HIGH, "Timelimit hit.\n");
+				sl_SoftGameEnd (&gi, level);
+				q2log_logAccuracy ();
+				if (!overtime_timer)
+					q2log_gameEnd ("timelimit", 0);
+				else
+					q2log_gameEnd ("overtime timelimit", 0);
+				EndDMLevel ();
+				return;
+			}
+			goto fraglimit_check;
 		}
 	}
 
-	if (fraglimit->value)
+	if (connected_clients - botglobals.numbots <= 0 &&
+		level.time > 3600)
 	{
-		for (i=0 ; i<maxclients->value ; i++)
-		{
-			cl = game.clients + i;
-			if (!g_edicts[i+1].inuse)
-				continue;
+		ot_count = 0;
+		gi.bprintf (PRINT_HIGH, "Inactive client timelimit hit.\n");
+		sl_SoftGameEnd (&gi, level);
+		q2log_gameEnd ("inactive client timelimit", 0);
+		EndDMLevel ();
+		return;
+	}
 
-			if (cl->resp.score >= fraglimit->value)
+fraglimit_check:
+	if (fraglimit->value || frag_offset)
+	{
+		if (m_mode < 2)
+		{
+			for (i = 0; i < maxclients->value; i++)
 			{
-				gi.bprintf (PRINT_HIGH, "Fraglimit hit.\n");
+				gclient_t	*cl;
+
+				cl = game.clients + i;
+				if (!g_edicts[i+1].inuse)
+					continue;
+
+				if (cl->resp.score >= fraglimit->value)
+				{
+					gi.bprintf (PRINT_HIGH, "Fraglimit hit.\n");
+					sl_SoftGameEnd (&gi, level);
+					q2log_logAccuracy ();
+					q2log_gameEnd ("fraglimit", 0);
+					EndDMLevel ();
+					return;
+				}
+			}
+		}
+		else if (frag_offset)
+		{
+			if (teams[0].osp_m0f8 != teams[1].osp_m0f8)
+			{
+				OSP_findTeamWinner ();
+				gi.bprintf (PRINT_HIGH, "We have a sudden-death winner!\n");
+				sl_SoftGameEnd (&gi, level);
+				q2log_logAccuracy ();
+				q2log_gameEnd ("sudden death fraglimit", 0);
 				EndDMLevel ();
 				return;
+			}
+		}
+		else
+		{
+			if (teams[0].osp_m0f8 >= fraglimit->value + frag_offset ||
+				teams[1].osp_m0f8 >= fraglimit->value + frag_offset)
+			{
+				OSP_findTeamWinner ();
+				gi.bprintf (PRINT_HIGH, "Team fraglimit hit.\n");
+				sl_SoftGameEnd (&gi, level);
+				q2log_logAccuracy ();
+				q2log_gameEnd ("team fraglimit", 0);
+				EndDMLevel ();
 			}
 		}
 	}
@@ -327,6 +421,8 @@ void CheckDMRules (void)
 ExitLevel
 =============
 */
+// gamex86.dll: 100161D0..10016302
+// gamei386.so: 00022CB0..00022E26
 void ExitLevel (void)
 {
 	int		i;
@@ -348,6 +444,8 @@ void ExitLevel (void)
 			continue;
 		if (ent->health > ent->client->pers.max_health)
 			ent->health = ent->client->pers.max_health;
+		ent->client->resp.score = ent->client->pers.score = 0;
+		PlayerResetGrapple (ent);
 	}
 
 }
@@ -359,65 +457,405 @@ G_RunFrame
 Advances the world by 0.1 seconds
 ================
 */
+// gamex86.dll: 10016302..10017330
+// gamei386.so: 00022E28..00024162
 void G_RunFrame (void)
 {
 	int		i;
 	edict_t	*ent;
 
-	level.framenum++;
-	level.time = level.framenum*FRAMETIME;
-
-	// choose a client for monsters to target this frame
-	AI_SetSightClient ();
-
-	// exit intermissions
-
-	if (level.exitintermission)
+	if (match_paused < 2)
 	{
-		ExitLevel ();
-		return;
-	}
+		level.framenum++;
+		level.time = level.framenum*FRAMETIME;
 
-	//
-	// treat each object in turn
-	// even the world gets a chance to think
-	//
-	ent = &g_edicts[0];
-	for (i=0 ; i<globals.num_edicts ; i++, ent++)
-	{
-		if (!ent->inuse)
-			continue;
-
-		level.current_entity = ent;
-
-		VectorCopy (ent->s.origin, ent->s.old_origin);
-
-		// if the ground entity moved, make sure we are still on it
-		if ((ent->groundentity) && (ent->groundentity->linkcount != ent->groundentity_linkcount))
+		if ((int)console_timestamp->value &&
+			console_stampcount < level.framenum)
 		{
-			ent->groundentity = NULL;
-			if ( !(ent->flags & (FL_SWIM|FL_FLY)) && (ent->svflags & SVF_MONSTER) )
+			console_stampcount = level.framenum +
+				(int)console_timestamp->value * 600;
+			OSP_consoleStamp ();
+		}
+
+		if (level.framenum == 25 && bots_botfile->string &&
+			bots_loadstat == 1)
+		{
+			char	command[256];
+
+			gi.bprintf (PRINT_HIGH, "Loading bots...\n");
+			Com_sprintf (command, sizeof(command), " exec %s\n",
+						 bots_botfile->string);
+			gi.AddCommandString (command);
+		}
+
+		if (!level.intermissiontime)
+			OSP_updateClock ();
+
+		if (vote_inprogress && level.framenum > vote_frametime &&
+			!level.intermissiontime)
+		{
+			gi.bprintf (PRINT_HIGH, "Time up. Vote failed. No changes made.\n");
+			q2log_voteInfo ("Fail", 0, 0);
+			OSP_clearVotes ();
+			OSP_closeMenus ();
+		}
+
+		if (m_mode > 1)
+			OSP_updateTeamFrags ();
+
+		if (sync_stat < 4 && !level.intermissiontime)
+			OSP_checkSync ();
+
+		if (level.exitintermission)
+		{
+			OSP_serverbotsRemove ();
+			ot_count = 0;
+
+			if (manual_map == 2)
 			{
-				M_CheckGround (ent);
+				char	command[256];
+				edict_t	*ent;
+
+				OSP_loadMaps ();
+				ent = NextMap ();
+				if (ent)
+					Com_sprintf (command, sizeof(command), "map %s\n", ent->map);
+				else
+					Com_sprintf (command, sizeof(command), "map %s\n", level.mapname);
+				gi.AddCommandString (command);
+				return;
+			}
+
+			if (((int)dmflags->value & DF_SAME_LEVEL) && manual_map != 1 &&
+				level.framenum < 64000 &&
+				connected_clients - botglobals.numbots > 0)
+			{
+				OSP_endClean ();
+				level.changemap = NULL;
+				level.exitintermission = 0;
+				level.intermissiontime = 0;
+				ClientEndServerFrames ();
+				botglobals.numbots = 0;
+				q2log_gameInit (1);
+				sl_GameStart (&gi, level);
+				if (m_mode < 1)
+					q2log_gameStart ();
+				OSP_consoleStamp ();
+
+				for (i = 0; i < maxclients->value; i++)
+				{
+					ent = g_edicts + 1 + i;
+					if (!ent->inuse)
+						continue;
+					if (ent->health > ent->client->pers.max_health)
+						ent->health = ent->client->pers.max_health;
+					ent->client->resp.score = ent->client->pers.score = 0;
+					ent->client->resp.osp_r030 = 0;
+					PlayerResetGrapple (ent);
+					ClientBegin (ent);
+				}
+
+				ent = g_edicts + ((int)maxclients->value + 1);
+				for (i = (int)(maxclients->value + 1); i < globals.num_edicts;
+					 i++, ent++)
+				{
+					if (!ent->inuse || !ent->think)
+						continue;
+					if ((!ent->team || ent == ent->teammaster) &&
+						!OSP_disableItems (ent))
+						ent->nextthink = level.time - 1.0;
+				}
+				return;
+			}
+
+			if ((int)vote_config_default->value &&
+				vote_config_defaultname->string &&
+				strcmp (vote_config_defaultname->string, "default") &&
+				strcmp (__current_config->string, "default") &&
+				!(connected_clients - botglobals.numbots))
+			{
+				char	command[256];
+
+				OSP_endClean ();
+				gi.cvar_set ("__current_config", "default");
+				gi.dprintf ("Changing back to default config: %s\n",
+							vote_config_defaultname->string);
+				Com_sprintf (command, sizeof(command), "exec %s\n",
+							 vote_config_defaultname->string);
+				gi.AddCommandString (command);
+				Com_sprintf (command, sizeof(command), "map %s\n", level.mapname);
+				gi.AddCommandString (command);
+				return;
+			}
+
+			OSP_endClean ();
+			ExitLevel ();
+			return;
+		}
+
+		AddQueuedBots ();
+		BotLib_BotStartFrame (level.time);
+
+		ent = g_edicts;
+		for (i=0 ; i<globals.num_edicts && ent ; i++, ent++)
+		{
+			vec3_t	forward;
+			vec3_t	right;
+			vec3_t	offset;
+			vec3_t	start;
+
+			if (!ent->inuse || !ent->classname)
+				continue;
+
+			level.current_entity = ent;
+
+			if (ent->classname && !strncmp (ent->classname, "hook", 4))
+			{
+				if (ent != ent->owner->client->grapple || !ent->owner->inuse)
+				{
+					G_FreeEdict (ent);
+					continue;
+				}
+
+				AngleVectors (ent->owner->client->v_angle, forward, right, NULL);
+				VectorSet (offset, 24, 8, ent->owner->viewheight - 8);
+				P_ProjectSource (ent->owner->client, ent->owner->s.origin, offset,
+								 forward, right, start);
+				VectorSubtract (start, ent->owner->s.origin, offset);
+				VectorAdd (offset, ent->owner->s.origin, ent->s.old_origin);
+			}
+			else if (!(ent->flags & FL_OLDORGNOTSET))
+				VectorCopy (ent->s.origin, ent->s.old_origin);
+
+			if ((ent->groundentity) && (ent->groundentity->linkcount != ent->groundentity_linkcount))
+				ent->groundentity = NULL;
+
+			if (i > 0 && i <= maxclients->value)
+			{
+				ClientBeginServerFrame (ent);
+				continue;
+			}
+
+			G_RunEntity (ent);
+		}
+
+		if (botglobals.numbots)
+		{
+			ent = g_edicts;
+			for (i = 0; i < globals.num_edicts && ent; i++, ent++)
+			{
+				if (!ent->inuse)
+					continue;
+				if (!(ent->svflags & SVF_NOCLIENT))
+					BotLib_BotUpdateEntity (ent);
 			}
 		}
 
-		if (i > 0 && i <= maxclients->value)
+		for (i = 0; i < maxclients->value; i++)
 		{
-			ClientBeginServerFrame (ent);
-			continue;
+			ent = g_edicts + (i + 1);
+			if (ent->inuse && (ent->flags & FL_BOT) && BotStarted (ent))
+			{
+				BotLib_BotUpdateClient (ent);
+				BotLib_BotAI (ent, FRAMETIME);
+				BotExecuteInput (ent);
+			}
 		}
 
-		G_RunEntity (ent);
+		if (bots_loadstat > 1 && (int)bots_minplayers->value &&
+			(((level.framenum > bots_delaytime) && (int)dedicated->value) ||
+			 ((level.framenum > 25) && !(int)dedicated->value)) &&
+			!level.intermissiontime && !level.exitintermission)
+			CheckMinimumPlayers ();
+
+		CheckDMRules ();
+
+		ClientEndServerFrames ();
+
+		if (match_paused == 1)
+		{
+			match_paused = 2;
+
+			if (who_paused == -1 || who_paused == -3)
+				gi.configstring (0x621, "Pause");
+			else if (who_paused == -2)
+				gi.configstring (0x621, " Wait");
+
+			{
+				edict_t	*ent;
+
+				for (i = 1; i <= game.maxclients; i++)
+				{
+					ent = g_edicts + i;
+					if (!ent->inuse || !ent->client)
+						continue;
+
+					ent->client->ps.pmove.pm_type = PM_FREEZE;
+					ent->client->ps.pmove.pm_flags |= PMF_NO_PREDICTION;
+				}
+			}
+		}
+		return;
 	}
 
-	// see if it is time to end a deathmatch
-	CheckDMRules ();
+	if (level.intermissiontime)
+	{
+		edict_t	*ent;
 
-	// see if needpass needs updated
-	CheckNeedPass ();
+		match_paused = 0;
+		who_paused = -1;
+		end_timeout = -1;
 
-	// build the playerstate_t structures for all players
+		for (i = 1; i <= game.maxclients; i++)
+		{
+			ent = g_edicts + i;
+			if (!ent->inuse || !ent->client)
+				continue;
+
+			ent->client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
+		}
+		return;
+	}
+
+	if (match_paused == 3)
+	{
+		// message[64], and the per-iteration `command` is 32 bytes, not 48.
+		char	message[64];
+		char	command[32];
+		edict_t	*ent;
+
+		if (end_timeout == -1)
+			end_timeout = 51;
+		end_timeout--;
+
+		if (!end_timeout)
+		{
+			edict_t	*ent;
+
+			match_paused = 0;
+			who_paused = -1;
+			for (i = 1; i <= game.maxclients; i++)
+			{
+				ent = g_edicts + i;
+				if (!ent->inuse || !ent->client)
+					continue;
+
+				ent->client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
+			}
+			gi.bprintf (PRINT_CHAT, "**** MATCH HAS RESTARTED!! ****\n");
+			end_timeout = -1;
+			return;
+		}
+
+		if (!(end_timeout % 10))
+		{
+			if (end_timeout / 10 != 1)
+				sprintf (message, "Match restarting in %d seconds.\n",
+						 end_timeout / 10);
+			else
+				sprintf (message, "Match restarting in %d second!\n",
+						 end_timeout / 10);
+			for (i = 1; i <= game.maxclients; i++)
+			{
+				ent = g_edicts + i;
+				if (!ent->inuse || !ent->client)
+					continue;
+				gi.centerprintf (ent, "%s", message);
+				sprintf (command, "play misc/secret.wav");
+				gi.WriteByte (svc_stufftext);
+				gi.WriteString (command);
+				gi.unicast (ent, false);
+			}
+		}
+		return;
+	}
+
+	if (who_paused == -1)
+	{
+		ClientEndServerFrames ();
+		return;
+	}
+
+	// Each of the three pause countdowns truncates pause_time ONCE into its own
+	// int local and reuses it.  (`secs` is an invented name.)
+	if (who_paused == -3)
+	{
+		int		secs = (int)pause_time;
+
+		if (pause_time - secs < FRAMETIME && !(secs % 10))
+		{
+			edict_t	*ent;
+
+			for (i = 1; i <= game.maxclients; i++)
+			{
+				ent = g_edicts + i;
+				if (!ent->inuse || !ent->client)
+					continue;
+
+				gi.centerprintf (ent,
+					"Admin is viewing ngStats.  Please Wait.\n");
+			}
+		}
+		pause_time -= FRAMETIME;
+		ClientEndServerFrames ();
+		return;
+	}
+
+	if (who_paused == -2)
+	{
+		int		secs = (int)pause_time;
+
+		if (pause_time - secs < FRAMETIME && !(secs % 10))
+		{
+			char	message[128];
+
+			sprintf (message, "Waiting for %s to reconnect.\n(%d seconds)\n",
+					 reconn_player, secs);
+			for (i = 1; i <= game.maxclients; i++)
+			{
+				ent = g_edicts + i;
+				if (!ent->inuse || !ent->client)
+					continue;
+
+				gi.centerprintf (ent, message);
+			}
+		}
+		pause_time -= FRAMETIME;
+		if (pause_time < FRAMETIME)
+		{
+			edict_t	*ent;
+
+			match_paused = 0;
+			who_paused = -1;
+			for (i = 1; i <= game.maxclients; i++)
+			{
+				ent = g_edicts + i;
+				if (!ent->inuse || !ent->client ||
+					ent->client->resp.entered > 2)
+					continue;
+
+				ent->client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
+			}
+			gi.bprintf (PRINT_HIGH, "No reconnect. Match terminated.\n");
+			OSP_checkHalt (reconn_index);
+		}
+		ClientEndServerFrames ();
+		return;
+	}
+
+	{
+		int		secs = (int)pause_time;
+
+		if (pause_time - secs < FRAMETIME)
+		{
+			char	message[8];
+
+			sprintf (message, "TO %.2d", secs);
+			gi.configstring (0x621, message);
+		}
+	}
+	pause_time -= FRAMETIME;
+	if (pause_time < FRAMETIME)
+		match_paused = 3;
 	ClientEndServerFrames ();
 }
-

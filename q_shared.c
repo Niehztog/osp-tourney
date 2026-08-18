@@ -10,7 +10,11 @@ vec3_t vec3_origin = {0,0,0};
 #pragma optimize( "", off )
 #endif
 
-void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
+// Present in the original source, but not compiled.
+#if 0
+// gamex86.dll: absent
+// gamei386.so: absent
+static void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
 {
 	float	m[3][3];
 	float	im[3][3];
@@ -19,14 +23,11 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	float	rot[3][3];
 	int	i;
 	vec3_t vr, vup, vf;
-
 	vf[0] = dir[0];
 	vf[1] = dir[1];
 	vf[2] = dir[2];
-
 	PerpendicularVector( vr, dir );
 	CrossProduct( vr, vf, vup );
-
 	m[0][0] = vr[0];
 	m[1][0] = vr[1];
 	m[2][0] = vr[2];
@@ -64,6 +65,7 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 		dst[i] = rot[i][0] * point[0] + rot[i][1] * point[1] + rot[i][2] * point[2];
 	}
 }
+#endif
 
 #ifdef _WIN32
 #pragma optimize( "", on )
@@ -71,6 +73,8 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 
 
 
+// gamex86.dll: 10060940..10060B1C
+// gamei386.so: 000463CC..0004658F
 void AngleVectors (vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 {
 	float		angle;
@@ -108,6 +112,8 @@ void AngleVectors (vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 }
 
 
+// gamex86.dll: 10060B1C..10060BD8
+// gamei386.so: 00046590..00046600
 void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 {
 	float d;
@@ -130,6 +136,8 @@ void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 /*
 ** assumes "src" is normalized
 */
+// gamex86.dll: 10060BD8..10060C8D
+// gamei386.so: 00046600..000466E3
 void PerpendicularVector( vec3_t dst, const vec3_t src )
 {
 	int	pos;
@@ -169,6 +177,8 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 R_ConcatRotations
 ================
 */
+// gamex86.dll: 10060C8D..10060E29
+// gamei386.so: 000466E4..000467CC
 void R_ConcatRotations (float in1[3][3], float in2[3][3], float out[3][3])
 {
 	out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] +
@@ -197,6 +207,8 @@ void R_ConcatRotations (float in1[3][3], float in2[3][3], float out[3][3])
 R_ConcatTransforms
 ================
 */
+// gamex86.dll: 10060E29..10061060
+// gamei386.so: 000467CC..00046907
 void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 {
 	out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] +
@@ -229,6 +241,8 @@ void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 //============================================================================
 
 
+// gamex86.dll: 10061060..1006107D
+// gamei386.so: 00046908..0004691E
 float Q_fabs (float f)
 {
 #if 0
@@ -244,6 +258,8 @@ float Q_fabs (float f)
 
 #if defined _M_IX86 && !defined C_ONLY
 #pragma warning (disable:4035)
+// gamex86.dll: 1006107D..1006108D
+// gamei386.so: absent
 __declspec( naked ) long Q_ftol( float f )
 {
 	static int tmp;
@@ -261,6 +277,8 @@ LerpAngle
 
 ===============
 */
+// gamex86.dll: 1006108D..100610DC
+// gamei386.so: 00046920..00046983
 float LerpAngle (float a2, float a1, float frac)
 {
 	if (a1 - a2 > 180)
@@ -271,6 +289,8 @@ float LerpAngle (float a2, float a1, float frac)
 }
 
 
+// gamex86.dll: 100610DC..10061106
+// gamei386.so: 00046984..000469D9
 float	anglemod(float a)
 {
 #if 0
@@ -288,6 +308,8 @@ float	anglemod(float a)
 
 
 // this is the slow, general version
+// gamex86.dll: 10061106..1006120A
+// gamei386.so: 000469DC..00046A83
 int BoxOnPlaneSide2 (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
 	int		i;
@@ -327,6 +349,12 @@ Returns 1, 2, or 1 + 2
 ==================
 */
 #if !id386 || defined __linux__ 
+// The two asserts below bake __LINE__ into .text as unmasked immediates --
+// 382 and 392, the ORIGINAL source's line numbers.  Anything inserted between
+// this directive and `assert (sides != 0)` must keep the directive correct.
+// gamex86.dll: absent
+// gamei386.so: 00046A84..00046CC6
+#line 330
 int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
 	float	dist1, dist2;
@@ -396,6 +424,8 @@ dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
 #else
 #pragma warning( disable: 4035 )
 
+// gamex86.dll: 1006120A..10061488
+// gamei386.so: absent
 __declspec( naked ) int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
 	static int bops_initialized;
@@ -628,12 +658,16 @@ Lerror:
 #pragma warning( default: 4035 )
 #endif
 
+// gamex86.dll: 10061488..100614C7
+// gamei386.so: 00046CC8..00046D03
 void ClearBounds (vec3_t mins, vec3_t maxs)
 {
 	mins[0] = mins[1] = mins[2] = 99999;
 	maxs[0] = maxs[1] = maxs[2] = -99999;
 }
 
+// gamex86.dll: 100614C7..10061535
+// gamei386.so: 00046D04..00046D49
 void AddPointToBounds (vec3_t v, vec3_t mins, vec3_t maxs)
 {
 	int		i;
@@ -650,6 +684,8 @@ void AddPointToBounds (vec3_t v, vec3_t mins, vec3_t maxs)
 }
 
 
+// gamex86.dll: 10061535..1006157A
+// gamei386.so: 00046D4C..00046D97
 int VectorCompare (vec3_t v1, vec3_t v2)
 {
 	if (v1[0] != v2[0] || v1[1] != v2[1] || v1[2] != v2[2])
@@ -659,6 +695,8 @@ int VectorCompare (vec3_t v1, vec3_t v2)
 }
 
 
+// gamex86.dll: 1006157A..10061605
+// gamei386.so: 00046D98..00046E15
 vec_t VectorNormalize (vec3_t v)
 {
 	float	length, ilength;
@@ -678,6 +716,8 @@ vec_t VectorNormalize (vec3_t v)
 
 }
 
+// gamex86.dll: 10061605..10061690
+// gamei386.so: 00046E18..00046E9A
 vec_t VectorNormalize2 (vec3_t v, vec3_t out)
 {
 	float	length, ilength;
@@ -697,6 +737,8 @@ vec_t VectorNormalize2 (vec3_t v, vec3_t out)
 
 }
 
+// gamex86.dll: 10061690..100616D1
+// gamei386.so: 00046E9C..00046EC9
 void VectorMA (vec3_t veca, float scale, vec3_t vecb, vec3_t vecc)
 {
 	vecc[0] = veca[0] + scale*vecb[0];
@@ -705,11 +747,15 @@ void VectorMA (vec3_t veca, float scale, vec3_t vecb, vec3_t vecc)
 }
 
 
+// gamex86.dll: 100616D1..100616FC
+// gamei386.so: 00046ECC..00046EEB
 vec_t _DotProduct (vec3_t v1, vec3_t v2)
 {
 	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2];
 }
 
+// gamex86.dll: 100616FC..10061734
+// gamei386.so: 00046EEC..00046F12
 void _VectorSubtract (vec3_t veca, vec3_t vecb, vec3_t out)
 {
 	out[0] = veca[0]-vecb[0];
@@ -717,6 +763,8 @@ void _VectorSubtract (vec3_t veca, vec3_t vecb, vec3_t out)
 	out[2] = veca[2]-vecb[2];
 }
 
+// gamex86.dll: 10061734..1006176C
+// gamei386.so: 00046F14..00046F3A
 void _VectorAdd (vec3_t veca, vec3_t vecb, vec3_t out)
 {
 	out[0] = veca[0]+vecb[0];
@@ -724,6 +772,8 @@ void _VectorAdd (vec3_t veca, vec3_t vecb, vec3_t out)
 	out[2] = veca[2]+vecb[2];
 }
 
+// gamex86.dll: 1006176C..10061793
+// gamei386.so: 00046F3C..00046F57
 void _VectorCopy (vec3_t in, vec3_t out)
 {
 	out[0] = in[0];
@@ -731,6 +781,8 @@ void _VectorCopy (vec3_t in, vec3_t out)
 	out[2] = in[2];
 }
 
+// gamex86.dll: 10061793..100617F3
+// gamei386.so: 00046F58..00046F94
 void CrossProduct (vec3_t v1, vec3_t v2, vec3_t cross)
 {
 	cross[0] = v1[1]*v2[2] - v1[2]*v2[1];
@@ -740,6 +792,8 @@ void CrossProduct (vec3_t v1, vec3_t v2, vec3_t cross)
 
 double sqrt(double x);
 
+// gamex86.dll: 100617F3..1006184C
+// gamei386.so: 00046F94..00046FED
 vec_t VectorLength(vec3_t v)
 {
 	int		i;
@@ -753,6 +807,8 @@ vec_t VectorLength(vec3_t v)
 	return length;
 }
 
+// gamex86.dll: 1006184C..10061879
+// gamei386.so: 00046FF0..0004700E
 void VectorInverse (vec3_t v)
 {
 	v[0] = -v[0];
@@ -760,6 +816,8 @@ void VectorInverse (vec3_t v)
 	v[2] = -v[2];
 }
 
+// gamex86.dll: 10061879..100618A9
+// gamei386.so: 00047010..00047032
 void VectorScale (vec3_t in, vec_t scale, vec3_t out)
 {
 	out[0] = in[0]*scale;
@@ -768,6 +826,8 @@ void VectorScale (vec3_t in, vec_t scale, vec3_t out)
 }
 
 
+// gamex86.dll: 100618A9..100618D4
+// gamei386.so: 00047034..00047048
 int Q_log2(int val)
 {
 	int answer=0;
@@ -785,6 +845,8 @@ int Q_log2(int val)
 COM_SkipPath
 ============
 */
+// gamex86.dll: 100618D4..1006190E
+// gamei386.so: 00047048..0004706A
 char *COM_SkipPath (char *pathname)
 {
 	char	*last;
@@ -804,6 +866,8 @@ char *COM_SkipPath (char *pathname)
 COM_StripExtension
 ============
 */
+// gamex86.dll: 1006190E..1006194C
+// gamei386.so: 0004706C..00047090
 void COM_StripExtension (char *in, char *out)
 {
 	while (*in && *in != '.')
@@ -816,6 +880,8 @@ void COM_StripExtension (char *in, char *out)
 COM_FileExtension
 ============
 */
+// gamex86.dll: 1006194C..100619D8
+// gamei386.so: 00047090..000470E7
 char *COM_FileExtension (char *in)
 {
 	static char exten[8];
@@ -837,6 +903,8 @@ char *COM_FileExtension (char *in)
 COM_FileBase
 ============
 */
+// gamex86.dll: 100619D8..10061A7F
+// gamei386.so: 000470E8..00047165
 void COM_FileBase (char *in, char *out)
 {
 	char *s, *s2;
@@ -866,6 +934,8 @@ COM_FilePath
 Returns the path up to, but not including the last /
 ============
 */
+// gamex86.dll: 10061A7F..10061ADF
+// gamei386.so: 00047168..000471BF
 void COM_FilePath (char *in, char *out)
 {
 	char *s;
@@ -885,6 +955,8 @@ void COM_FilePath (char *in, char *out)
 COM_DefaultExtension
 ==================
 */
+// gamex86.dll: 10061ADF..10061B38
+// gamei386.so: 000471C0..00047214
 void COM_DefaultExtension (char *path, char *extension)
 {
 	char    *src;
@@ -923,13 +995,27 @@ int		(*_LittleLong) (int l);
 float	(*_BigFloat) (float l);
 float	(*_LittleFloat) (float l);
 
+// gamex86.dll: 10061B38..10061B4B
+// gamei386.so: 00047214..00047239
 short	BigShort(short l){return _BigShort(l);}
+// gamex86.dll: 10061B4B..10061B5E
+// gamei386.so: 0004723C..00047261
 short	LittleShort(short l) {return _LittleShort(l);}
+// gamex86.dll: 10061B5E..10061B70
+// gamei386.so: 00047264..00047286
 int		BigLong (int l) {return _BigLong(l);}
+// gamex86.dll: 10061B70..10061B82
+// gamei386.so: 00047288..000472AA
 int		LittleLong (int l) {return _LittleLong(l);}
+// gamex86.dll: 10061B82..10061B94
+// gamei386.so: 000472AC..000472CF
 float	BigFloat (float l) {return _BigFloat(l);}
+// gamex86.dll: 10061B94..10061BA6
+// gamei386.so: 000472D0..000472F3
 float	LittleFloat (float l) {return _LittleFloat(l);}
 
+// gamex86.dll: 10061BA6..10061BE2
+// gamei386.so: 000472F4..0004730F
 short   ShortSwap (short l)
 {
 	byte    b1,b2;
@@ -940,11 +1026,15 @@ short   ShortSwap (short l)
 	return (b1<<8) + b2;
 }
 
+// gamex86.dll: 10061BE2..10061BEB
+// gamei386.so: 00047310..00047319
 short	ShortNoSwap (short l)
 {
 	return l;
 }
 
+// gamex86.dll: 10061BEB..10061C5E
+// gamei386.so: 0004731C..00047357
 int    LongSwap (int l)
 {
 	byte    b1,b2,b3,b4;
@@ -957,11 +1047,15 @@ int    LongSwap (int l)
 	return ((int)b1<<24) + ((int)b2<<16) + ((int)b3<<8) + b4;
 }
 
+// gamex86.dll: 10061C5E..10061C66
+// gamei386.so: 00047358..00047360
 int	LongNoSwap (int l)
 {
 	return l;
 }
 
+// gamex86.dll: 10061C66..10061C91
+// gamei386.so: 00047360..000473A4
 float FloatSwap (float f)
 {
 	union
@@ -979,6 +1073,8 @@ float FloatSwap (float f)
 	return dat2.f;
 }
 
+// gamex86.dll: 10061C91..10061C99
+// gamei386.so: 000473A4..000473AC
 float FloatNoSwap (float f)
 {
 	return f;
@@ -989,6 +1085,8 @@ float FloatNoSwap (float f)
 Swap_Init
 ================
 */
+// gamex86.dll: 10061C99..10061D40
+// gamei386.so: 000473AC..0004749D
 void Swap_Init (void)
 {
 	byte	swaptest[2] = {1,0};
@@ -1028,6 +1126,8 @@ varargs versions of all text functions.
 FIXME: make this buffer size safe someday
 ============
 */
+// gamex86.dll: 10061D40..10061D6F
+// gamei386.so: 000474A0..000474CD
 char	*va(char *format, ...)
 {
 	va_list		argptr;
@@ -1050,6 +1150,8 @@ COM_Parse
 Parse a token out of a string
 ==============
 */
+// gamex86.dll: 10061D6F..10061EDB
+// gamei386.so: 000474D0..00047594
 char *COM_Parse (char **data_p)
 {
 	int		c;
@@ -1139,6 +1241,8 @@ Com_PageInMemory
 */
 int	paged_total;
 
+// gamex86.dll: 10061EDB..10061F1A
+// gamei386.so: 00047594..000475CD
 void Com_PageInMemory (byte *buffer, int size)
 {
 	int		i;
@@ -1158,6 +1262,8 @@ void Com_PageInMemory (byte *buffer, int size)
 */
 
 // FIXME: replace all Q_stricmp with Q_strcasecmp
+// gamex86.dll: 10061F1A..10061F2F
+// gamei386.so: 000475D0..000475F0
 int Q_stricmp (char *s1, char *s2)
 {
 #if defined(WIN32)
@@ -1168,6 +1274,8 @@ int Q_stricmp (char *s1, char *s2)
 }
 
 
+// gamex86.dll: 10061F2F..10061FB8
+// gamei386.so: 000475F0..00047641
 int Q_strncasecmp (char *s1, char *s2, int n)
 {
 	int		c1, c2;
@@ -1194,6 +1302,8 @@ int Q_strncasecmp (char *s1, char *s2, int n)
 	return 0;		// strings are equal
 }
 
+// gamex86.dll: 10061FB8..10061FD2
+// gamei386.so: 00047644..000476A5
 int Q_strcasecmp (char *s1, char *s2)
 {
 	return Q_strncasecmp (s1, s2, 99999);
@@ -1201,6 +1311,8 @@ int Q_strcasecmp (char *s1, char *s2)
 
 
 
+// gamex86.dll: 10061FD2..1006205D
+// gamei386.so: 000476A8..0004770E
 void Com_sprintf (char *dest, int size, char *fmt, ...)
 {
 	int		len;
@@ -1213,6 +1325,7 @@ void Com_sprintf (char *dest, int size, char *fmt, ...)
 	if (len >= size)
 		Com_Printf ("Com_sprintf: overflow of %i in %i\n", len, size);
 	strncpy (dest, bigbuffer, size-1);
+	dest[size-1] = 0;
 }
 
 /*
@@ -1231,6 +1344,8 @@ Searches the string for the given
 key and returns the associated value, or an empty string.
 ===============
 */
+// gamex86.dll: 1006205D..100621B1
+// gamei386.so: 00047710..000477BE
 char *Info_ValueForKey (char *s, char *key)
 {
 	char	pkey[512];
@@ -1271,8 +1386,12 @@ char *Info_ValueForKey (char *s, char *key)
 			return "";
 		s++;
 	}
+
+	return "";
 }
 
+// gamex86.dll: 100621B1..100622FB
+// gamei386.so: 000477C0..0004786C
 void Info_RemoveKey (char *s, char *key)
 {
 	char	*start;
@@ -1331,6 +1450,8 @@ Some characters are illegal in info strings because they
 can mess up the server's parsing
 ==================
 */
+// gamex86.dll: 100622FB..10062337
+// gamei386.so: 0004786C..000478B5
 qboolean Info_Validate (char *s)
 {
 	if (strstr (s, "\""))
@@ -1340,6 +1461,8 @@ qboolean Info_Validate (char *s)
 	return true;
 }
 
+// gamex86.dll: 10062337..10062530
+// gamei386.so: 000478B8..00047B3C
 void Info_SetValueForKey (char *s, char *key, char *value)
 {
 	char	newi[MAX_INFO_STRING], *v;
@@ -1377,7 +1500,9 @@ void Info_SetValueForKey (char *s, char *key, char *value)
 
 	if (strlen(newi) + strlen(s) > maxsize)
 	{
-		Com_Printf ("Info string length exceeded\n");
+		Com_Printf ("Info stringRHEA length exceeded\n");
+		Com_Printf ("string newi: %s\n", newi);
+		Com_Printf ("string s: %s\n", s);
 		return;
 	}
 
