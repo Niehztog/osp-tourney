@@ -7,48 +7,45 @@
 #include "g_local.h"
 #include "bl_main.h"
 
-int	overtime_timer;
-team_t	teams[2];
-int	frag_offset;
-
+int overtime_timer;
+team_t  teams[2];
+int frag_offset;
 
 // gamex86.dll: 100373C0..10037447
 // gamei386.so: 00063780..000637EF
-int OSP_teamCount (int team)
+int OSP_teamCount(int team)
 {
-	int			i;
-	int			count;
+    int         i;
+    int         count;
 
-	count = 0;
-	for (i = 1; i <= game.maxclients; i++)
-	{
-		if (!g_edicts[i].inuse || !g_edicts[i].client ||
-			g_edicts[i].client->resp.team != team)
-			continue;
+    count = 0;
+    for (i = 1; i <= game.maxclients; i++) {
+        if (!g_edicts[i].inuse || !g_edicts[i].client ||
+            g_edicts[i].client->resp.team != team)
+            continue;
 
-		count++;
-	}
-	return count;
+        count++;
+    }
+    return count;
 }
 
 // gamex86.dll: 10037447..100374ED
 // gamei386.so: 000637F0..00063868
-int OSP_teamReady (int team)
+int OSP_teamReady(int team)
 {
-	int			i;
-	int			count;
+    int         i;
+    int         count;
 
-	count = 0;
-	for (i = 1; i <= game.maxclients; i++)
-	{
-		if (!g_edicts[i].inuse || !g_edicts[i].client ||
-			g_edicts[i].client->resp.team != team)
-			continue;
+    count = 0;
+    for (i = 1; i <= game.maxclients; i++) {
+        if (!g_edicts[i].inuse || !g_edicts[i].client ||
+            g_edicts[i].client->resp.team != team)
+            continue;
 
-		if (g_edicts[i].client->resp.osp_r20c)
-			count++;
-	}
-	return count;
+        if (g_edicts[i].client->resp.osp_r20c)
+            count++;
+    }
+    return count;
 }
 
 // Put a client on a team. `team` == 2 means "no team yet, pick one": the mod
@@ -57,131 +54,118 @@ int OSP_teamReady (int team)
 // picking a locked team.
 // gamex86.dll: 100374ED..10037A9C
 // gamei386.so: 00063868..00063F8D
-qboolean OSP_addTeamMember (edict_t *ent, int requested_team)
+bool OSP_addTeamMember(edict_t *ent, int requested_team)
 {
-	char		tmp[164];
-	edict_t		*p;
-	int			t;
-	int			team;
+    char        tmp[164];
+    edict_t     *p;
+    int         t;
+    int         team;
 
-	team = requested_team;
-	if (requested_team == 2)
-	{
-		if (teams[0].osp_m0f4 && teams[1].osp_m0f4)
-		{
-			if (!(ent->flags & FL_OSP_NOCMD))
-				gi.cprintf (ent, PRINT_HIGH, "Sorry, both teams are locked!\n");
-			else
-				BotDestroy (ent);
-			return false;
-		}
+    team = requested_team;
+    if (requested_team == 2) {
+        if (teams[0].osp_m0f4 && teams[1].osp_m0f4) {
+            if (!(ent->flags & FL_OSP_NOCMD))
+                gi.cprintf(ent, PRINT_HIGH, "Sorry, both teams are locked!\n");
+            else
+                BotDestroy(ent);
+            return false;
+        }
 
-		if (OSP_teamCount (0) >= (int)team_maxplayers->value &&
-			OSP_teamCount (1) >= (int)team_maxplayers->value)
-		{
-			if (!(ent->flags & FL_OSP_NOCMD))
-				gi.cprintf (ent, PRINT_HIGH, "Sorry, both teams are full!\n");
-			else
-				BotDestroy (ent);
-			return false;
-		}
+        if (OSP_teamCount(0) >= (int)team_maxplayers->value &&
+            OSP_teamCount(1) >= (int)team_maxplayers->value) {
+            if (!(ent->flags & FL_OSP_NOCMD))
+                gi.cprintf(ent, PRINT_HIGH, "Sorry, both teams are full!\n");
+            else
+                BotDestroy(ent);
+            return false;
+        }
 
-		if (m_mode == 3)
-		{
-			if (OSP_1v1Team (ent))
-				return true;
-			return false;
-		}
+        if (m_mode == 3) {
+            if (OSP_1v1Team(ent))
+                return true;
+            return false;
+        }
 
-		if (OSP_defaultTeam (ent))
-			return true;
+        if (OSP_defaultTeam(ent))
+            return true;
 
-		if ((OSP_teamCount (0) > OSP_teamCount (1) || teams[0].osp_m0f4) &&
-			!teams[1].osp_m0f4)
-			team = 1;
-		else
-			team = 0;
-	}
+        if ((OSP_teamCount(0) > OSP_teamCount(1) || teams[0].osp_m0f4) &&
+            !teams[1].osp_m0f4)
+            team = 1;
+        else
+            team = 0;
+    }
 
-	ent->client->resp.team = team;
-	q2log_teamJoin (ent);
+    ent->client->resp.team = team;
+    q2log_teamJoin(ent);
 
-	if (!(ent->flags & FL_OSP_NOCMD))
-	{
-		sprintf (tmp, "skin %s\n", teams[team].skin);
-		gi.WriteByte (svc_stufftext);
-		gi.WriteString (tmp);
-		gi.unicast (ent, true);
+    if (!(ent->flags & FL_OSP_NOCMD)) {
+        sprintf(tmp, "skin %s\n", teams[team].skin);
+        gi.WriteByte(svc_stufftext);
+        gi.WriteString(tmp);
+        gi.unicast(ent, true);
 
-		sprintf (tmp, "set default_teamname %s\n", teams[team].netname);
-		strcpy (ent->osp_e3a0, teams[team].netname);
-		gi.WriteByte (svc_stufftext);
-		gi.WriteString (tmp);
-		gi.unicast (ent, true);
+        sprintf(tmp, "set default_teamname %s\n", teams[team].netname);
+        strcpy(ent->osp_e3a0, teams[team].netname);
+        gi.WriteByte(svc_stufftext);
+        gi.WriteString(tmp);
+        gi.unicast(ent, true);
 
-		sprintf (tmp, "set default_teamskin %s\n", teams[team].skin);
-		strcpy (ent->osp_e3b0, teams[team].skin);
-		gi.WriteByte (svc_stufftext);
-		gi.WriteString (tmp);
-		gi.unicast (ent, true);
-	}
-	else
-	{
-		char		userinfo[512];
+        sprintf(tmp, "set default_teamskin %s\n", teams[team].skin);
+        strcpy(ent->osp_e3b0, teams[team].skin);
+        gi.WriteByte(svc_stufftext);
+        gi.WriteString(tmp);
+        gi.unicast(ent, true);
+    } else {
+        char        userinfo[512];
 
-		strncpy (userinfo, ent->client->pers.userinfo, 511);
-		userinfo[511] = 0;
-		Info_SetValueForKey (userinfo, "skin", teams[team].skin);
-		ClientUserinfoChanged (ent, userinfo);
-	}
+        strncpy(userinfo, ent->client->pers.userinfo, 511);
+        userinfo[511] = 0;
+        Info_SetValueForKey(userinfo, "skin", teams[team].skin);
+        ClientUserinfoChanged(ent, userinfo);
+    }
 
-	sprintf (tmp, "%15s", teams[team].netname);
-	OSP_clientConfigString (ent, 0x625 + team * 2, tmp);
-	sprintf (tmp, "%15s", teams[1 - team].greenname);
-	OSP_clientConfigString (ent, 0x625 + (1 - team) * 2, tmp);
+    sprintf(tmp, "%15s", teams[team].netname);
+    OSP_clientConfigString(ent, 0x625 + team * 2, tmp);
+    sprintf(tmp, "%15s", teams[1 - team].greenname);
+    OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, tmp);
 
-	if (m_mode == 2)
-		gi.bprintf (PRINT_HIGH, "%s joined team \"%s\"\n",
-					ent->client->pers.greenname, teams[team].netname);
+    if (m_mode == 2)
+        gi.bprintf(PRINT_HIGH, "%s joined team \"%s\"\n",
+                   ent->client->pers.greenname, teams[team].netname);
 
-	if (!(ent->flags & FL_OSP_BOT) && m_mode == 2)
-	{
-		// First human on the team becomes captain.
-		ent->client->resp.osp_r2c4 = 1;
-		for (t = 1; t <= game.maxclients; t++)
-		{
-			p = g_edicts + t;
-			if (!p->inuse || !p->client ||
-				p->client->resp.entered != ENTERED_ENTERED ||
-				p->client->resp.team != team || p == ent ||
-				(p->flags & FL_OSP_BOT))
-				continue;
-			if (p->client->resp.osp_r2c4)
-			{
-				ent->client->resp.osp_r2c4 = 0;
-				break;
-			}
-		}
+    if (!(ent->flags & FL_OSP_BOT) && m_mode == 2) {
+        // First human on the team becomes captain.
+        ent->client->resp.osp_r2c4 = 1;
+        for (t = 1; t <= game.maxclients; t++) {
+            p = g_edicts + t;
+            if (!p->inuse || !p->client ||
+                p->client->resp.entered != ENTERED_ENTERED ||
+                p->client->resp.team != team || p == ent ||
+                (p->flags & FL_OSP_BOT))
+                continue;
+            if (p->client->resp.osp_r2c4) {
+                ent->client->resp.osp_r2c4 = 0;
+                break;
+            }
+        }
 
-		if (ent->client->resp.osp_r2c4)
-		{
-			gi.cprintf (ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
-						teams[team].greenname);
-			if (ent->client->resp.osp_r07d[0])
-				strcpy (teams[team].joincode, ent->client->resp.osp_r07d);
-		}
-	}
-	else if (m_mode == 2)
-		ent->client->resp.osp_r2c4 = 0;
+        if (ent->client->resp.osp_r2c4) {
+            gi.cprintf(ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
+                       teams[team].greenname);
+            if (ent->client->resp.osp_r07d[0])
+                strcpy(teams[team].joincode, ent->client->resp.osp_r07d);
+        }
+    } else if (m_mode == 2)
+        ent->client->resp.osp_r2c4 = 0;
 
-	if (m_mode == 2 && !(ent->flags & FL_OSP_NOCMD))
-	{
-		if (teams[team].joincode[0])
-			gi.centerprintf (ent, "Team joincode is \"%s\"\n", teams[team].joincode);
-		else
-			gi.centerprintf (ent, "The team joincode has not been set.\n");
-	}
-	return true;
+    if (m_mode == 2 && !(ent->flags & FL_OSP_NOCMD)) {
+        if (teams[team].joincode[0])
+            gi.centerprintf(ent, "Team joincode is \"%s\"\n", teams[team].joincode);
+        else
+            gi.centerprintf(ent, "The team joincode has not been set.\n");
+    }
+    return true;
 }
 
 // The "I always play for <name>/<skin>" path. `defaultteam` stores a name and
@@ -190,145 +174,128 @@ qboolean OSP_addTeamMember (edict_t *ent, int requested_team)
 // swapping the two teams' names or skins over if the other one is in the way.
 // gamex86.dll: 10037A9C..1003820B
 // gamei386.so: 00063F90..000649C9
-qboolean OSP_defaultTeam (edict_t *ent)
+bool OSP_defaultTeam(edict_t *ent)
 {
-	char		msgbuf[64];
-	int			team;
-	int			i;
-	edict_t		*p;
-	int			k;
+    char        msgbuf[64];
+    int         team;
+    int         i;
+    edict_t     *p;
+    int         k;
 
-	team = 2;
-	if (!ent->osp_e3a0[0])
-		return false;
+    team = 2;
+    if (!ent->osp_e3a0[0])
+        return false;
 
-	for (k = 1; k >= 0; k--)
-	{
-		if (OSP_teamCount (k))
-			team = k;
-		if (!Q_stricmp (teams[k].skin, ent->osp_e3b0) ||
-			!Q_stricmp (teams[k].netname, ent->osp_e3a0))
-		{
-			team = k;
-			break;
-		}
-	}
+    for (k = 1; k >= 0; k--) {
+        if (OSP_teamCount(k))
+            team = k;
+        if (!Q_stricmp(teams[k].skin, ent->osp_e3b0) ||
+            !Q_stricmp(teams[k].netname, ent->osp_e3a0)) {
+            team = k;
+            break;
+        }
+    }
 
-	if (team == 2)
-		return false;
+    if (team == 2)
+        return false;
 
-	if (!OSP_teamCount (team))
-	{
-		if (Q_stricmp (teams[1 - team].netname, ent->osp_e3a0))
-		{
-			if (Q_stricmp (teams[team].netname, ent->osp_e3a0))
-				q2log_teamRename (teams[team].netname, ent->osp_e3a0);
-			strncpy (teams[team].netname, ent->osp_e3a0, 15);
-			strncpy (teams[team].greenname, ent->osp_e3a0, 15);
-			{
+    if (!OSP_teamCount(team)) {
+        if (Q_stricmp(teams[1 - team].netname, ent->osp_e3a0)) {
+            if (Q_stricmp(teams[team].netname, ent->osp_e3a0))
+                q2log_teamRename(teams[team].netname, ent->osp_e3a0);
+            strncpy(teams[team].netname, ent->osp_e3a0, 15);
+            strncpy(teams[team].greenname, ent->osp_e3a0, 15);
+            {
 
-				for (i = 0; i < strlen (teams[team].greenname); i++)
-					teams[team].greenname[i] += 128;
-			}
-			sprintf (msgbuf, "%15s", teams[team].greenname);
-			gi.configstring (0x625 + team * 2, msgbuf);
-		}
-		else if (!OSP_teamCount (1 - team))
-		{
-			// The name we want is the OTHER team's and that team is empty, so
-			// hand it our name and take theirs.
-			strncpy (teams[1 - team].netname, teams[team].netname, 15);
-			strncpy (teams[team].netname, ent->osp_e3a0, 15);
-			strncpy (teams[team].greenname, ent->osp_e3a0, 15);
-			{
+                for (i = 0; i < strlen(teams[team].greenname); i++)
+                    teams[team].greenname[i] += 128;
+            }
+            sprintf(msgbuf, "%15s", teams[team].greenname);
+            gi.configstring(0x625 + team * 2, msgbuf);
+        } else if (!OSP_teamCount(1 - team)) {
+            // The name we want is the OTHER team's and that team is empty, so
+            // hand it our name and take theirs.
+            strncpy(teams[1 - team].netname, teams[team].netname, 15);
+            strncpy(teams[team].netname, ent->osp_e3a0, 15);
+            strncpy(teams[team].greenname, ent->osp_e3a0, 15);
+            {
 
-				for (i = 0; i < strlen (teams[team].greenname); i++)
-					teams[team].greenname[i] += 128;
-			}
-			sprintf (msgbuf, "%15s", teams[team].greenname);
-			gi.configstring (0x625 + team * 2, msgbuf);
-		}
+                for (i = 0; i < strlen(teams[team].greenname); i++)
+                    teams[team].greenname[i] += 128;
+            }
+            sprintf(msgbuf, "%15s", teams[team].greenname);
+            gi.configstring(0x625 + team * 2, msgbuf);
+        }
 
-		if (Q_stricmp (teams[1 - team].skin, ent->osp_e3b0))
-			strncpy (teams[team].skin, ent->osp_e3b0, 128);
-		else if (!OSP_teamCount (1 - team))
-		{
-			strncpy (teams[1 - team].skin, teams[team].skin, 128);
-			strncpy (teams[team].skin, ent->osp_e3b0, 128);
-		}
-	}
-	else if (OSP_teamCount (team) >= (int)team_maxplayers->value)
-		return false;
+        if (Q_stricmp(teams[1 - team].skin, ent->osp_e3b0))
+            strncpy(teams[team].skin, ent->osp_e3b0, 128);
+        else if (!OSP_teamCount(1 - team)) {
+            strncpy(teams[1 - team].skin, teams[team].skin, 128);
+            strncpy(teams[team].skin, ent->osp_e3b0, 128);
+        }
+    } else if (OSP_teamCount(team) >= (int)team_maxplayers->value)
+        return false;
 
-	ent->client->resp.team = team;
-	q2log_teamJoin (ent);
+    ent->client->resp.team = team;
+    q2log_teamJoin(ent);
 
-	if (!(ent->flags & FL_OSP_NOCMD))
-	{
-		sprintf (msgbuf, "skin %s\n", teams[team].skin);
-		gi.WriteByte (svc_stufftext);
-		gi.WriteString (msgbuf);
-		gi.unicast (ent, true);
+    if (!(ent->flags & FL_OSP_NOCMD)) {
+        sprintf(msgbuf, "skin %s\n", teams[team].skin);
+        gi.WriteByte(svc_stufftext);
+        gi.WriteString(msgbuf);
+        gi.unicast(ent, true);
 
-		sprintf (msgbuf, "%15s", teams[team].netname);
-		OSP_clientConfigString (ent, 0x625 + team * 2, msgbuf);
-		sprintf (msgbuf, "%15s", teams[1 - team].greenname);
-		OSP_clientConfigString (ent, 0x625 + (1 - team) * 2, msgbuf);
-	}
-	else
-	{
-		char		userinfo[512];
+        sprintf(msgbuf, "%15s", teams[team].netname);
+        OSP_clientConfigString(ent, 0x625 + team * 2, msgbuf);
+        sprintf(msgbuf, "%15s", teams[1 - team].greenname);
+        OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, msgbuf);
+    } else {
+        char        userinfo[512];
 
-		strncpy (userinfo, ent->client->pers.userinfo, 511);
-		userinfo[511] = 0;
-		Info_SetValueForKey (userinfo, "skin", teams[team].skin);
-		ClientUserinfoChanged (ent, userinfo);
-	}
+        strncpy(userinfo, ent->client->pers.userinfo, 511);
+        userinfo[511] = 0;
+        Info_SetValueForKey(userinfo, "skin", teams[team].skin);
+        ClientUserinfoChanged(ent, userinfo);
+    }
 
-	if (m_mode == 2)
-		gi.bprintf (PRINT_HIGH, "%s joined team \"%s\"\n",
-					ent->client->pers.greenname, teams[team].netname);
+    if (m_mode == 2)
+        gi.bprintf(PRINT_HIGH, "%s joined team \"%s\"\n",
+                   ent->client->pers.greenname, teams[team].netname);
 
-	if (!(ent->flags & FL_OSP_BOT))
-	{
-		ent->client->resp.osp_r2c4 = 1;
-		{
+    if (!(ent->flags & FL_OSP_BOT)) {
+        ent->client->resp.osp_r2c4 = 1;
+        {
 
-			for (i = 1; i <= game.maxclients; i++)
-			{
-				p = g_edicts + i;
-				if (!p->inuse || !p->client ||
-					p->client->resp.entered != ENTERED_ENTERED ||
-					p->client->resp.team != team || p == ent ||
-					(p->flags & FL_OSP_BOT))
-					continue;
-				if (p->client->resp.osp_r2c4)
-				{
-					ent->client->resp.osp_r2c4 = 0;
-					break;
-				}
-			}
-		}
+            for (i = 1; i <= game.maxclients; i++) {
+                p = g_edicts + i;
+                if (!p->inuse || !p->client ||
+                    p->client->resp.entered != ENTERED_ENTERED ||
+                    p->client->resp.team != team || p == ent ||
+                    (p->flags & FL_OSP_BOT))
+                    continue;
+                if (p->client->resp.osp_r2c4) {
+                    ent->client->resp.osp_r2c4 = 0;
+                    break;
+                }
+            }
+        }
 
-		if (ent->client->resp.osp_r2c4)
-		{
-			gi.cprintf (ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
-						teams[team].greenname);
-			if (ent->client->resp.osp_r07d[0])
-				strcpy (teams[team].joincode, ent->client->resp.osp_r07d);
-		}
-	}
-	else
-		ent->client->resp.osp_r2c4 = 0;
+        if (ent->client->resp.osp_r2c4) {
+            gi.cprintf(ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
+                       teams[team].greenname);
+            if (ent->client->resp.osp_r07d[0])
+                strcpy(teams[team].joincode, ent->client->resp.osp_r07d);
+        }
+    } else
+        ent->client->resp.osp_r2c4 = 0;
 
-	if (m_mode == 2 && !(ent->flags & FL_OSP_NOCMD))
-	{
-		if (teams[team].joincode[0])
-			gi.centerprintf (ent, "Team joincode is \"%s\"\n", teams[team].joincode);
-		else
-			gi.centerprintf (ent, "The team joincode has not been set.\n");
-	}
-	return true;
+    if (m_mode == 2 && !(ent->flags & FL_OSP_NOCMD)) {
+        if (teams[team].joincode[0])
+            gi.centerprintf(ent, "Team joincode is \"%s\"\n", teams[team].joincode);
+        else
+            gi.centerprintf(ent, "The team joincode has not been set.\n");
+    }
+    return true;
 }
 
 // 1v1 (m_mode 3): the "teams" are the two duellists, so the only choice is
@@ -336,145 +303,139 @@ qboolean OSP_defaultTeam (edict_t *ent)
 // which is why this renames the team to the player rather than the reverse.
 // gamex86.dll: 1003820B..10038418
 // gamei386.so: 000649CC..00064C01
-qboolean OSP_1v1Team (edict_t *ent)
+bool OSP_1v1Team(edict_t *ent)
 {
-	char		tmp[64];
-	int			t;
-	int			team;
+    char        tmp[64];
+    int         t;
+    int         team;
 
-	team = 2;
-	for (t = 1; t >= 0; t--)
-		if (!OSP_teamCount (t))
-			team = t;
+    team = 2;
+    for (t = 1; t >= 0; t--)
+        if (!OSP_teamCount(t))
+            team = t;
 
-	if (team == 2)
-		return false;
+    if (team == 2)
+        return false;
 
-	if (Q_stricmp (teams[1 - team].netname, ent->client->pers.netname))
-	{
-		if (strcmp (teams[team].netname, ent->client->pers.netname))
-			q2log_teamRename (teams[team].netname, ent->client->pers.netname);
-		strncpy (teams[team].netname, ent->client->pers.netname, 15);
-		strncpy (teams[team].greenname, ent->client->pers.greenname, 15);
-		sprintf (tmp, "%15s", teams[team].greenname);
-		gi.configstring (0x625 + team * 2, tmp);
-	}
+    if (Q_stricmp(teams[1 - team].netname, ent->client->pers.netname)) {
+        if (strcmp(teams[team].netname, ent->client->pers.netname))
+            q2log_teamRename(teams[team].netname, ent->client->pers.netname);
+        strncpy(teams[team].netname, ent->client->pers.netname, 15);
+        strncpy(teams[team].greenname, ent->client->pers.greenname, 15);
+        sprintf(tmp, "%15s", teams[team].greenname);
+        gi.configstring(0x625 + team * 2, tmp);
+    }
 
-	ent->client->resp.team = team;
-	q2log_teamJoin (ent);
+    ent->client->resp.team = team;
+    q2log_teamJoin(ent);
 
-	if (!(ent->flags & FL_OSP_NOCMD))
-	{
-		sprintf (tmp, "%15s", teams[team].netname);
-		OSP_clientConfigString (ent, 0x625 + team * 2, tmp);
-		sprintf (tmp, "%15s", teams[1 - team].greenname);
-		OSP_clientConfigString (ent, 0x625 + (1 - team) * 2, tmp);
-	}
-	return true;
+    if (!(ent->flags & FL_OSP_NOCMD)) {
+        sprintf(tmp, "%15s", teams[team].netname);
+        OSP_clientConfigString(ent, 0x625 + team * 2, tmp);
+        sprintf(tmp, "%15s", teams[1 - team].greenname);
+        OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, tmp);
+    }
+    return true;
 }
 
 // The 1v1 waiting line. p_order[] is one 112-byte symbol used as four things:
-// [0..24] the queue of client numbers, [25] how many are in it, and [26]/[27]
+// [0..24] the queue of client numbers, [25] how many are in it, and[26]/[27]
 // a "claim your slot by this framenum" deadline for the two players at the
 // head of it. A slot whose deadline passes is dropped back into the queue.
 // gamex86.dll: 10038418..1003864F
 // gamei386.so: 00064C04..00064EA1
-qboolean OSP_1v1AllowJoin (edict_t *ent)
+bool OSP_1v1AllowJoin(edict_t *ent)
 {
-	int			i;
-	int			until;
+    int         i;
+    int         until;
 
-	OSP_1v1QueueCheck ();
+    OSP_1v1QueueCheck();
 
-	if (p_order[25] < 2 || !(int)team_nextuptime->value)
-		return true;
+    if (p_order[25] < 2 || !(int)team_nextuptime->value)
+        return true;
 
-	if (p_order[27] > 0 && p_order[27] < level.framenum)
-		OSP_1v1Remove (&g_edicts[p_order[1] + 1], 0);
-	if (p_order[26] > 0 && p_order[26] < level.framenum)
-		OSP_1v1Remove (&g_edicts[p_order[0] + 1], 0);
+    if (p_order[27] > 0 && p_order[27] < level.framenum)
+        OSP_1v1Remove(&g_edicts[p_order[1] + 1], 0);
+    if (p_order[26] > 0 && p_order[26] < level.framenum)
+        OSP_1v1Remove(&g_edicts[p_order[0] + 1], 0);
 
-	if (ent - g_edicts - 1 == p_order[0])
-	{
-		p_order[26] = -1;
-		return true;
-	}
-	if (ent - g_edicts - 1 == p_order[1])
-	{
-		p_order[27] = -1;
-		return true;
-	}
+    if (ent - g_edicts - 1 == p_order[0]) {
+        p_order[26] = -1;
+        return true;
+    }
+    if (ent - g_edicts - 1 == p_order[1]) {
+        p_order[27] = -1;
+        return true;
+    }
 
-	for (i = 0; i < p_order[25]; i++)
-		if (ent - g_edicts - 1 == p_order[i])
-			break;
+    for (i = 0; i < p_order[25]; i++)
+        if (ent - g_edicts - 1 == p_order[i])
+            break;
 
-	gi.cprintf (ent, PRINT_CHAT, "*** It is not your turn! ***\n");
-	gi.cprintf (ent, PRINT_HIGH, "%d players are ahead of you in line.\n", i);
+    gi.cprintf(ent, PRINT_CHAT, "*** It is not your turn! ***\n");
+    gi.cprintf(ent, PRINT_HIGH, "%d players are ahead of you in line.\n", i);
 
-	until = -1;
-	if (!p_order[27])
-		p_order[27] = until = level.framenum + (int)team_nextuptime->value * 10;
-	else if (p_order[27] > 0)
-		until = p_order[27];
+    until = -1;
+    if (!p_order[27])
+        p_order[27] = until = level.framenum + (int)team_nextuptime->value * 10;
+    else if (p_order[27] > 0)
+        until = p_order[27];
 
-	if (!p_order[26])
-		p_order[26] = until = level.framenum + (int)team_nextuptime->value * 10;
-	else if (p_order[26] > 0 && p_order[26] < until)
-		until = p_order[26];
+    if (!p_order[26])
+        p_order[26] = until = level.framenum + (int)team_nextuptime->value * 10;
+    else if (p_order[26] > 0 && p_order[26] < until)
+        until = p_order[26];
 
-	if (until >= 0 && i == 2)
-		gi.cprintf (ent, PRINT_HIGH,
-					"Try again in %d seconds if they have not joined.\n",
-					(until - level.framenum) / 10);
-	return false;
+    if (until >= 0 && i == 2)
+        gi.cprintf(ent, PRINT_HIGH,
+                   "Try again in %d seconds if they have not joined.\n",
+                   (until - level.framenum) / 10);
+    return false;
 }
 
 // gamex86.dll: 1003864F..100386AC
 // gamei386.so: 00064EA4..00064F41
-void OSP_1v1Add (edict_t *ent)
+void OSP_1v1Add(edict_t *ent)
 {
-	if (m_mode != 3 || p_order[25] >= 25 || !(int)team_nextuptime->value)
-		return;
+    if (m_mode != 3 || p_order[25] >= 25 || !(int)team_nextuptime->value)
+        return;
 
-	p_order[p_order[25]] = ent - g_edicts - 1;
-	p_order[25]++;
-	OSP_1v1QueueCheck ();
+    p_order[p_order[25]] = ent - g_edicts - 1;
+    p_order[25]++;
+    OSP_1v1QueueCheck();
 }
 
 // mode 1 drops the client out of the queue entirely; anything else moves them
 // to the back of it. Only mode 0 also takes them off their team.
 // gamex86.dll: 100386AC..100387B6
 // gamei386.so: 00064F44..00065088
-void OSP_1v1Remove (edict_t *ent, int mode)
+void OSP_1v1Remove(edict_t *ent, int mode)
 {
-	int			i;
-	int			j;
+    int         i;
+    int         j;
 
-	if (!(int)team_nextuptime->value)
-		return;
+    if (!(int)team_nextuptime->value)
+        return;
 
-	for (i = 0; i < p_order[25]; i++)
-	{
-		if (p_order[i] == ent - g_edicts - 1)
-		{
-			if (!i || !(i - 1))
-				p_order[26 + i] = 0;
-			for (j = i; j < p_order[25] - 1; j++)
-				p_order[j] = p_order[j + 1];
-			break;
-		}
-	}
+    for (i = 0; i < p_order[25]; i++) {
+        if (p_order[i] == ent - g_edicts - 1) {
+            if (!i || !(i - 1))
+                p_order[26 + i] = 0;
+            for (j = i; j < p_order[25] - 1; j++)
+                p_order[j] = p_order[j + 1];
+            break;
+        }
+    }
 
-	if (mode == 1)
-		p_order[25]--;
-	else
-		p_order[p_order[25] - 1] = ent - g_edicts - 1;
+    if (mode == 1)
+        p_order[25]--;
+    else
+        p_order[p_order[25] - 1] = ent - g_edicts - 1;
 
-	if (!mode)
-		ent->client->resp.team = 2;
+    if (!mode)
+        ent->client->resp.team = 2;
 
-	OSP_1v1QueueCheck ();
+    OSP_1v1QueueCheck();
 }
 
 // Compact the queue: drop any entry that duplicates one ahead of it, and any
@@ -483,35 +444,33 @@ void OSP_1v1Remove (edict_t *ent, int mode)
 // slot is null, or the client is no longer connected.
 // gamex86.dll: 100387B6..10038920
 // gamei386.so: 00065088..000651A8
-void OSP_1v1QueueCheck (void)
+void OSP_1v1QueueCheck(void)
 {
-	int			i;
-	int			j;
-	int			k;
+    int         i;
+    int         j;
+    int         k;
 
-	if (!(int)team_nextuptime->value)
-		return;
+    if (!(int)team_nextuptime->value)
+        return;
 
-	for (i = 0; i < p_order[25]; i++)
-	{
-		for (j = 0; j < i; j++)
-		{
-			if (!(p_order[i] == p_order[j] ||
-				  (g_edicts[p_order[i] + 1].client->resp.entered !=
-				   ENTERED_ENTERED &&
-				   ((!g_edicts[p_order[i] + 1].inuse &&
-					 level.framenum - level_start >= 300) ||
-					!g_edicts[p_order[i] + 1].client ||
-					!g_edicts[p_order[i] + 1].client->pers.connected))))
-				continue;
+    for (i = 0; i < p_order[25]; i++) {
+        for (j = 0; j < i; j++) {
+            if (!(p_order[i] == p_order[j] ||
+                  (g_edicts[p_order[i] + 1].client->resp.entered !=
+                   ENTERED_ENTERED &&
+                   ((!g_edicts[p_order[i] + 1].inuse &&
+                     level.framenum - level_start >= 300) ||
+                    !g_edicts[p_order[i] + 1].client ||
+                    !g_edicts[p_order[i] + 1].client->pers.connected))))
+                continue;
 
-			for (k = i; k < p_order[25] - 1; k++)
-				p_order[k] = p_order[k + 1];
-			i--;
-			p_order[25]--;
-			break;
-		}
-	}
+            for (k = i; k < p_order[25] - 1; k++)
+                p_order[k] = p_order[k + 1];
+            i--;
+            p_order[25]--;
+            break;
+        }
+    }
 }
 
 // Take a client off their team. `quiet` suppresses both the announcement and
@@ -519,59 +478,56 @@ void OSP_1v1QueueCheck (void)
 // human still on the team, and an emptied team is unlocked.
 // gamex86.dll: 10038920..10038B29
 // gamei386.so: 000651A8..000653ED
-void OSP_removeTeamMember (edict_t *ent, qboolean quiet)
+void OSP_removeTeamMember(edict_t *ent, bool quiet)
 {
-	char		buf[20];
-	edict_t		*other;
-	int			i;
-	int			tno;
+    char        buf[20];
+    edict_t     *other;
+    int         i;
+    int         tno;
 
-	tno = ent->client->resp.team;
-	if (tno == 2 || ent->client->resp.entered != ENTERED_ENTERED)
-		return;
+    tno = ent->client->resp.team;
+    if (tno == 2 || ent->client->resp.entered != ENTERED_ENTERED)
+        return;
 
-	if (m_mode == 2)
-		gi.bprintf (PRINT_HIGH, "%s removed from team \"%s\"\n",
-					ent->client->pers.greenname, teams[tno].netname);
-	else if (!quiet)
-		gi.bprintf (PRINT_HIGH,
-					"%s has become a spectator and moves to the end of the line.\n",
-					ent->client->pers.greenname);
+    if (m_mode == 2)
+        gi.bprintf(PRINT_HIGH, "%s removed from team \"%s\"\n",
+                   ent->client->pers.greenname, teams[tno].netname);
+    else if (!quiet)
+        gi.bprintf(PRINT_HIGH,
+                   "%s has become a spectator and moves to the end of the line.\n",
+                   ent->client->pers.greenname);
 
-	if (!quiet && !(ent->flags & FL_OSP_BOT))
-	{
-		sprintf (buf, "%15s", teams[tno].greenname);
-		OSP_clientConfigString (ent, 0x625 + tno * 2, buf);
-	}
+    if (!quiet && !(ent->flags & FL_OSP_BOT)) {
+        sprintf(buf, "%15s", teams[tno].greenname);
+        OSP_clientConfigString(ent, 0x625 + tno * 2, buf);
+    }
 
-	q2log_teamLeave (ent);
+    q2log_teamLeave(ent);
 
-	if (ent->client->resp.osp_r2c4)
-	{
-		for (i = 1; i <= game.maxclients; i++)
-		{
-			other = g_edicts + i;
+    if (ent->client->resp.osp_r2c4) {
+        for (i = 1; i <= game.maxclients; i++) {
+            other = g_edicts + i;
 
-			if (!other->inuse || !other->client ||
-				other->client->resp.entered != ENTERED_ENTERED ||
-				other->client->resp.team != tno || other == ent ||
-				(other->flags & FL_OSP_BOT))
-				continue;
+            if (!other->inuse || !other->client ||
+                other->client->resp.entered != ENTERED_ENTERED ||
+                other->client->resp.team != tno || other == ent ||
+                (other->flags & FL_OSP_BOT))
+                continue;
 
-			other->client->resp.osp_r2c4 = 1;
-			gi.cprintf (other, PRINT_CHAT,
-						"*** You are now team captain of \"%s\". ***\n",
-						teams[tno].greenname);
-			break;
-		}
-	}
+            other->client->resp.osp_r2c4 = 1;
+            gi.cprintf(other, PRINT_CHAT,
+                       "*** You are now team captain of \"%s\". ***\n",
+                       teams[tno].greenname);
+            break;
+        }
+    }
 
-	ent->client->resp.osp_r2cc = tno;
-	ent->client->resp.team = 2;
-	ent->client->resp.osp_r2c4 = 0;
+    ent->client->resp.osp_r2cc = tno;
+    ent->client->resp.team = 2;
+    ent->client->resp.osp_r2c4 = 0;
 
-	if (!OSP_teamCount (tno))
-		teams[tno].osp_m0f4 = 0;
+    if (!OSP_teamCount(tno))
+        teams[tno].osp_m0f4 = 0;
 }
 
 // Rejoin the team the client was last on -- resp.osp_r2cc is where
@@ -580,86 +536,75 @@ void OSP_removeTeamMember (edict_t *ent, qboolean quiet)
 // get back.
 // gamex86.dll: 10038B29..10038EA0
 // gamei386.so: 000653F0..000657C0
-qboolean OSP_readdTeamMember (edict_t *ent)
+bool OSP_readdTeamMember(edict_t *ent)
 {
-	char		tmp[64];
-	edict_t		*p;
-	int			t;
-	int			team;
+    char        tmp[64];
+    edict_t     *p;
+    int         t;
+    int         team;
 
-	team = ent->client->resp.osp_r2cc;
-	if (team == 2)
-		return false;
+    team = ent->client->resp.osp_r2cc;
+    if (team == 2)
+        return false;
 
-	if (OSP_teamCount (team) >= (int)team_maxplayers->value)
-	{
-		if (ent->client->resp.osp_r078)
-		{
-			ent->client->resp.osp_r078 = 0;
-			gi.cprintf (ent, PRINT_HIGH, "Sorry, the inviting team is now full!\n");
-		}
-		else
-			gi.cprintf (ent, PRINT_HIGH, "Sorry, your team is now full!\n");
-		return false;
-	}
+    if (OSP_teamCount(team) >= (int)team_maxplayers->value) {
+        if (ent->client->resp.osp_r078) {
+            ent->client->resp.osp_r078 = 0;
+            gi.cprintf(ent, PRINT_HIGH, "Sorry, the inviting team is now full!\n");
+        } else
+            gi.cprintf(ent, PRINT_HIGH, "Sorry, your team is now full!\n");
+        return false;
+    }
 
-	q2log_teamJoin (ent);
-	ent->client->resp.team = ent->client->resp.osp_r2cc;
+    q2log_teamJoin(ent);
+    ent->client->resp.team = ent->client->resp.osp_r2cc;
 
-	if (!(ent->flags & FL_OSP_NOCMD))
-	{
-		sprintf (tmp, "skin %s\n", teams[team].skin);
-		gi.WriteByte (svc_stufftext);
-		gi.WriteString (tmp);
-		gi.unicast (ent, true);
+    if (!(ent->flags & FL_OSP_NOCMD)) {
+        sprintf(tmp, "skin %s\n", teams[team].skin);
+        gi.WriteByte(svc_stufftext);
+        gi.WriteString(tmp);
+        gi.unicast(ent, true);
 
-		sprintf (tmp, "%15s", teams[team].netname);
-		OSP_clientConfigString (ent, 0x625 + team * 2, tmp);
-		sprintf (tmp, "%15s", teams[1 - team].greenname);
-		OSP_clientConfigString (ent, 0x625 + (1 - team) * 2, tmp);
-	}
-	else
-	{
-		char	userinfo[512];
+        sprintf(tmp, "%15s", teams[team].netname);
+        OSP_clientConfigString(ent, 0x625 + team * 2, tmp);
+        sprintf(tmp, "%15s", teams[1 - team].greenname);
+        OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, tmp);
+    } else {
+        char    userinfo[512];
 
-		strncpy (userinfo, ent->client->pers.userinfo, 511);
-		userinfo[511] = 0;
-		Info_SetValueForKey (userinfo, "skin", teams[team].skin);
-		ClientUserinfoChanged (ent, userinfo);
-	}
+        strncpy(userinfo, ent->client->pers.userinfo, 511);
+        userinfo[511] = 0;
+        Info_SetValueForKey(userinfo, "skin", teams[team].skin);
+        ClientUserinfoChanged(ent, userinfo);
+    }
 
-	gi.bprintf (PRINT_HIGH, "%s rejoined team \"%s\"\n",
-				ent->client->pers.greenname, teams[team].netname);
+    gi.bprintf(PRINT_HIGH, "%s rejoined team \"%s\"\n",
+               ent->client->pers.greenname, teams[team].netname);
 
-	if (!(ent->flags & FL_OSP_BOT))
-	{
-		ent->client->resp.osp_r2c4 = 1;
-		for (t = 1; t <= game.maxclients; t++)
-		{
-			p = g_edicts + t;
-			if (!p->inuse || !p->client ||
-				p->client->resp.entered != ENTERED_ENTERED ||
-				p->client->resp.team != team || p == ent ||
-				(p->flags & FL_OSP_BOT))
-				continue;
-			if (p->client->resp.osp_r2c4)
-			{
-				ent->client->resp.osp_r2c4 = 0;
-				break;
-			}
-		}
+    if (!(ent->flags & FL_OSP_BOT)) {
+        ent->client->resp.osp_r2c4 = 1;
+        for (t = 1; t <= game.maxclients; t++) {
+            p = g_edicts + t;
+            if (!p->inuse || !p->client ||
+                p->client->resp.entered != ENTERED_ENTERED ||
+                p->client->resp.team != team || p == ent ||
+                (p->flags & FL_OSP_BOT))
+                continue;
+            if (p->client->resp.osp_r2c4) {
+                ent->client->resp.osp_r2c4 = 0;
+                break;
+            }
+        }
 
-		if (ent->client->resp.osp_r2c4)
-		{
-			gi.cprintf (ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
-						teams[team].greenname);
-			if (ent->client->resp.osp_r07d[0])
-				strcpy (teams[team].joincode, ent->client->resp.osp_r07d);
-		}
-	}
-	else
-		ent->client->resp.osp_r2c4 = 0;
-	return true;
+        if (ent->client->resp.osp_r2c4) {
+            gi.cprintf(ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
+                       teams[team].greenname);
+            if (ent->client->resp.osp_r07d[0])
+                strcpy(teams[team].joincode, ent->client->resp.osp_r07d);
+        }
+    } else
+        ent->client->resp.osp_r2c4 = 0;
+    return true;
 }
 
 // The two team-score status bar cells are configstrings 0x626 and 0x628; a
@@ -668,99 +613,86 @@ qboolean OSP_readdTeamMember (edict_t *ent)
 // client, for a whole team, and for an observer.
 // gamex86.dll: 10038EA0..1003904A
 // gamei386.so: 000657C0..000659B8
-void OSP_initTeamFrags (edict_t *ent)
+void OSP_initTeamFrags(edict_t *ent)
 {
-	char		buf[16];
-	char		tmp[16];
-	int			teamidx;
+    char        buf[16];
+    char        tmp[16];
+    int         teamidx;
 
-	teamidx = ent->client->resp.team;
-	if (!(ent->flags & FL_OSP_NOCMD))
-	{
-		if (!(int)fraglimit->value)
-		{
-			sprintf (tmp, "(%i) %i", ent->client->resp.score, teams[teamidx].osp_m0f8);
-			sprintf (buf, "%13s", tmp);
-		}
-		else
-		{
-			sprintf (tmp, "(%i) %i/%i", ent->client->resp.score, teams[teamidx].osp_m0f8,
-					 (int)fraglimit->value);
-			sprintf (buf, "%13s", tmp);
-		}
-		OSP_clientConfigString (ent, 0x626 + teamidx * 2, buf);
+    teamidx = ent->client->resp.team;
+    if (!(ent->flags & FL_OSP_NOCMD)) {
+        if (!(int)fraglimit->value) {
+            sprintf(tmp, "(%i) %i", ent->client->resp.score, teams[teamidx].osp_m0f8);
+            sprintf(buf, "%13s", tmp);
+        } else {
+            sprintf(tmp, "(%i) %i/%i", ent->client->resp.score, teams[teamidx].osp_m0f8,
+                    (int)fraglimit->value);
+            sprintf(buf, "%13s", tmp);
+        }
+        OSP_clientConfigString(ent, 0x626 + teamidx * 2, buf);
 
-		if (ent->client->resp.osp_r210)
-		{
-			if (!(int)fraglimit->value)
-				sprintf (buf, "%13i", teams[1 - teamidx].osp_m0f8);
-			else
-			{
-				sprintf (tmp, "%i/%i", teams[1 - teamidx].osp_m0f8, (int)fraglimit->value);
-				sprintf (buf, "%13s", tmp);
-			}
-			OSP_clientConfigString (ent, 0x626 + (1 - teamidx) * 2, buf);
-		}
-	}
+        if (ent->client->resp.osp_r210) {
+            if (!(int)fraglimit->value)
+                sprintf(buf, "%13i", teams[1 - teamidx].osp_m0f8);
+            else {
+                sprintf(tmp, "%i/%i", teams[1 - teamidx].osp_m0f8, (int)fraglimit->value);
+                sprintf(buf, "%13s", tmp);
+            }
+            OSP_clientConfigString(ent, 0x626 + (1 - teamidx) * 2, buf);
+        }
+    }
 }
 
 // gamex86.dll: 1003904A..10039198
 // gamei386.so: 000659B8..00065B4C
-void OSP_playerTeamFrags (edict_t *ent)
+void OSP_playerTeamFrags(edict_t *ent)
 {
-	char		buf[16];
-	char		tmp[16];
-	edict_t		*other;
-	int			i;
-	int			teamidx;
+    char        buf[16];
+    char        tmp[16];
+    edict_t     *other;
+    int         i;
+    int         teamidx;
 
-	teamidx = ent->client->resp.team;
-	for (i = 1; i <= game.maxclients; i++)
-	{
-		other = g_edicts + i;
-		if (!other->inuse || !other->client || (other->flags & FL_OSP_BOT) ||
-			other->client->resp.team != teamidx)
-			continue;
+    teamidx = ent->client->resp.team;
+    for (i = 1; i <= game.maxclients; i++) {
+        other = g_edicts + i;
+        if (!other->inuse || !other->client || (other->flags & FL_OSP_BOT) ||
+            other->client->resp.team != teamidx)
+            continue;
 
-		if (!(int)fraglimit->value)
-		{
-			sprintf (tmp, "(%i) %i", other->client->resp.score,
-					 teams[teamidx].osp_m0f8);
-			sprintf (buf, "%13s", tmp);
-		}
-		else
-		{
-			sprintf (tmp, "(%i) %i/%i", other->client->resp.score,
-					 teams[teamidx].osp_m0f8, (int)fraglimit->value);
-			sprintf (buf, "%13s", tmp);
-		}
-		OSP_clientConfigString (other, 0x626 + teamidx * 2, buf);
-	}
+        if (!(int)fraglimit->value) {
+            sprintf(tmp, "(%i) %i", other->client->resp.score,
+                    teams[teamidx].osp_m0f8);
+            sprintf(buf, "%13s", tmp);
+        } else {
+            sprintf(tmp, "(%i) %i/%i", other->client->resp.score,
+                    teams[teamidx].osp_m0f8, (int)fraglimit->value);
+            sprintf(buf, "%13s", tmp);
+        }
+        OSP_clientConfigString(other, 0x626 + teamidx * 2, buf);
+    }
 }
 
 // gamex86.dll: 10039198..10039284
 // gamei386.so: 00065B4C..00065C65
-void OSP_observerTeamFrags (edict_t *ent)
+void OSP_observerTeamFrags(edict_t *ent)
 {
-	char		num[32];
-	char		msg[32];
-	int			n;
+    char        num[32];
+    char        msg[32];
+    int         n;
 
-	if (sync_stat > 2 && m_mode == 2)
-	{
-		for (n = 0; n < 2; n++)
-		{
-			if (!(int)fraglimit->value)
-				sprintf (num, "%13i", teams[n].osp_m0f8);
-			else
-			{
-				sprintf (msg, "%i/%i", teams[n].osp_m0f8, (int)fraglimit->value);
-				sprintf (num, "%13s", msg);
-			}
-			if (!(ent->flags & FL_OSP_NOCMD))
-				OSP_clientConfigString (ent, 0x626 + n * 2, num);
-		}
-	}
+    if (sync_stat > 2 && m_mode == 2) {
+        for (n = 0; n < 2; n++) {
+            if (!(int)fraglimit->value)
+                sprintf(num, "%13i", teams[n].osp_m0f8);
+            else {
+                sprintf(msg, "%i/%i", teams[n].osp_m0f8, (int)fraglimit->value);
+                sprintf(num, "%13s", msg);
+            }
+            if (!(ent->flags & FL_OSP_NOCMD))
+                OSP_clientConfigString(ent, 0x626 + n * 2, num);
+        }
+    }
 }
 
 // Push a changed team score out. teams[].osp_m110/osp_m118 cache what was last
@@ -770,80 +702,73 @@ void OSP_observerTeamFrags (edict_t *ent)
 // otherwise it is one broadcast configstring.
 // gamex86.dll: 10039284..1003950F
 // gamei386.so: 00065C68..00065F67
-void OSP_updateTeamFrags (void)
+void OSP_updateTeamFrags(void)
 {
-	char		buf[32];
-	char		tmp[32];
-	edict_t		*other;
-	int			i;
-	int			j;
+    char        buf[32];
+    char        tmp[32];
+    edict_t     *other;
+    int         i;
+    int         j;
 
-	for (i = 0; i < 2; i++)
-	{
-		if (sync_stat > 2)
-		{
-			if (teams[i].osp_m110 != teams[i].osp_m0f8 ||
-				teams[i].osp_m118 != (int)fraglimit->value)
-			{
-				if (!(int)fraglimit->value)
-					sprintf (buf, "%13i", teams[i].osp_m0f8);
-				else
-				{
-					sprintf (tmp, "%i/%i", teams[i].osp_m0f8, (int)fraglimit->value);
-					sprintf (buf, "%13s", tmp);
-				}
+    for (i = 0; i < 2; i++) {
+        if (sync_stat > 2) {
+            if (teams[i].osp_m110 != teams[i].osp_m0f8 ||
+                teams[i].osp_m118 != (int)fraglimit->value) {
+                if (!(int)fraglimit->value)
+                    sprintf(buf, "%13i", teams[i].osp_m0f8);
+                else {
+                    sprintf(tmp, "%i/%i", teams[i].osp_m0f8, (int)fraglimit->value);
+                    sprintf(buf, "%13s", tmp);
+                }
 
-				if (m_mode == 2)
-				{
-					for (j = 1; j <= game.maxclients; j++)
-					{
-						other = g_edicts + j;
-						if (!other->inuse || !other->client ||
-							other->client->resp.team == i ||
-							(other->flags & FL_OSP_NOCMD))
-							continue;
-						OSP_clientConfigString (other, 0x626 + i * 2, buf);
-					}
+                if (m_mode == 2) {
+                    for (j = 1; j <= game.maxclients; j++) {
+                        other = g_edicts + j;
+                        if (!other->inuse || !other->client ||
+                            other->client->resp.team == i ||
+                            (other->flags & FL_OSP_NOCMD))
+                            continue;
+                        OSP_clientConfigString(other, 0x626 + i * 2, buf);
+                    }
 
-					if (!(int)fraglimit->value)
-						sprintf (buf, "%i-%s", teams[i].osp_m0f8, teams[i].netname);
-					else
-						sprintf (buf, "%i/%i-%s", teams[i].osp_m0f8,
-								 (int)fraglimit->value, teams[i].netname);
+                    if (!(int)fraglimit->value)
+                        sprintf(buf, "%i-%s", teams[i].osp_m0f8, teams[i].netname);
+                    else
+                        sprintf(buf, "%i/%i-%s", teams[i].osp_m0f8,
+                                (int)fraglimit->value, teams[i].netname);
 
-					if (!i)
-						gi.cvar_set ("Score_A", buf);
-					else
-						gi.cvar_set ("Score_B", buf);
-				}
-				else
-					gi.configstring (0x626 + i * 2, buf);
+                    if (!i)
+                        gi.cvar_set("Score_A", buf);
+                    else
+                        gi.cvar_set("Score_B", buf);
+                } else
+                    gi.configstring(0x626 + i * 2, buf);
 
-				teams[i].osp_m110 = teams[i].osp_m0f8;
-				teams[i].osp_m118 = (int)fraglimit->value;
-			}
-		}
-	}
+                teams[i].osp_m110 = teams[i].osp_m0f8;
+                teams[i].osp_m118 = (int)fraglimit->value;
+            }
+        }
+    }
 }
 
 // gamex86.dll: 1003950F..10039563
 // gamei386.so: 00065F68..00065FD9
-void OSP_defaultteam_cmd (edict_t *ent)
+void OSP_defaultteam_cmd(edict_t *ent)
 {
-	if (gi.argc () != 3)
-		return;
+    if (gi.argc() != 3)
+        return;
 
-	strncpy (ent->osp_e3a0, gi.argv (1), 15);
-	strncpy (ent->osp_e3b0, gi.argv (2), 128);
+    Q_strlcpy(ent->osp_e3a0, gi.argv(1), sizeof(ent->osp_e3a0));
+    Q_strlcpy(ent->osp_e3b0, gi.argv(2), sizeof(ent->osp_e3b0));
 }
 
 // gamex86.dll: 10039563..10039598
 // gamei386.so: 00065FDC..0006602E
-void OSP_defaultjoincode_cmd (edict_t *ent)
+void OSP_defaultjoincode_cmd(edict_t *ent)
 {
-	if (gi.argc () != 2)
-		return;
-	strncpy (ent->client->resp.osp_r07d, gi.argv (1), 15);
+    if (gi.argc() != 2)
+        return;
+    strncpy(ent->client->resp.osp_r07d, gi.argv(1), 15);
 }
 
 // `joincode` with no argument, or from a non-captain, prints the code; from a
@@ -851,146 +776,130 @@ void OSP_defaultjoincode_cmd (edict_t *ent)
 // in -- the code picks the team and hands off to OSP_teamjoin_cmd.
 // gamex86.dll: 10039598..100397CE
 // gamei386.so: 00066030..000662B5
-void OSP_joincode_cmd (edict_t *ent)
+void OSP_joincode_cmd(edict_t *ent)
 {
-	edict_t		*p;
-	int			t;
-	int			teamidx;
+    edict_t     *p;
+    int         t;
+    int         teamidx;
 
-	teamidx = ent->client->resp.team;
-	if (m_mode != 2 || level.intermissiontime)
-		return;
+    teamidx = ent->client->resp.team;
+    if (m_mode != 2 || level.intermission_framenum)
+        return;
 
-	if (ent->client->resp.entered == ENTERED_ENTERED)
-	{
-		if (!ent->client->resp.osp_r2c4 || gi.argc () == 1)
-		{
-			if (teams[teamidx].joincode[0])
-				gi.cprintf (ent, PRINT_HIGH, "You're team's joincode is \"%s\"\n",
-							teams[teamidx].joincode);
-			else
-				gi.cprintf (ent, PRINT_HIGH, "No joincode set for your team.\n");
-			return;
-		}
+    if (ent->client->resp.entered == ENTERED_ENTERED) {
+        if (!ent->client->resp.osp_r2c4 || gi.argc() == 1) {
+            if (teams[teamidx].joincode[0])
+                gi.cprintf(ent, PRINT_HIGH, "You're team's joincode is \"%s\"\n",
+                           teams[teamidx].joincode);
+            else
+                gi.cprintf(ent, PRINT_HIGH, "No joincode set for your team.\n");
+            return;
+        }
 
-		strncpy (teams[teamidx].joincode, gi.argv (1), 15);
-		for (t = 1; t < game.maxclients; t++)
-		{
-			p = g_edicts + t;
-			if (!p->inuse || !p->client ||
-				p->client->resp.team != teamidx)
-				continue;
+        strncpy(teams[teamidx].joincode, gi.argv(1), 15);
+        for (t = 1; t < game.maxclients; t++) {
+            p = g_edicts + t;
+            if (!p->inuse || !p->client ||
+                p->client->resp.team != teamidx)
+                continue;
 
-			gi.centerprintf (p, "Team joincode is now \"%s\".\n",
-							 gi.argv (1));
-		}
-		return;
-	}
+            gi.centerprintf(p, "Team joincode is now \"%s\".\n",
+                            gi.argv(1));
+        }
+        return;
+    }
 
-	if (gi.argc () == 1 || !gi.argv (1))
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Usage: joincode <team_joincode_string>\n");
-		return;
-	}
+    if (gi.argc() == 1 || !gi.argv(1)) {
+        gi.cprintf(ent, PRINT_HIGH, "Usage: joincode <team_joincode_string>\n");
+        return;
+    }
 
-	if (teams[0].joincode[0] && !Q_stricmp (gi.argv (1), teams[0].joincode))
-	{
-		ent->client->resp.osp_r078 = 1;
-		OSP_teamjoin_cmd (ent, teams[0].netname);
-	}
-	else if (teams[1].joincode[0] && !Q_stricmp (gi.argv (1), teams[1].joincode))
-	{
-		ent->client->resp.osp_r078 = 2;
-		OSP_teamjoin_cmd (ent, teams[1].netname);
-	}
-	else
-		gi.cprintf (ent, PRINT_HIGH, "Illegal joincode.\n");
+    if (teams[0].joincode[0] && !Q_stricmp(gi.argv(1), teams[0].joincode)) {
+        ent->client->resp.osp_r078 = 1;
+        OSP_teamjoin_cmd(ent, teams[0].netname);
+    } else if (teams[1].joincode[0] && !Q_stricmp(gi.argv(1), teams[1].joincode)) {
+        ent->client->resp.osp_r078 = 2;
+        OSP_teamjoin_cmd(ent, teams[1].netname);
+    } else
+        gi.cprintf(ent, PRINT_HIGH, "Illegal joincode.\n");
 }
 
 // `teamname <words>` -- warmup only. The argument is squeezed to at most 15
 // non-space characters before it is accepted, so "Red Team" becomes "RedTeam".
 // gamex86.dll: 100397CE..10039BE4
 // gamei386.so: 000662B8..0006670F
-void OSP_teamname_cmd (edict_t *ent)
+void OSP_teamname_cmd(edict_t *ent)
 {
-	char		buf[128];
-	char		pname[64];
-	char		cmd[64];
-	edict_t		*player;
-	int			i;
-	int			j;
-	int			tnum;
+    char        buf[128];
+    char        pname[64];
+    char        cmd[64];
+    edict_t     *player;
+    int         i;
+    int         j;
+    int         tnum;
 
-	tnum = ent->client->resp.team;
-	if (tnum == 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-		return;
-	}
+    tnum = ent->client->resp.team;
+    if (tnum == 2) {
+        gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+        return;
+    }
 
-	if (gi.argc () == 1)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Current teamname: \"%s\"\n",
-					teams[tnum].netname);
-		return;
-	}
+    if (gi.argc() == 1) {
+        gi.cprintf(ent, PRINT_HIGH, "Current teamname: \"%s\"\n",
+                   teams[tnum].netname);
+        return;
+    }
 
-	if (sync_stat > 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Cannot change team's name during match!\n");
-		return;
-	}
+    if (sync_stat > 2) {
+        gi.cprintf(ent, PRINT_HIGH, "Cannot change team's name during match!\n");
+        return;
+    }
 
-	strncpy (buf, gi.args (), 30);
-	buf[30] = 0;
+    strncpy(buf, gi.args(), 30);
+    buf[30] = 0;
 
-	for (i = 0, j = 0; i < strlen (buf) && j < 15; i++)
-	{
-		if (buf[i] == ' ')
-			continue;
-		pname[j++] = buf[i];
-	}
-	pname[j] = 0;
+    for (i = 0, j = 0; i < strlen(buf) && j < 15; i++) {
+        if (buf[i] == ' ')
+            continue;
+        pname[j++] = buf[i];
+    }
+    pname[j] = 0;
 
-	if (!Q_stricmp (pname, teams[1 - tnum].netname))
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Sorry, cannot use same name for both teams.\n");
-		return;
-	}
+    if (!Q_stricmp(pname, teams[1 - tnum].netname)) {
+        gi.cprintf(ent, PRINT_HIGH, "Sorry, cannot use same name for both teams.\n");
+        return;
+    }
 
-	gi.bprintf (PRINT_HIGH, "Team \"%s\" renamed to \"%s\"\n",
-				teams[tnum].netname, pname);
-	q2log_teamRename (teams[tnum].netname, pname);
-	strcpy (teams[tnum].netname, pname);
-	strcpy (teams[tnum].greenname, pname);
-	for (i = 0; i < strlen (teams[tnum].greenname); i++)
-		teams[tnum].greenname[i] += 128;
+    gi.bprintf(PRINT_HIGH, "Team \"%s\" renamed to \"%s\"\n",
+               teams[tnum].netname, pname);
+    q2log_teamRename(teams[tnum].netname, pname);
+    strcpy(teams[tnum].netname, pname);
+    strcpy(teams[tnum].greenname, pname);
+    for (i = 0; i < strlen(teams[tnum].greenname); i++)
+        teams[tnum].greenname[i] += 128;
 
-	sprintf (buf, "%15s", teams[tnum].greenname);
-	gi.configstring (0x625 + tnum * 2, buf);
-	sprintf (cmd, "set default_teamname \"%s\"\n", pname);
+    sprintf(buf, "%15s", teams[tnum].greenname);
+    gi.configstring(0x625 + tnum * 2, buf);
+    sprintf(cmd, "set default_teamname \"%s\"\n", pname);
 
-	for (i = 1; i <= game.maxclients; i++)
-	{
-		player = g_edicts + i;
-		if (!player->inuse || !player->client || (player->flags & FL_OSP_NOCMD))
-			continue;
-		if (player->client->resp.team == tnum)
-		{
-			sprintf (buf, "%15s", teams[tnum].netname);
-			OSP_clientConfigString (player, 0x625 + tnum * 2, buf);
-			gi.WriteByte (svc_stufftext);
-			gi.WriteString (cmd);
-			gi.unicast (player, true);
-		}
-	}
+    for (i = 1; i <= game.maxclients; i++) {
+        player = g_edicts + i;
+        if (!player->inuse || !player->client || (player->flags & FL_OSP_NOCMD))
+            continue;
+        if (player->client->resp.team == tnum) {
+            sprintf(buf, "%15s", teams[tnum].netname);
+            OSP_clientConfigString(player, 0x625 + tnum * 2, buf);
+            gi.WriteByte(svc_stufftext);
+            gi.WriteString(cmd);
+            gi.unicast(player, true);
+        }
+    }
 
-	if (m_mode == 2)
-	{
-		gi.cvar_set ("Score_A", "WARMUP");
-		gi.cvar_set ("Score_B", "WARMUP");
-	}
-	OSP_setShowParams ();
+    if (m_mode == 2) {
+        gi.cvar_set("Score_A", "WARMUP");
+        gi.cvar_set("Score_B", "WARMUP");
+    }
+    OSP_setShowParams();
 }
 
 // `teamskin <skin>` -- warmup only, and only when the server has not set
@@ -1001,75 +910,66 @@ void OSP_teamname_cmd (edict_t *ent)
 // every client past the second.
 // gamex86.dll: 10039BE4..10039E6B
 // gamei386.so: 00066710..00066A3F
-void OSP_teamskin_cmd (edict_t *ent)
+void OSP_teamskin_cmd(edict_t *ent)
 {
-	char		stuff[256];
-	edict_t		*p;
-	int			t;
-	int			teamidx;
+    char        stuff[256];
+    edict_t     *p;
+    int         t;
+    int         teamidx;
 
-	teamidx = ent->client->resp.team;
-	if (ent->client->resp.team == 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-		return;
-	}
+    teamidx = ent->client->resp.team;
+    if (ent->client->resp.team == 2) {
+        gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+        return;
+    }
 
-	if (gi.argc () == 1)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Current teamskin: \"%s\"\n", teams[teamidx].skin);
-		return;
-	}
+    if (gi.argc() == 1) {
+        gi.cprintf(ent, PRINT_HIGH, "Current teamskin: \"%s\"\n", teams[teamidx].skin);
+        return;
+    }
 
-	if ((int)team_lockskin->value)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Sorry, teamskins are locked by server.\n");
-		return;
-	}
+    if ((int)team_lockskin->value) {
+        gi.cprintf(ent, PRINT_HIGH, "Sorry, teamskins are locked by server.\n");
+        return;
+    }
 
-	if (sync_stat > 0)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Cannot change team's skin after warmup!\n");
-		return;
-	}
+    if (sync_stat > 0) {
+        gi.cprintf(ent, PRINT_HIGH, "Cannot change team's skin after warmup!\n");
+        return;
+    }
 
-	if (!Q_stricmp (gi.argv (1), teams[1 - teamidx].skin))
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Sorry, cannot use same skin for both teams.\n");
-		return;
-	}
+    if (!Q_stricmp(gi.argv(1), teams[1 - teamidx].skin)) {
+        gi.cprintf(ent, PRINT_HIGH, "Sorry, cannot use same skin for both teams.\n");
+        return;
+    }
 
-	gi.bprintf (PRINT_HIGH, "Team %s skin changed to \"%s\"\n",
-				teams[teamidx].greenname, gi.argv (1));
-	strcpy (teams[teamidx].skin, gi.argv (1));
-	sprintf (stuff, "skin %s; set default_teamskin %s\n", gi.argv (1), gi.argv (1));
+    gi.bprintf(PRINT_HIGH, "Team %s skin changed to \"%s\"\n",
+               teams[teamidx].greenname, gi.argv(1));
+    strcpy(teams[teamidx].skin, gi.argv(1));
+    sprintf(stuff, "skin %s; set default_teamskin %s\n", gi.argv(1), gi.argv(1));
 
-	for (t = 1; t <= game.maxclients; t++)
-	{
-		p = g_edicts + t;
-		if (!p->inuse || !p->client ||
-			p->client->resp.team != teamidx)
-			continue;
+    for (t = 1; t <= game.maxclients; t++) {
+        p = g_edicts + t;
+        if (!p->inuse || !p->client ||
+            p->client->resp.team != teamidx)
+            continue;
 
-		{
-			if (p->flags & FL_OSP_NOCMD)
-			{
-				char	userinfo[512];
+        {
+            if (p->flags & FL_OSP_NOCMD) {
+                char    userinfo[512];
 
-				strncpy (userinfo, ent->client->pers.userinfo, 511);
-				userinfo[511] = 0;
-				Info_SetValueForKey (userinfo, "skin", teams[t].skin);
-				ClientUserinfoChanged (ent, userinfo);
-			}
-			else
-			{
-				gi.WriteByte (svc_stufftext);
-				gi.WriteString (stuff);
-				gi.unicast (p, true);
-			}
-		}
-	}
-	OSP_setShowParams ();
+                strncpy(userinfo, ent->client->pers.userinfo, 511);
+                userinfo[511] = 0;
+                Info_SetValueForKey(userinfo, "skin", teams[t].skin);
+                ClientUserinfoChanged(ent, userinfo);
+            } else {
+                gi.WriteByte(svc_stufftext);
+                gi.WriteString(stuff);
+                gi.unicast(p, true);
+            }
+        }
+    }
+    OSP_setShowParams();
 }
 
 // `team [<name>]`. `name` non-NULL is the OSP_joincode_cmd entry, which has
@@ -1078,178 +978,159 @@ void OSP_teamskin_cmd (edict_t *ent)
 // 0 or 1", and it is what lets a player past a locked or full team.
 // gamex86.dll: 10039E6B..1003A309
 // gamei386.so: 00066A40..00066FB4
-void OSP_teamjoin_cmd (edict_t *ent, char *name)
+void OSP_teamjoin_cmd(edict_t *ent, char *name)
 {
-	char		teamname[32];
-	int			i;
-	int			invited;
+    char        teamname[32];
+    int         i;
+    int         invited;
 
-	invited = ent->client->resp.osp_r078;
+    invited = ent->client->resp.osp_r078;
 
-	if (m_mode == 3 && ent->client->resp.entered != ENTERED_ENTERED)
-	{
-		if (!OSP_1v1AllowJoin (ent))
-			return;
-	}
+    if (m_mode == 3 && ent->client->resp.entered != ENTERED_ENTERED) {
+        if (!OSP_1v1AllowJoin(ent))
+            return;
+    }
 
-	if (gi.argc () == 1)
-	{
-		if (ent->client->resp.team == 2)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "You aren't currently on any team.\n");
-			return;
-		}
-		gi.cprintf (ent, PRINT_HIGH, "You are on team \"%s\"\n",
-					teams[ent->client->resp.team].netname);
-		return;
-	}
+    if (gi.argc() == 1) {
+        if (ent->client->resp.team == 2) {
+            gi.cprintf(ent, PRINT_HIGH, "You aren't currently on any team.\n");
+            return;
+        }
+        gi.cprintf(ent, PRINT_HIGH, "You are on team \"%s\"\n",
+                   teams[ent->client->resp.team].netname);
+        return;
+    }
 
-	if (name)
-		strcpy (teamname, name);
-	else
-		strncpy (teamname, gi.args (), 15);
+    if (name)
+        strcpy(teamname, name);
+    else
+        strncpy(teamname, gi.args(), 15);
 
-	if (who_paused == -2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Sorry, cannot join on a forced pause.\n");
-		return;
-	}
+    if (who_paused == -2) {
+        gi.cprintf(ent, PRINT_HIGH, "Sorry, cannot join on a forced pause.\n");
+        return;
+    }
 
-	for (i = 0; i < 2; i++)
-	{
-		if (!Q_stricmp (teamname, teams[i].netname))
-		{
-			if (!((OSP_teamCount (i) >= (int)team_maxplayers->value && !invited &&
-				   (m_mode != 2 ||
-					((int)match_latejoin->value <= 2 &&
-					 (sync_stat <= 2 ||
-					  (int)match_latejoin->value != 2 ||
-					  OSP_teamCount (i) >= (int)team_maxplayers->value)))) ||
-				  (teams[i].osp_m0f4 && !invited)))
-			{
-				if (invited)
-				{
-					if (i != invited - 1 &&
-						OSP_teamCount (i) >= (int)team_maxplayers->value)
-					{
-						gi.cprintf (ent, PRINT_HIGH,
-									"You have been invited to join only team %s\n",
-									teams[invited - 1].greenname);
-						return;
-					}
-					ent->client->resp.osp_r078 = 0;
-				}
+    for (i = 0; i < 2; i++) {
+        if (!Q_stricmp(teamname, teams[i].netname)) {
+            if (!((OSP_teamCount(i) >= (int)team_maxplayers->value && !invited &&
+                   (m_mode != 2 ||
+                    ((int)match_latejoin->value <= 2 &&
+                     (sync_stat <= 2 ||
+                      (int)match_latejoin->value != 2 ||
+                      OSP_teamCount(i) >= (int)team_maxplayers->value)))) ||
+                  (teams[i].osp_m0f4 && !invited))) {
+                if (invited) {
+                    if (i != invited - 1 &&
+                        OSP_teamCount(i) >= (int)team_maxplayers->value) {
+                        gi.cprintf(ent, PRINT_HIGH,
+                                   "You have been invited to join only team %s\n",
+                                   teams[invited - 1].greenname);
+                        return;
+                    }
+                    ent->client->resp.osp_r078 = 0;
+                }
 
-				if (ent->client->resp.team != 2)
-				{
-					ent->client->pers.score = 0;
-					ent->client->resp.osp_r0a0 = 0;
-				}
-				ent->client->resp.osp_r20c = 0;
-				OSP_addTeamMember (ent, i);
+                if (ent->client->resp.team != 2) {
+                    ent->client->pers.score = 0;
+                    ent->client->resp.osp_r0a0 = 0;
+                }
+                ent->client->resp.osp_r20c = 0;
+                OSP_addTeamMember(ent, i);
 
-				if (sync_stat < 4 && ent->client->resp.entered == ENTERED_ENTERED &&
-					!(ent->flags & FL_OSP_BOT))
-					OSP_notready_cmd (ent, true);
+                if (sync_stat < 4 && ent->client->resp.entered == ENTERED_ENTERED &&
+                    !(ent->flags & FL_OSP_BOT))
+                    OSP_notready_cmd(ent, true);
 
-				if (ent->client->resp.entered != ENTERED_ENTERED)
-				{
-					active_clients++;
-					ent->client->chase_target = NULL;
-					ent->client->resp.entered = ENTERED_ENTERED;
-					ent->client->resp.osp_r240 = 0;
-					ent->client->osp_t040 = 0;
-					ent->client->osp_t03c = NULL;
-					if (!ent->client->resp.osp_r030)
-					{
-						ent->client->resp.osp_r030 = 1;
-						ent->client->resp.enterframe = level.framenum;
-					}
-					else
-						ent->client->resp.enterframe =
-							level.framenum - ent->client->resp.osp_r2d4;
-					ent->client->resp.score = ent->client->resp.osp_r248;
-					ent->client->resp.osp_r0a0--;
-					ent->client->resp.osp_r09c--;
-					EntityListAdd (ent);
-					q2log_playerEntered (ent);
-				}
+                if (ent->client->resp.entered != ENTERED_ENTERED) {
+                    active_clients++;
+                    ent->client->chase_target = NULL;
+                    ent->client->resp.entered = ENTERED_ENTERED;
+                    ent->client->resp.osp_r240 = 0;
+                    ent->client->osp_t040 = 0;
+                    ent->client->osp_t03c = NULL;
+                    if (!ent->client->resp.osp_r030) {
+                        ent->client->resp.osp_r030 = 1;
+                        ent->client->resp.enterframe = level.framenum;
+                    } else
+                        ent->client->resp.enterframe =
+                            level.framenum - ent->client->resp.osp_r2d4;
+                    ent->client->resp.score = ent->client->resp.osp_r248;
+                    ent->client->resp.osp_r0a0--;
+                    ent->client->resp.osp_r09c--;
+                    EntityListAdd(ent);
+                    q2log_playerEntered(ent);
+                }
 
-				if (sync_stat > 2)
-					OSP_initTeamFrags (ent);
-				OSP_setShowParams ();
-				return;
-			}
+                if (sync_stat > 2)
+                    OSP_initTeamFrags(ent);
+                OSP_setShowParams();
+                return;
+            }
 
-			if (teams[i].osp_m0f4 && !invited)
-				gi.cprintf (ent, PRINT_HIGH, "\"%s\" is locked.\n", teams[i].netname);
-			else
-				gi.cprintf (ent, PRINT_HIGH, "\"%s\" is full.\n", teams[i].netname);
-			return;
-		}
-	}
+            if (teams[i].osp_m0f4 && !invited)
+                gi.cprintf(ent, PRINT_HIGH, "\"%s\" is locked.\n", teams[i].netname);
+            else
+                gi.cprintf(ent, PRINT_HIGH, "\"%s\" is full.\n", teams[i].netname);
+            return;
+        }
+    }
 
-	gi.cprintf (ent, PRINT_HIGH, "Unknown team \"%s\"\n", teamname);
+    gi.cprintf(ent, PRINT_HIGH, "Unknown team \"%s\"\n", teamname);
 }
 
 // gamex86.dll: 1003A309..1003A4EC
 // gamei386.so: 00066FB4..000671F9
-void OSP_switchteam_cmd (edict_t *ent)
+void OSP_switchteam_cmd(edict_t *ent)
 {
-	int			team;
+    int         team;
 
-	team = ent->client->resp.team;
-	if (team == 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-		return;
-	}
+    team = ent->client->resp.team;
+    if (team == 2) {
+        gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+        return;
+    }
 
-	if (who_paused == -2)
-	{
-		gi.cprintf (ent, PRINT_HIGH,
-					"Sorry, cannot switch teams during a forced pause.\n");
-		return;
-	}
+    if (who_paused == -2) {
+        gi.cprintf(ent, PRINT_HIGH,
+                   "Sorry, cannot switch teams during a forced pause.\n");
+        return;
+    }
 
-	if (OSP_teamCount (1 - team) < (int)team_maxplayers->value)
-	{
-		if (sync_stat < 4)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "Sorry, \"%s\" is full.\n",
-						teams[1 - team].netname);
-			return;
-		}
+    if (OSP_teamCount(1 - team) < (int)team_maxplayers->value) {
+        if (sync_stat < 4) {
+            gi.cprintf(ent, PRINT_HIGH, "Sorry, \"%s\" is full.\n",
+                       teams[1 - team].netname);
+            return;
+        }
 
-		if (teams[1 - team].osp_m0f4 && !ent->client->resp.osp_r078)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "Sorry, \"%s\" is locked.\n",
-						teams[1 - team].netname);
-			return;
-		}
+        if (teams[1 - team].osp_m0f4 && !ent->client->resp.osp_r078) {
+            gi.cprintf(ent, PRINT_HIGH, "Sorry, \"%s\" is locked.\n",
+                       teams[1 - team].netname);
+            return;
+        }
 
-		if (!ent->client->resp.osp_r078 && (int)match_latejoin->value < 2)
-		{
-			gi.cprintf (ent, PRINT_HIGH,
-						"You need to be invited to switch teams.\n");
-			return;
-		}
+        if (!ent->client->resp.osp_r078 && (int)match_latejoin->value < 2) {
+            gi.cprintf(ent, PRINT_HIGH,
+                       "You need to be invited to switch teams.\n");
+            return;
+        }
 
-		OSP_removeTeamMember (ent, false);
-		ent->client->resp.osp_r2cc = 1 - team;
-		OSP_readdTeamMember (ent);
-		ent->client->resp.osp_r2c4 = 0;
-		ent->client->resp.osp_r20c = 0;
-		ent->client->pers.score = 0;
+        OSP_removeTeamMember(ent, false);
+        ent->client->resp.osp_r2cc = 1 - team;
+        OSP_readdTeamMember(ent);
+        ent->client->resp.osp_r2c4 = 0;
+        ent->client->resp.osp_r20c = 0;
+        ent->client->pers.score = 0;
 
-		if (sync_stat < 4)
-			OSP_notready_cmd (ent, true);
-		OSP_initTeamFrags (ent);
-		OSP_setShowParams ();
-		return;
-	}
+        if (sync_stat < 4)
+            OSP_notready_cmd(ent, true);
+        OSP_initTeamFrags(ent);
+        OSP_setShowParams();
+        return;
+    }
 
-	gi.cprintf (ent, PRINT_HIGH, "Sorry, the other team is full.\n");
+    gi.cprintf(ent, PRINT_HIGH, "Sorry, the other team is full.\n");
 }
 
 // `invite <player>` -- a captain's way past a locked or full team. The
@@ -1257,69 +1138,62 @@ void OSP_switchteam_cmd (edict_t *ent)
 // still means "no invitation") plus resp.osp_r2cc as the team to re-add to.
 // gamex86.dll: 1003A4EC..1003A71B
 // gamei386.so: 000671FC..0006748F
-void OSP_teaminvite_cmd (edict_t *ent)
+void OSP_teaminvite_cmd(edict_t *ent)
 {
-	edict_t		*target;
+    edict_t     *target;
 
-	if (ent->client->resp.entered != ENTERED_ENTERED)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You must be in the game to invite others!\n");
-		return;
-	}
-	if (ent->client->resp.team == 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You must be on a team to invite others!\n");
-		return;
-	}
-	if (!ent->client->resp.osp_r2c4)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Only captains can invite others!\n");
-		return;
-	}
+    if (ent->client->resp.entered != ENTERED_ENTERED) {
+        gi.cprintf(ent, PRINT_HIGH, "You must be in the game to invite others!\n");
+        return;
+    }
+    if (ent->client->resp.team == 2) {
+        gi.cprintf(ent, PRINT_HIGH, "You must be on a team to invite others!\n");
+        return;
+    }
+    if (!ent->client->resp.osp_r2c4) {
+        gi.cprintf(ent, PRINT_HIGH, "Only captains can invite others!\n");
+        return;
+    }
 
-	target = OSP_findPlayer (gi.args ());
-	if (!target)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Player \"%s\" is not logged on.\n", gi.args ());
-		return;
-	}
-	if (target == ent)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You can't invite youself!\n");
-		return;
-	}
-	if (target->client->resp.team == ent->client->resp.team)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "\"%s\" is already on your team!\n",
-					target->client->pers.netname);
-		return;
-	}
+    target = OSP_findPlayer(gi.args());
+    if (!target) {
+        gi.cprintf(ent, PRINT_HIGH, "Player \"%s\" is not logged on.\n", gi.args());
+        return;
+    }
+    if (target == ent) {
+        gi.cprintf(ent, PRINT_HIGH, "You can't invite youself!\n");
+        return;
+    }
+    if (target->client->resp.team == ent->client->resp.team) {
+        gi.cprintf(ent, PRINT_HIGH, "\"%s\" is already on your team!\n",
+                   target->client->pers.netname);
+        return;
+    }
 
-	{
-	if (OSP_teamCount (ent->client->resp.team) >=
-		(int)team_maxplayers->value)
-	{
-		gi.cprintf (ent, PRINT_HIGH,
-					"Sorry, your team is already full (max %d players).\n",
-					(int)team_maxplayers->value);
-		return;
-	}
-	if (target->client->resp.osp_r078)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "\"%s\" has already been invited.\n");
-		return;
-	}
+    {
+        if (OSP_teamCount(ent->client->resp.team) >=
+            (int)team_maxplayers->value) {
+            gi.cprintf(ent, PRINT_HIGH,
+                       "Sorry, your team is already full (max %d players).\n",
+                       (int)team_maxplayers->value);
+            return;
+        }
+        if (target->client->resp.osp_r078) {
+            gi.cprintf(ent, PRINT_HIGH, "\"%s\" has already been invited.\n",
+                       target->client->pers.netname);
+            return;
+        }
 
-	target->client->resp.osp_r030 = 1;
-	target->client->resp.osp_r078 = ent->client->resp.team + 1;
-	target->client->resp.osp_r2cc = ent->client->resp.team;
+        target->client->resp.osp_r030 = 1;
+        target->client->resp.osp_r078 = ent->client->resp.team + 1;
+        target->client->resp.osp_r2cc = ent->client->resp.team;
 
-	gi.cprintf (target, PRINT_HIGH, "You have been invited to join team %s\n",
-				teams[ent->client->resp.team].greenname);
-	gi.cprintf (ent, PRINT_HIGH, "%s has been sent a \"join\" invitation.\n",
-				target->client->pers.greenname);
-	OSP_inviteMenu (target);
-	}
+        gi.cprintf(target, PRINT_HIGH, "You have been invited to join team %s\n",
+                   teams[ent->client->resp.team].greenname);
+        gi.cprintf(ent, PRINT_HIGH, "%s has been sent a \"join\" invitation.\n",
+                   target->client->pers.greenname);
+        OSP_inviteMenu(target);
+    }
 }
 
 // lock/unlock/readyteam/notreadyteam share one shape: a captain acts on their
@@ -1328,229 +1202,201 @@ void OSP_teaminvite_cmd (edict_t *ent)
 // mod's own copy-paste, reproduced here.
 // gamex86.dll: 1003A71B..1003A856
 // gamei386.so: 00067490..000675EA
-void OSP_lockteam_cmd (edict_t *ent)
+void OSP_lockteam_cmd(edict_t *ent)
 {
-	int			team;
+    int         team;
 
-	team = ent->client->resp.team;
+    team = ent->client->resp.team;
 
-	if (!ent->osp_e39c && !ent->client->resp.osp_r2c4)
-	{
-		gi.cprintf (ent, PRINT_HIGH,
-					"Only captains or referees can lock a team.\n");
-		return;
-	}
+    if (!ent->osp_e39c && !ent->client->resp.osp_r2c4) {
+        gi.cprintf(ent, PRINT_HIGH,
+                   "Only captains or referees can lock a team.\n");
+        return;
+    }
 
-	if (ent->osp_e39c)
-	{
-		if (ent->client->resp.entered != ENTERED_ENTERED && gi.argc () == 1)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "Ref: Usage: unlockteam <teamname>\n");
-			return;
-		}
+    if (ent->osp_e39c) {
+        if (ent->client->resp.entered != ENTERED_ENTERED && gi.argc() == 1) {
+            gi.cprintf(ent, PRINT_HIGH, "Ref: Usage: unlockteam <teamname>\n");
+            return;
+        }
 
-		if (gi.argc () > 1)
-		{
-			if (!Q_stricmp (gi.args (), teams[0].netname))
-				team = 0;
-			else if (!Q_stricmp (gi.args (), teams[1].netname))
-				team = 1;
-			else
-			{
-				gi.cprintf (ent, PRINT_HIGH,
-							"Ref (lockteam): unknown team \"%s\"\n", gi.args ());
-				return;
-			}
-		}
-	}
+        if (gi.argc() > 1) {
+            if (!Q_stricmp(gi.args(), teams[0].netname))
+                team = 0;
+            else if (!Q_stricmp(gi.args(), teams[1].netname))
+                team = 1;
+            else {
+                gi.cprintf(ent, PRINT_HIGH,
+                           "Ref (lockteam): unknown team \"%s\"\n", gi.args());
+                return;
+            }
+        }
+    }
 
-	if (team == 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-		return;
-	}
+    if (team == 2) {
+        gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+        return;
+    }
 
-	teams[team].osp_m0f4 = 1;
-	gi.cprintf (ent, PRINT_HIGH,
-				"Team locked.  Use \"invite\" to allow others to join.\n");
+    teams[team].osp_m0f4 = 1;
+    gi.cprintf(ent, PRINT_HIGH,
+               "Team locked.  Use \"invite\" to allow others to join.\n");
 }
 
 // gamex86.dll: 1003A856..1003A991
 // gamei386.so: 000675EC..00067746
-void OSP_unlockteam_cmd (edict_t *ent)
+void OSP_unlockteam_cmd(edict_t *ent)
 {
-	int			team;
+    int         team;
 
-	team = ent->client->resp.team;
+    team = ent->client->resp.team;
 
-	if (!ent->osp_e39c && !ent->client->resp.osp_r2c4)
-	{
-		gi.cprintf (ent, PRINT_HIGH,
-					"Only captains or referees can unlock a team.\n");
-		return;
-	}
+    if (!ent->osp_e39c && !ent->client->resp.osp_r2c4) {
+        gi.cprintf(ent, PRINT_HIGH,
+                   "Only captains or referees can unlock a team.\n");
+        return;
+    }
 
-	if (ent->osp_e39c)
-	{
-		if (ent->client->resp.entered != ENTERED_ENTERED && gi.argc () == 1)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "Ref: Usage: unlockteam <teamname>\n");
-			return;
-		}
+    if (ent->osp_e39c) {
+        if (ent->client->resp.entered != ENTERED_ENTERED && gi.argc() == 1) {
+            gi.cprintf(ent, PRINT_HIGH, "Ref: Usage: unlockteam <teamname>\n");
+            return;
+        }
 
-		if (gi.argc () > 1)
-		{
-			if (!Q_stricmp (gi.args (), teams[0].netname))
-				team = 0;
-			else if (!Q_stricmp (gi.args (), teams[1].netname))
-				team = 1;
-			else
-			{
-				gi.cprintf (ent, PRINT_HIGH,
-							"Ref (unlockteam): unknown team \"%s\"\n", gi.args ());
-				return;
-			}
-		}
-	}
+        if (gi.argc() > 1) {
+            if (!Q_stricmp(gi.args(), teams[0].netname))
+                team = 0;
+            else if (!Q_stricmp(gi.args(), teams[1].netname))
+                team = 1;
+            else {
+                gi.cprintf(ent, PRINT_HIGH,
+                           "Ref (unlockteam): unknown team \"%s\"\n", gi.args());
+                return;
+            }
+        }
+    }
 
-	if (team == 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-		return;
-	}
+    if (team == 2) {
+        gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+        return;
+    }
 
-	teams[team].osp_m0f4 = 0;
-	gi.cprintf (ent, PRINT_HIGH, "Team unlocked.  Anybody can now join.\n");
+    teams[team].osp_m0f4 = 0;
+    gi.cprintf(ent, PRINT_HIGH, "Team unlocked.  Anybody can now join.\n");
 }
 
 // gamex86.dll: 1003A991..1003AB8C
 // gamei386.so: 00067748..00067962
-void OSP_readyteam_cmd (edict_t *ent)
+void OSP_readyteam_cmd(edict_t *ent)
 {
-	edict_t		*p;
-	int			t;
-	int			teamidx;
+    edict_t     *p;
+    int         t;
+    int         teamidx;
 
-	teamidx = ent->client->resp.team;
-	// The second disjunct re-tests osp_e39c, which the first has already
-	// settled -- another of the target's duplicate-condition bugs.
-	if (!ent->osp_e39c ||
-		(ent->osp_e39c && !ent->client->resp.osp_r2c4 &&
-		 ent->client->resp.entered == ENTERED_ENTERED && gi.argc () == 1))
-	{
-		if (teamidx == 2)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-			return;
-		}
-		if (!ent->client->resp.osp_r2c4 && !ent->osp_e39c)
-		{
-			gi.cprintf (ent, PRINT_HIGH,
-						"Only team captain can \"ready\" entire team.\n");
-			return;
-		}
-	}
-	else
-	{
-		if (gi.argc () == 1)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "Ref: Usage: readyteam <teamname>\n");
-			return;
-		}
-		if (!Q_stricmp (gi.args (), teams[0].netname))
-			teamidx = 0;
-		else if (!Q_stricmp (gi.args (), teams[1].netname))
-			teamidx = 1;
-		else
-		{
-			gi.cprintf (ent, PRINT_HIGH,
-						"Ref (readyteam): unknown team \"%s\"\n", gi.args ());
-			return;
-		}
-	}
+    teamidx = ent->client->resp.team;
+    // The second disjunct re-tests osp_e39c, which the first has already
+    // settled -- another of the target's duplicate-condition bugs.
+    if (!ent->osp_e39c ||
+        (ent->osp_e39c && !ent->client->resp.osp_r2c4 &&
+         ent->client->resp.entered == ENTERED_ENTERED && gi.argc() == 1)) {
+        if (teamidx == 2) {
+            gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+            return;
+        }
+        if (!ent->client->resp.osp_r2c4 && !ent->osp_e39c) {
+            gi.cprintf(ent, PRINT_HIGH,
+                       "Only team captain can \"ready\" entire team.\n");
+            return;
+        }
+    } else {
+        if (gi.argc() == 1) {
+            gi.cprintf(ent, PRINT_HIGH, "Ref: Usage: readyteam <teamname>\n");
+            return;
+        }
+        if (!Q_stricmp(gi.args(), teams[0].netname))
+            teamidx = 0;
+        else if (!Q_stricmp(gi.args(), teams[1].netname))
+            teamidx = 1;
+        else {
+            gi.cprintf(ent, PRINT_HIGH,
+                       "Ref (readyteam): unknown team \"%s\"\n", gi.args());
+            return;
+        }
+    }
 
-	if (sync_stat >= 4)
-		return;
+    if (sync_stat >= 4)
+        return;
 
-	for (t = 1; t <= game.maxclients; t++)
-	{
-		p = g_edicts + t;
-		if (!p->inuse || !p->client ||
-			p->client->resp.team != teamidx ||
-			p->client->resp.entered != ENTERED_ENTERED ||
-			p->client->resp.osp_r20c)
-			continue;
+    for (t = 1; t <= game.maxclients; t++) {
+        p = g_edicts + t;
+        if (!p->inuse || !p->client ||
+            p->client->resp.team != teamidx ||
+            p->client->resp.entered != ENTERED_ENTERED ||
+            p->client->resp.osp_r20c)
+            continue;
 
-		OSP_ready_cmd (p, true);
-		if (sync_stat)
-			break;
-	}
+        OSP_ready_cmd(p, true);
+        if (sync_stat)
+            break;
+    }
 
-	gi.bprintf (PRINT_HIGH, "Team \"%s\" is ready!\n", teams[teamidx].greenname);
+    gi.bprintf(PRINT_HIGH, "Team \"%s\" is ready!\n", teams[teamidx].greenname);
 }
 
 // gamex86.dll: 1003AB8C..1003AD79
 // gamei386.so: 00067964..00067B73
-void OSP_notreadyteam_cmd (edict_t *ent)
+void OSP_notreadyteam_cmd(edict_t *ent)
 {
-	edict_t		*p;
-	int			t;
-	int			teamidx;
+    edict_t     *p;
+    int         t;
+    int         teamidx;
 
-	teamidx = ent->client->resp.team;
-	// The second disjunct re-tests osp_e39c, which the first has already
-	// settled -- another of the target's duplicate-condition bugs.
-	if (!ent->osp_e39c ||
-		(ent->osp_e39c && !ent->client->resp.osp_r2c4 &&
-		 ent->client->resp.entered == ENTERED_ENTERED && gi.argc () == 1))
-	{
-		if (teamidx == 2)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-			return;
-		}
-		if (!ent->client->resp.osp_r2c4 && !ent->osp_e39c)
-		{
-			gi.cprintf (ent, PRINT_HIGH,
-						"Only team captain can \"notready\" entire team.\n");
-			return;
-		}
-	}
-	else
-	{
-		if (gi.argc () == 1)
-		{
-			gi.cprintf (ent, PRINT_HIGH,
-						"Ref (notreadyteam): Usage: notreadyteam <teamname>\n");
-			return;
-		}
-		if (!Q_stricmp (gi.args (), teams[0].netname))
-			teamidx = 0;
-		else if (!Q_stricmp (gi.args (), teams[1].netname))
-			teamidx = 1;
-		else
-		{
-			gi.cprintf (ent, PRINT_HIGH, "Ref: unknown team \"%s\"\n", gi.args ());
-			return;
-		}
-	}
+    teamidx = ent->client->resp.team;
+    // The second disjunct re-tests osp_e39c, which the first has already
+    // settled -- another of the target's duplicate-condition bugs.
+    if (!ent->osp_e39c ||
+        (ent->osp_e39c && !ent->client->resp.osp_r2c4 &&
+         ent->client->resp.entered == ENTERED_ENTERED && gi.argc() == 1)) {
+        if (teamidx == 2) {
+            gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+            return;
+        }
+        if (!ent->client->resp.osp_r2c4 && !ent->osp_e39c) {
+            gi.cprintf(ent, PRINT_HIGH,
+                       "Only team captain can \"notready\" entire team.\n");
+            return;
+        }
+    } else {
+        if (gi.argc() == 1) {
+            gi.cprintf(ent, PRINT_HIGH,
+                       "Ref (notreadyteam): Usage: notreadyteam <teamname>\n");
+            return;
+        }
+        if (!Q_stricmp(gi.args(), teams[0].netname))
+            teamidx = 0;
+        else if (!Q_stricmp(gi.args(), teams[1].netname))
+            teamidx = 1;
+        else {
+            gi.cprintf(ent, PRINT_HIGH, "Ref: unknown team \"%s\"\n", gi.args());
+            return;
+        }
+    }
 
-	if (sync_stat >= 4)
-		return;
+    if (sync_stat >= 4)
+        return;
 
-	for (t = 1; t <= game.maxclients; t++)
-	{
-		p = g_edicts + t;
-		if (!p->inuse || !p->client ||
-			p->client->resp.team != teamidx ||
-			p->client->resp.entered != ENTERED_ENTERED ||
-			!p->client->resp.osp_r20c)
-			continue;
+    for (t = 1; t <= game.maxclients; t++) {
+        p = g_edicts + t;
+        if (!p->inuse || !p->client ||
+            p->client->resp.team != teamidx ||
+            p->client->resp.entered != ENTERED_ENTERED ||
+            !p->client->resp.osp_r20c)
+            continue;
 
-		OSP_notready_cmd (p, true);
-	}
+        OSP_notready_cmd(p, true);
+    }
 
-	gi.bprintf (PRINT_HIGH, "Team \"%s\" is NOT ready!\n", teams[teamidx].greenname);
+    gi.bprintf(PRINT_HIGH, "Team \"%s\" is NOT ready!\n", teams[teamidx].greenname);
 }
 
 // `captain` with no argument reports the captain; a captain naming a player
@@ -1558,156 +1404,141 @@ void OSP_notreadyteam_cmd (edict_t *ent)
 // team and a player. resp.osp_r2c4 is the captain flag throughout.
 // gamex86.dll: 1003AD79..1003B2FC
 // gamei386.so: 00067B74..00068120
-void OSP_captain_cmd (edict_t *ent)
+void OSP_captain_cmd(edict_t *ent)
 {
-	edict_t		*other;
-	int			i;
-	int			prevcap;
-	int			tnum;
+    edict_t     *other;
+    int         i;
+    int         prevcap;
+    int         tnum;
 
-	tnum = ent->client->resp.team;
-	if (ent->osp_e39c)
-	{
-		if (ent->client->resp.entered != ENTERED_ENTERED && gi.argc () == 1)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "Ref: Usage: captain <teamname>\n");
-			return;
-		}
-		if (gi.argc () > 1 && !ent->client->resp.osp_r2c4)
-		{
-			if (!Q_stricmp (gi.argv (1), teams[0].netname))
-				tnum = 0;
-			else if (!Q_stricmp (gi.argv (1), teams[1].netname))
-				tnum = 1;
-			else
-			{
-				gi.cprintf (ent, PRINT_HIGH,
-							"Ref (captain): unknown team \"%s\"\n", gi.argv (1));
-				return;
-			}
-		}
-	}
+    tnum = ent->client->resp.team;
+    if (ent->osp_e39c) {
+        if (ent->client->resp.entered != ENTERED_ENTERED && gi.argc() == 1) {
+            gi.cprintf(ent, PRINT_HIGH, "Ref: Usage: captain <teamname>\n");
+            return;
+        }
+        if (gi.argc() > 1 && !ent->client->resp.osp_r2c4) {
+            if (!Q_stricmp(gi.argv(1), teams[0].netname))
+                tnum = 0;
+            else if (!Q_stricmp(gi.argv(1), teams[1].netname))
+                tnum = 1;
+            else {
+                gi.cprintf(ent, PRINT_HIGH,
+                           "Ref (captain): unknown team \"%s\"\n", gi.argv(1));
+                return;
+            }
+        }
+    }
 
-	if (tnum == 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "You have not joined any team yet.\n");
-		return;
-	}
+    if (tnum == 2) {
+        gi.cprintf(ent, PRINT_HIGH, "You have not joined any team yet.\n");
+        return;
+    }
 
-	// Nobody is asking to change anything -- just report.
-	if ((!ent->client->resp.osp_r2c4 && !ent->osp_e39c) || gi.argc () == 1 ||
-		(!ent->client->resp.osp_r2c4 && ent->osp_e39c && gi.argc () == 2))
-	{
-		for (i = 1; i <= game.maxclients; i++)
-		{
-			other = g_edicts + i;
-			if (!other->inuse || !other->client ||
-				other->client->resp.team != tnum ||
-				other->client->resp.entered != ENTERED_ENTERED ||
-				!other->client->resp.osp_r2c4)
-				continue;
+    // Nobody is asking to change anything -- just report.
+    if ((!ent->client->resp.osp_r2c4 && !ent->osp_e39c) || gi.argc() == 1 ||
+        (!ent->client->resp.osp_r2c4 && ent->osp_e39c && gi.argc() == 2)) {
+        for (i = 1; i <= game.maxclients; i++) {
+            other = g_edicts + i;
+            if (!other->inuse || !other->client ||
+                other->client->resp.team != tnum ||
+                other->client->resp.entered != ENTERED_ENTERED ||
+                !other->client->resp.osp_r2c4)
+                continue;
 
-			gi.cprintf (ent, PRINT_HIGH, "Current team captain is \"%s\"\n",
-						other->client->pers.netname);
-			return;
-		}
-		gi.cprintf (ent, PRINT_HIGH, "Currently, there is no team captain.\n");
-		return;
-	}
+            gi.cprintf(ent, PRINT_HIGH, "Current team captain is \"%s\"\n",
+                       other->client->pers.netname);
+            return;
+        }
+        gi.cprintf(ent, PRINT_HIGH, "Currently, there is no team captain.\n");
+        return;
+    }
 
-	// A captain handing the job over names the new captain in gi.args().
-	if (ent->client->resp.osp_r2c4 && gi.argc () > 1)
-	{
-		for (i = 1; i <= game.maxclients; i++)
-		{
-			other = g_edicts + i;
-			if (!other->inuse || !other->client ||
-				other->client->resp.team != tnum ||
-				other->client->resp.entered != ENTERED_ENTERED ||
-				Q_stricmp (gi.args (), other->client->pers.netname))
-				continue;
+    // A captain handing the job over names the new captain in gi.args().
+    if (ent->client->resp.osp_r2c4 && gi.argc() > 1) {
+        for (i = 1; i <= game.maxclients; i++) {
+            other = g_edicts + i;
+            if (!other->inuse || !other->client ||
+                other->client->resp.team != tnum ||
+                other->client->resp.entered != ENTERED_ENTERED ||
+                Q_stricmp(gi.args(), other->client->pers.netname))
+                continue;
 
-			gi.cprintf (ent, PRINT_HIGH, "Team captain is now \"%s\"\n",
-						other->client->pers.netname);
-			gi.cprintf (other, PRINT_HIGH, "You are now team captain.\n");
-			ent->client->resp.osp_r2c4 = 0;
-			other->client->resp.osp_r2c4 = 1;
-			return;
-		}
-		gi.cprintf (ent, PRINT_HIGH, "\"%s\" is not on team %s.\n",
-					gi.args (), teams[tnum].netname);
-		return;
-	}
+            gi.cprintf(ent, PRINT_HIGH, "Team captain is now \"%s\"\n",
+                       other->client->pers.netname);
+            gi.cprintf(other, PRINT_HIGH, "You are now team captain.\n");
+            ent->client->resp.osp_r2c4 = 0;
+            other->client->resp.osp_r2c4 = 1;
+            return;
+        }
+        gi.cprintf(ent, PRINT_HIGH, "\"%s\" is not on team %s.\n",
+                   gi.args(), teams[tnum].netname);
+        return;
+    }
 
-	// Referee form: `captain <tnum> <player>`.
-	if (ent->osp_e39c && gi.argc () > 2)
-	{
-		prevcap = -1;
-		for (i = 1; i <= game.maxclients; i++)
-		{
-			other = g_edicts + i;
-			if (!other->inuse || !other->client ||
-				other->client->resp.team != tnum ||
-				other->client->resp.entered != ENTERED_ENTERED ||
-				!other->client->resp.osp_r2c4)
-				continue;
+    // Referee form: `captain <tnum> <player>`.
+    if (ent->osp_e39c && gi.argc() > 2) {
+        prevcap = -1;
+        for (i = 1; i <= game.maxclients; i++) {
+            other = g_edicts + i;
+            if (!other->inuse || !other->client ||
+                other->client->resp.team != tnum ||
+                other->client->resp.entered != ENTERED_ENTERED ||
+                !other->client->resp.osp_r2c4)
+                continue;
 
-			prevcap = i;
-			break;
-		}
+            prevcap = i;
+            break;
+        }
 
-		if (prevcap < 0)
-			gi.cprintf (ent, PRINT_HIGH, "There is no team captain for \"%s\".\n",
-						teams[tnum].netname);
+        if (prevcap < 0)
+            gi.cprintf(ent, PRINT_HIGH, "There is no team captain for \"%s\".\n",
+                       teams[tnum].netname);
 
-		for (i = 1; i <= game.maxclients; i++)
-		{
-			other = g_edicts + i;
-			if (!other->inuse || !other->client ||
-				other->client->resp.team != tnum ||
-				other->client->resp.entered != ENTERED_ENTERED ||
-				Q_stricmp (gi.argv (2), other->client->pers.netname))
-				continue;
+        for (i = 1; i <= game.maxclients; i++) {
+            other = g_edicts + i;
+            if (!other->inuse || !other->client ||
+                other->client->resp.team != tnum ||
+                other->client->resp.entered != ENTERED_ENTERED ||
+                Q_stricmp(gi.argv(2), other->client->pers.netname))
+                continue;
 
-			gi.cprintf (ent, PRINT_HIGH, "Team captain is now \"%s\"\n",
-						other->client->pers.netname);
-			gi.cprintf (other, PRINT_HIGH, "You are now team captain.\n");
-			other->client->resp.osp_r2c4 = 1;
-			if (prevcap >= 0)
-			{
-				g_edicts[prevcap].client->resp.osp_r2c4 = 0;
-				gi.cprintf (g_edicts + prevcap, PRINT_HIGH, "Team captain is now \"%s\"\n",
-							other->client->pers.netname);
-			}
-			return;
-		}
+            gi.cprintf(ent, PRINT_HIGH, "Team captain is now \"%s\"\n",
+                       other->client->pers.netname);
+            gi.cprintf(other, PRINT_HIGH, "You are now team captain.\n");
+            other->client->resp.osp_r2c4 = 1;
+            if (prevcap >= 0) {
+                g_edicts[prevcap].client->resp.osp_r2c4 = 0;
+                gi.cprintf(g_edicts + prevcap, PRINT_HIGH, "Team captain is now \"%s\"\n",
+                           other->client->pers.netname);
+            }
+            return;
+        }
 
-		gi.cprintf (ent, PRINT_HIGH, "\"%s\" is not on team %s.\n",
-					gi.argv (2), teams[tnum].netname);
-	}
-	else
-		gi.cprintf (ent, PRINT_HIGH, "Unknown captain request (%d)\n", gi.argc ());
+        gi.cprintf(ent, PRINT_HIGH, "\"%s\" is not on team %s.\n",
+                   gi.argv(2), teams[tnum].netname);
+    } else
+        gi.cprintf(ent, PRINT_HIGH, "Unknown captain request (%d)\n", gi.argc());
 }
 
 // gamex86.dll: 1003B2FC..1003B3AB
 // gamei386.so: 00068120..000681C9
-void OSP_captains_cmd (edict_t *ent)
+void OSP_captains_cmd(edict_t *ent)
 {
-	edict_t		*other;
-	int			i;
+    edict_t     *other;
+    int         i;
 
-	for (i = 1; i <= game.maxclients; i++)
-	{
-		other = g_edicts + i;
-		if (!other->inuse || !other->client ||
-			other->client->resp.entered != ENTERED_ENTERED ||
-			!other->client->resp.osp_r2c4)
-			continue;
+    for (i = 1; i <= game.maxclients; i++) {
+        other = g_edicts + i;
+        if (!other->inuse || !other->client ||
+            other->client->resp.entered != ENTERED_ENTERED ||
+            !other->client->resp.osp_r2c4)
+            continue;
 
-		gi.cprintf (ent, PRINT_HIGH, "Team captain for %s is \"%s\".\n",
-						teams[other->client->resp.team].netname,
-						other->client->pers.netname);
-	}
+        gi.cprintf(ent, PRINT_HIGH, "Team captain for %s is \"%s\".\n",
+                   teams[other->client->resp.team].netname,
+                   other->client->pers.netname);
+    }
 }
 
 // A captain (or a referee, who must name the team first) drops a player from
@@ -1715,92 +1546,80 @@ void OSP_captains_cmd (edict_t *ent)
 // server command; a human is dropped into observer mode.
 // gamex86.dll: 1003B3AB..1003B6BC
 // gamei386.so: 000681CC..000684DE
-void OSP_kickplayer_cmd (edict_t *ent)
+void OSP_kickplayer_cmd(edict_t *ent)
 {
-	char		pname[32];
-	edict_t		*victim;
-	int			i;
-	int			tnum;
+    char        pname[32];
+    edict_t     *victim;
+    int         i;
+    int         tnum;
 
-	tnum = ent->client->resp.team;
-	if (!ent->osp_e39c && !ent->client->resp.osp_r2c4)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Only team captains can kick players.\n");
-		return;
-	}
+    tnum = ent->client->resp.team;
+    if (!ent->osp_e39c && !ent->client->resp.osp_r2c4) {
+        gi.cprintf(ent, PRINT_HIGH, "Only team captains can kick players.\n");
+        return;
+    }
 
-	if (ent->client->resp.osp_r2c4 && gi.argc () < 2)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Usage: kickplayer <player_name>\n");
-		return;
-	}
+    if (ent->client->resp.osp_r2c4 && gi.argc() < 2) {
+        gi.cprintf(ent, PRINT_HIGH, "Usage: kickplayer <player_name>\n");
+        return;
+    }
 
-	if (ent->osp_e39c && gi.argc () < 3 && !ent->client->resp.osp_r2c4)
-	{
-		gi.cprintf (ent, PRINT_HIGH,
-					"(Referee) Usage: kickplayer <team_name> <player_name>\n");
-		return;
-	}
+    if (ent->osp_e39c && gi.argc() < 3 && !ent->client->resp.osp_r2c4) {
+        gi.cprintf(ent, PRINT_HIGH,
+                   "(Referee) Usage: kickplayer <team_name> <player_name>\n");
+        return;
+    }
 
-	if (ent->client->resp.osp_r2c4)
-		strcpy (pname, gi.args ());
-	else
-	{
-		if (!Q_stricmp (gi.argv (1), teams[0].netname))
-			tnum = 0;
-		else if (!Q_stricmp (gi.argv (1), teams[1].netname))
-			tnum = 1;
-		else
-		{
-			gi.cprintf (ent, PRINT_HIGH,
-						"Ref (kickplayer): unknown team \"%s\"\n", gi.argv (1));
-			return;
-		}
-		strcpy (pname, gi.argv (2));
-	}
+    if (ent->client->resp.osp_r2c4)
+        strcpy(pname, gi.args());
+    else {
+        if (!Q_stricmp(gi.argv(1), teams[0].netname))
+            tnum = 0;
+        else if (!Q_stricmp(gi.argv(1), teams[1].netname))
+            tnum = 1;
+        else {
+            gi.cprintf(ent, PRINT_HIGH,
+                       "Ref (kickplayer): unknown team \"%s\"\n", gi.argv(1));
+            return;
+        }
+        strcpy(pname, gi.argv(2));
+    }
 
-	victim = OSP_findPlayer (pname);
-	if (!victim)
-	{
-		for (i = 1; i <= game.maxclients; i++)
-		{
-			victim = g_edicts + i;
-			if (!victim->inuse || !victim->client ||
-				victim->client->resp.team != tnum ||
-				victim->client->resp.entered != ENTERED_ENTERED ||
-				Q_stricmp (pname, victim->client->pers.netname))
-				continue;
-			break;
-		}
-		if (i > game.maxclients)
-		{
-			gi.cprintf (ent, PRINT_HIGH, "\"%s\" is not on team %s\n",
-						pname, teams[tnum].greenname);
-			return;
-		}
-	}
-	else if (victim->client->resp.team != tnum ||
-			 victim->client->resp.entered != ENTERED_ENTERED)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "\"%s\" is not on team %s\n",
-					pname, teams[tnum].greenname);
-		return;
-	}
+    victim = OSP_findPlayer(pname);
+    if (!victim) {
+        for (i = 1; i <= game.maxclients; i++) {
+            victim = g_edicts + i;
+            if (!victim->inuse || !victim->client ||
+                victim->client->resp.team != tnum ||
+                victim->client->resp.entered != ENTERED_ENTERED ||
+                Q_stricmp(pname, victim->client->pers.netname))
+                continue;
+            break;
+        }
+        if (i > game.maxclients) {
+            gi.cprintf(ent, PRINT_HIGH, "\"%s\" is not on team %s\n",
+                       pname, teams[tnum].greenname);
+            return;
+        }
+    } else if (victim->client->resp.team != tnum ||
+               victim->client->resp.entered != ENTERED_ENTERED) {
+        gi.cprintf(ent, PRINT_HIGH, "\"%s\" is not on team %s\n",
+                   pname, teams[tnum].greenname);
+        return;
+    }
 
-	gi.bprintf (PRINT_HIGH, "%s has been removed from \"%s\"\n",
-				pname, teams[tnum].netname);
+    gi.bprintf(PRINT_HIGH, "%s has been removed from \"%s\"\n",
+               pname, teams[tnum].netname);
 
-	if (victim->flags & FL_OSP_NOCMD)
-	{
-		BotServerCommand ("sv", "removebot", pname, 0);
-		// The target's own oddity, reproduced: the counter is subtracted from
-		// itself and the (always zero) result clamped.
-		bots_votedin -= bots_votedin;
-		if (bots_votedin < 0)
-			bots_votedin = 0;
-	}
-	else
-		OSP_startObserve (victim);
+    if (victim->flags & FL_OSP_NOCMD) {
+        BotServerCommand("sv", "removebot", pname, 0);
+        // The target's own oddity, reproduced: the counter is subtracted from
+        // itself and the (always zero) result clamped.
+        bots_votedin -= bots_votedin;
+        if (bots_votedin < 0)
+            bots_votedin = 0;
+    } else
+        OSP_startObserve(victim);
 }
 
 // `queue` -- print the 1v1 waiting line. The two slots at the head of it also
@@ -1808,101 +1627,92 @@ void OSP_kickplayer_cmd (edict_t *ent)
 // why a read-only-looking command writes p_order[26]/[27].
 // gamex86.dll: 1003B6BC..1003B926
 // gamei386.so: 000684E0..000687D4
-void OSP_1v1queue_cmd (edict_t *ent)
+void OSP_1v1queue_cmd(edict_t *ent)
 {
-	char		tmp[128];
-	char		scratch[64];
-	int			t;
+    char        tmp[128];
+    char        scratch[64];
+    int         t;
 
-	if (!(int)team_nextuptime->value)
-	{
-		gi.cprintf (ent, PRINT_HIGH, "Player queueing currently disabled.\n");
-		return;
-	}
+    if (!(int)team_nextuptime->value) {
+        gi.cprintf(ent, PRINT_HIGH, "Player queueing currently disabled.\n");
+        return;
+    }
 
-	gi.cprintf (ent, PRINT_HIGH, "\nCurrent 1v1 queue:\n------------------\n");
+    gi.cprintf(ent, PRINT_HIGH, "\nCurrent 1v1 queue:\n------------------\n");
 
-	for (t = 0; t < p_order[25]; t++)
-	{
-		if (p_order[t] == ent - g_edicts - 1)
-			strcpy (tmp, ent->client->pers.greenname);
-		else
-			strcpy (tmp, g_edicts[p_order[t] + 1].client->pers.netname);
+    for (t = 0; t < p_order[25]; t++) {
+        if (p_order[t] == ent - g_edicts - 1)
+            strcpy(tmp, ent->client->pers.greenname);
+        else
+            strcpy(tmp, g_edicts[p_order[t] + 1].client->pers.netname);
 
-		if (t < 2)
-		{
-			if (g_edicts[p_order[t] + 1].client->resp.entered == ENTERED_ENTERED)
-				strcat (tmp, " [Playing]");
-			else
-			{
-				if (!p_order[26 + t])
-					p_order[26 + t] =
-						level.framenum + (int)team_nextuptime->value * 10;
+        if (t < 2) {
+            if (g_edicts[p_order[t] + 1].client->resp.entered == ENTERED_ENTERED)
+                strcat(tmp, " [Playing]");
+            else {
+                if (!p_order[26 + t])
+                    p_order[26 + t] =
+                        level.framenum + (int)team_nextuptime->value * 10;
 
-				if (p_order[26 + t] > 0)
-				{
-					if (p_order[26 + t] < level.framenum)
-						strcat (tmp, " [Not yet joined --> will give up slot]");
-					else
-					{
-						if (!g_edicts[p_order[t] + 1].inuse)
-							sprintf (scratch,
-									 " [Connecting --> must join in %d sec]",
-									 (p_order[26 + t] - level.framenum) / 10);
-						else
-							sprintf (scratch,
-									 " [Not yet joined --> must join in %d sec]",
-									 (p_order[26 + t] - level.framenum) / 10);
-						strcat (tmp, scratch);
-					}
-				}
-				else
-					strcat (tmp, " [Not yet joined]");
-			}
-		}
+                if (p_order[26 + t] > 0) {
+                    if (p_order[26 + t] < level.framenum)
+                        strcat(tmp, " [Not yet joined --> will give up slot]");
+                    else {
+                        if (!g_edicts[p_order[t] + 1].inuse)
+                            sprintf(scratch,
+                                    " [Connecting --> must join in %d sec]",
+                                    (p_order[26 + t] - level.framenum) / 10);
+                        else
+                            sprintf(scratch,
+                                    " [Not yet joined --> must join in %d sec]",
+                                    (p_order[26 + t] - level.framenum) / 10);
+                        strcat(tmp, scratch);
+                    }
+                } else
+                    strcat(tmp, " [Not yet joined]");
+            }
+        }
 
-		gi.cprintf (ent, PRINT_HIGH, "%d. %s\n", t + 1, tmp);
-	}
+        gi.cprintf(ent, PRINT_HIGH, "%d. %s\n", t + 1, tmp);
+    }
 
-	gi.cprintf (ent, PRINT_HIGH, "\n");
+    gi.cprintf(ent, PRINT_HIGH, "\n");
 }
 
 // Wipe both teams back to the server's configured names. The green copy is
 // rebuilt from the plain one by the same `+= 0x80` loop OSP_defaultTeam uses.
 // gamex86.dll: 1003B926..1003BAF5
 // gamei386.so: 000687D4..000689BE
-void OSP_teamReset (void)
+void OSP_teamReset(void)
 {
-	int			i;
+    int         i;
 
-	for (i = 0; i < 2; i++)
-	{
-		teams[i].osp_m0f8 = 0;
-		teams[i].osp_m0f4 = 0;
-		teams[i].osp_m0f0 = 0;
-		teams[i].osp_m100 = 0;
-		teams[i].osp_m0fc = 0;
-		teams[i].osp_m104 = 0;
-		teams[i].osp_m108 = 0;
-		teams[i].joincode[0] = 0;
-		teams[i].osp_m124 = 0;
-	}
+    for (i = 0; i < 2; i++) {
+        teams[i].osp_m0f8 = 0;
+        teams[i].osp_m0f4 = 0;
+        teams[i].osp_m0f0 = 0;
+        teams[i].osp_m100 = 0;
+        teams[i].osp_m0fc = 0;
+        teams[i].osp_m104 = 0;
+        teams[i].osp_m108 = 0;
+        teams[i].joincode[0] = 0;
+        teams[i].osp_m124 = 0;
+    }
 
-	strcpy (teams[0].netname, team_a_name->string);
-	strcpy (teams[0].greenname, team_a_name->string);
-	for (i = 0; i < strlen (teams[0].greenname); i++)
-		teams[0].greenname[i] += 128;
+    strcpy(teams[0].netname, team_a_name->string);
+    strcpy(teams[0].greenname, team_a_name->string);
+    for (i = 0; i < strlen(teams[0].greenname); i++)
+        teams[0].greenname[i] += 128;
 
-	strcpy (teams[1].netname, team_b_name->string);
-	strcpy (teams[1].greenname, team_b_name->string);
-	for (i = 0; i < strlen (teams[1].greenname); i++)
-		teams[1].greenname[i] += 128;
+    strcpy(teams[1].netname, team_b_name->string);
+    strcpy(teams[1].greenname, team_b_name->string);
+    for (i = 0; i < strlen(teams[1].greenname); i++)
+        teams[1].greenname[i] += 128;
 
-	if (m_mode == 2)
-	{
-		gi.cvar_set ("Score_A", "WARMUP");
-		gi.cvar_set ("Score_B", "WARMUP");
-	}
+    if (m_mode == 2) {
+        gi.cvar_set("Score_A", "WARMUP");
+        gi.cvar_set("Score_B", "WARMUP");
+    }
 }
 
 // End of match: announce the result, stamp teams[].osp_m124 with 1 = won,
@@ -1910,96 +1720,89 @@ void OSP_teamReset (void)
 // goes to the back of the queue instead.
 // gamex86.dll: 1003BAF5..1003BFAB
 // gamei386.so: 000689C0..00068DF4
-void OSP_findTeamWinner (void)
+void OSP_findTeamWinner(void)
 {
-	edict_t		*ent;
-	int			winpct;
-	int			loserpct;
-	int			order[2];	// [0] = winning team, [1] = losing team
+    edict_t     *ent;
+    int         winpct;
+    int         loserpct;
+    int         order[2];   // [0] = winning team, [1] = losing team
 
-	order[0] = 0;
-	order[1] = 1;
-	if (teams[0].osp_m0f8 < teams[1].osp_m0f8)
-	{
-		order[0] = 1;
-		order[1] = 0;
-	}
+    order[0] = 0;
+    order[1] = 1;
+    if (teams[0].osp_m0f8 < teams[1].osp_m0f8) {
+        order[0] = 1;
+        order[1] = 0;
+    }
 
-	if (teams[order[0]].osp_m0f8 < 1)
-		winpct = 0;
-	else if (!teams[order[0]].osp_m0fc ||
-			 !(teams[order[0]].osp_m0fc + teams[order[0]].osp_m0f8))
-		winpct = 100;
-	else
-		winpct = teams[order[0]].osp_m0f8 * 100 /
-				 (teams[order[0]].osp_m0fc + teams[order[0]].osp_m0f8);
+    if (teams[order[0]].osp_m0f8 < 1)
+        winpct = 0;
+    else if (!teams[order[0]].osp_m0fc ||
+             !(teams[order[0]].osp_m0fc + teams[order[0]].osp_m0f8))
+        winpct = 100;
+    else
+        winpct = teams[order[0]].osp_m0f8 * 100 /
+                 (teams[order[0]].osp_m0fc + teams[order[0]].osp_m0f8);
 
-	if (teams[order[1]].osp_m0f8 < 1)
-		loserpct = 0;
-	else if (!teams[order[1]].osp_m0fc ||
-			 !(teams[order[1]].osp_m0fc + teams[order[1]].osp_m0f8))
-		loserpct = 100;
-	else
-		loserpct = teams[order[1]].osp_m0f8 * 100 /
-				  (teams[order[1]].osp_m0fc + teams[order[1]].osp_m0f8);
+    if (teams[order[1]].osp_m0f8 < 1)
+        loserpct = 0;
+    else if (!teams[order[1]].osp_m0fc ||
+             !(teams[order[1]].osp_m0fc + teams[order[1]].osp_m0f8))
+        loserpct = 100;
+    else
+        loserpct = teams[order[1]].osp_m0f8 * 100 /
+                   (teams[order[1]].osp_m0fc + teams[order[1]].osp_m0f8);
 
-	if (teams[order[0]].osp_m0f8 > teams[order[1]].osp_m0f8)
-	{
-		teams[order[0]].osp_m124 = 1;
-		teams[order[1]].osp_m124 = 2;
-		gi.bprintf (PRINT_HIGH, "\n\n%s defeats %s: %d - %d\n\n",
-					teams[order[0]].netname, teams[order[1]].netname,
-					teams[order[0]].osp_m0f8, teams[order[1]].osp_m0f8);
-	}
-	else
-	{
-		teams[order[0]].osp_m124 = 4;
-		teams[order[1]].osp_m124 = 4;
-		gi.bprintf (PRINT_HIGH, "\n\nTied match! (%d to %d)\n\n",
-					teams[order[0]].osp_m0f8, teams[order[1]].osp_m0f8);
-	}
+    if (teams[order[0]].osp_m0f8 > teams[order[1]].osp_m0f8) {
+        teams[order[0]].osp_m124 = 1;
+        teams[order[1]].osp_m124 = 2;
+        gi.bprintf(PRINT_HIGH, "\n\n%s defeats %s: %d - %d\n\n",
+                   teams[order[0]].netname, teams[order[1]].netname,
+                   teams[order[0]].osp_m0f8, teams[order[1]].osp_m0f8);
+    } else {
+        teams[order[0]].osp_m124 = 4;
+        teams[order[1]].osp_m124 = 4;
+        gi.bprintf(PRINT_HIGH, "\n\nTied match! (%d to %d)\n\n",
+                   teams[order[0]].osp_m0f8, teams[order[1]].osp_m0f8);
+    }
 
-	if (m_mode == 2)
-	{
-		gi.bprintf (PRINT_HIGH, "Frt: Fratricides          F  S  E\n");
-		gi.bprintf (PRINT_HIGH, "EK : Enemy Kills       E  r  u  f\n");
-		gi.bprintf (PRINT_HIGH, " S : Score         S   K  t  i  f\n");
-		gi.bprintf (PRINT_HIGH, "====================================\n");
-		gi.bprintf (PRINT_HIGH, "%-16s %3d %3d %2d %2d %d%%\n",
-					teams[order[0]].netname, teams[order[0]].osp_m0f8,
-					teams[order[0]].osp_m100, teams[order[0]].osp_m104,
-					teams[order[0]].osp_m108, winpct);
-		gi.bprintf (PRINT_HIGH, "%-16s %3d %3d %2d %2d %d%%\n\n",
-					teams[order[1]].netname, teams[order[1]].osp_m0f8,
-					teams[order[1]].osp_m100, teams[order[1]].osp_m104,
-					teams[order[1]].osp_m108, loserpct);
-		return;
-	}
+    if (m_mode == 2) {
+        gi.bprintf(PRINT_HIGH, "Frt: Fratricides          F  S  E\n");
+        gi.bprintf(PRINT_HIGH, "EK : Enemy Kills       E  r  u  f\n");
+        gi.bprintf(PRINT_HIGH, " S : Score         S   K  t  i  f\n");
+        gi.bprintf(PRINT_HIGH, "====================================\n");
+        gi.bprintf(PRINT_HIGH, "%-16s %3d %3d %2d %2d %d%%\n",
+                   teams[order[0]].netname, teams[order[0]].osp_m0f8,
+                   teams[order[0]].osp_m100, teams[order[0]].osp_m104,
+                   teams[order[0]].osp_m108, winpct);
+        gi.bprintf(PRINT_HIGH, "%-16s %3d %3d %2d %2d %d%%\n\n",
+                   teams[order[1]].netname, teams[order[1]].osp_m0f8,
+                   teams[order[1]].osp_m100, teams[order[1]].osp_m104,
+                   teams[order[1]].osp_m108, loserpct);
+        return;
+    }
 
-	gi.bprintf (PRINT_HIGH, "Sui: Suicides            S  E\n");
-	gi.bprintf (PRINT_HIGH, " EK: Enemy Kills      E  u  f\n");
-	gi.bprintf (PRINT_HIGH, "  S: Score        S   K  i  f\n");
-	gi.bprintf (PRINT_HIGH, "================================\n");
-	gi.bprintf (PRINT_HIGH, "%-15s %3d %3d %2d %d%%\n",
-				teams[order[0]].netname, teams[order[0]].osp_m0f8,
-				teams[order[0]].osp_m100, teams[order[0]].osp_m108, winpct);
-	gi.bprintf (PRINT_HIGH, "%-15s %3d %3d %2d %d%%\n\n",
-				teams[order[1]].netname, teams[order[1]].osp_m0f8,
-				teams[order[1]].osp_m100, teams[order[1]].osp_m108, loserpct);
+    gi.bprintf(PRINT_HIGH, "Sui: Suicides            S  E\n");
+    gi.bprintf(PRINT_HIGH, " EK: Enemy Kills      E  u  f\n");
+    gi.bprintf(PRINT_HIGH, "  S: Score        S   K  i  f\n");
+    gi.bprintf(PRINT_HIGH, "================================\n");
+    gi.bprintf(PRINT_HIGH, "%-15s %3d %3d %2d %d%%\n",
+               teams[order[0]].netname, teams[order[0]].osp_m0f8,
+               teams[order[0]].osp_m100, teams[order[0]].osp_m108, winpct);
+    gi.bprintf(PRINT_HIGH, "%-15s %3d %3d %2d %d%%\n\n",
+               teams[order[1]].netname, teams[order[1]].osp_m0f8,
+               teams[order[1]].osp_m100, teams[order[1]].osp_m108, loserpct);
 
-	for (winpct = 1; winpct <= game.maxclients; winpct++)
-	{
-		ent = g_edicts + winpct;
-		if (!ent->inuse || !ent->client)
-			continue;
+    for (winpct = 1; winpct <= game.maxclients; winpct++) {
+        ent = g_edicts + winpct;
+        if (!ent->inuse || !ent->client)
+            continue;
 
-		if (ent->client->resp.team == order[1] &&
-			ent->client->resp.entered == ENTERED_ENTERED)
-		{
-			OSP_1v1Remove (ent, 2);
-			return;
-		}
-	}
+        if (ent->client->resp.team == order[1] &&
+            ent->client->resp.entered == ENTERED_ENTERED) {
+            OSP_1v1Remove(ent, 2);
+            return;
+        }
+    }
 }
 
 // A tied match: mode 1 is sudden death straight away, mode 2 always adds time,
@@ -2007,53 +1810,50 @@ void OSP_findTeamWinner (void)
 // falls back to sudden death. `frag_offset` is what makes the next frag win.
 // gamex86.dll: 1003BFAB..1003C185
 // gamei386.so: 00068DF4..0006910B
-qboolean OSP_overtimeWork (int count)
+bool OSP_overtimeWork(int count)
 {
-	if (!(int)team_overtime_mode->value)
-		return false;
+    if (!(int)team_overtime_mode->value)
+        return false;
 
-	if ((int)team_overtime_mode->value == 1)
-	{
-		frag_offset = teams[0].osp_m0f8 + 1;
-		gi.bprintf (PRINT_HIGH, "Tied match!! Sudden Death mode in effect!!!\n");
-		return true;
-	}
+    if ((int)team_overtime_mode->value == 1) {
+        frag_offset = teams[0].osp_m0f8 + 1;
+        gi.bprintf(PRINT_HIGH, "Tied match!! Sudden Death mode in effect!!!\n");
+        return true;
+    }
 
-	if ((int)team_overtime_mode->value == 2)
-	{
-		overtime_timer += (int)team_overtime_time->value;
-		gi.bprintf (PRINT_HIGH, "Tied match!! %d minutes added to time!\n",
-					(int)team_overtime_time->value);
+    if ((int)team_overtime_mode->value == 2) {
+        overtime_timer += (int)team_overtime_time->value;
+        gi.bprintf(PRINT_HIGH, "Tied match!! %d minutes added to time!\n",
+                   (int)team_overtime_time->value);
 
-		if ((int)team_overtime_time->value >= 1)
-			start_count = 3;
-		if ((int)team_overtime_time->value >= 5)
-			start_count = 1;
-		if ((int)team_overtime_time->value >= 10)
-			start_count = 0;
+        if ((int)team_overtime_time->value >= 1)
+            start_count = 3;
+        if ((int)team_overtime_time->value >= 5)
+            start_count = 1;
+        if ((int)team_overtime_time->value >= 10)
+            start_count = 0;
 
-		return true;
-	}
+        return true;
+    }
 
-	if (count >= (int)team_overtime_count->value)
-	{
-		frag_offset = teams[0].osp_m0f8 + 1;
-		gi.bprintf (PRINT_HIGH, "Tied match!! Sudden Death mode now in effect!!!\n");
-		return true;
-	}
+    if (count >= (int)team_overtime_count->value) {
+        frag_offset = teams[0].osp_m0f8 + 1;
+        gi.bprintf(PRINT_HIGH, "Tied match!! Sudden Death mode now in effect!!!\n");
+        return true;
+    }
 
-	overtime_timer += (int)team_overtime_time->value;
-	gi.bprintf (PRINT_HIGH, "Tied match!! %d minutes added to time!\n",
-				(int)team_overtime_time->value);
+    overtime_timer += (int)team_overtime_time->value;
+    gi.bprintf(PRINT_HIGH, "Tied match!! %d minutes added to time!\n",
+               (int)team_overtime_time->value);
 
-	if ((int)team_overtime_time->value >= 1)
-		start_count = 3;
-	if ((int)team_overtime_time->value >= 5)
-		start_count = 1;
-	if ((int)team_overtime_time->value >= 10)
-		start_count = 0;
+    if ((int)team_overtime_time->value >= 1)
+        start_count = 3;
+    if ((int)team_overtime_time->value >= 5)
+        start_count = 1;
+    if ((int)team_overtime_time->value >= 10)
+        start_count = 0;
 
-	return true;
+    return true;
 }
 
 //=============================================================================
@@ -2075,7 +1875,7 @@ qboolean OSP_overtimeWork (int count)
 // now reports RUNES instead.  %r and %t are two separate case bodies with
 // identical contents.
 
-static edict_t *loc_findradius (edict_t *from, vec3_t org, float rad);
+static edict_t *loc_findradius(edict_t *from, vec3_t org, float rad);
 
 // The team scoreboard, small-roster variant.  With more than six players in
 // the game it hands straight over to OSP_showBIGTeamScores, which is the same
@@ -2089,346 +1889,321 @@ static edict_t *loc_findradius (edict_t *from, vec3_t org, float rad);
 // keys: score descending, then deaths and suicides ascending.
 // gamex86.dll: 1003C185..1003D40E
 // gamei386.so: 0006910C..0006A3A6
-void OSP_showTeamScores (edict_t *ent)
+void OSP_showTeamScores(edict_t *ent)
 {
-	int			rank[2][256];
-	int			pscore[2][256];
-	int			viewers[256];
-	char		rowline[200];
-	char		str[256];
-	char		temp[1024];
-	char		buf[1400];
-	char		time[32];
-	int			tarr[2];
-	int			count[2];
-	int			i;
-	int			eff;
-	int			nframes;
-	int			m;
-	int			y;
-	int			sideno;
-	int			kk;
-	int			basey;
-	int			cscore;
-	int			obscount;
-	int			size;
-	gclient_t	*cl;
-	edict_t		*player;
+    int         rank[2][256];
+    int         pscore[2][256];
+    int         viewers[256];
+    char        rowline[200];
+    char        str[256];
+    char        temp[1024];
+    char        buf[1400];
+    char        time[32];
+    int         tarr[2];
+    int         count[2];
+    int         i;
+    int         eff;
+    int         nframes;
+    int         m;
+    int         y;
+    int         sideno;
+    int         kk;
+    int         basey;
+    int         cscore;
+    int         obscount;
+    int         size;
+    gclient_t   *cl;
+    edict_t     *player;
 
-	y = 0;
-	obscount = 0;
-	size = 0;
+    y = 0;
+    obscount = 0;
+    size = 0;
 
-	if (active_clients > 6)
-	{
-		OSP_showBIGTeamScores (ent);
-		return;
-	}
+    if (active_clients > 6) {
+        OSP_showBIGTeamScores(ent);
+        return;
+    }
 
-	tarr[0] = 0;
-	tarr[1] = 1;
+    tarr[0] = 0;
+    tarr[1] = 1;
 
-	for (sideno = 0; sideno < 2; sideno++)
-	{
-		count[sideno] = 0;
+    for (sideno = 0; sideno < 2; sideno++) {
+        count[sideno] = 0;
 
-		for (i = 0; i <= game.maxclients; i++)
-		{
-			player = g_edicts + 1 + i;
+        for (i = 0; i <= game.maxclients; i++) {
+            player = g_edicts + 1 + i;
 
-			if (!player->inuse || !player->client)
-				continue;
+            if (!player->inuse || !player->client)
+                continue;
 
-			// observers are collected once, on the first team's pass
-			if (!sideno && player->client->resp.entered != ENTERED_ENTERED)
-			{
-				viewers[obscount] = i;
-				obscount++;
-				continue;
-			}
+            // observers are collected once, on the first team's pass
+            if (!sideno && player->client->resp.entered != ENTERED_ENTERED) {
+                viewers[obscount] = i;
+                obscount++;
+                continue;
+            }
 
-			if (player->client->resp.team != tarr[sideno])
-				continue;
+            if (player->client->resp.team != tarr[sideno])
+                continue;
 
-			cscore = game.clients[i].resp.score;
+            cscore = game.clients[i].resp.score;
 
-			for (kk = 0; kk < count[sideno]; kk++)
-			{
-				if (cscore > pscore[sideno][kk])
-					break;
-				if (cscore == pscore[sideno][kk])
-				{
-					if (game.clients[i].resp.osp_r014 < game.clients[rank[sideno][kk]].resp.osp_r014)
-						break;
-					if (game.clients[i].resp.osp_r014 == game.clients[rank[sideno][kk]].resp.osp_r014 &&
-						game.clients[i].resp.osp_r2c0 < game.clients[rank[sideno][kk]].resp.osp_r2c0)
-						break;
-				}
-			}
+            for (kk = 0; kk < count[sideno]; kk++) {
+                if (cscore > pscore[sideno][kk])
+                    break;
+                if (cscore == pscore[sideno][kk]) {
+                    if (game.clients[i].resp.osp_r014 < game.clients[rank[sideno][kk]].resp.osp_r014)
+                        break;
+                    if (game.clients[i].resp.osp_r014 == game.clients[rank[sideno][kk]].resp.osp_r014 &&
+                        game.clients[i].resp.osp_r2c0 < game.clients[rank[sideno][kk]].resp.osp_r2c0)
+                        break;
+                }
+            }
 
-			for (m = count[sideno]; m > kk; m--)
-			{
-				rank[sideno][m] = rank[sideno][m - 1];
-				pscore[sideno][m] = pscore[sideno][m - 1];
-			}
+            for (m = count[sideno]; m > kk; m--) {
+                rank[sideno][m] = rank[sideno][m - 1];
+                pscore[sideno][m] = pscore[sideno][m - 1];
+            }
 
-			rank[sideno][kk] = i;
-			pscore[sideno][kk] = cscore;
-			count[sideno]++;
-		}
+            rank[sideno][kk] = i;
+            pscore[sideno][kk] = cscore;
+            count[sideno]++;
+        }
 
-		for (i = 0; i < count[sideno]; i++)
-		{
-			player = g_edicts + 1 + rank[sideno][i];
-			player->client->resp.osp_r208 = i + 1;
-		}
-	}
+        for (i = 0; i < count[sideno]; i++) {
+            player = g_edicts + 1 + rank[sideno][i];
+            player->client->resp.osp_r208 = i + 1;
+        }
+    }
 
-	buf[0] = 0;
+    buf[0] = 0;
 
-	if ((int)gi.cvar ("nglog_worldstats", "0", 0)->value)
-		ent->client->ps.stats[28] = 0x62b;
+    if ((int)gi.cvar("nglog_worldstats", "0", 0)->value)
+        ent->client->ps.stats[28] = 0x62b;
 
-	if (level.intermissiontime != 0)
-		ent->client->ps.stats[27] = 0x62a;
-	else
-		ent->client->ps.stats[27] = 0x629;
+    if (level.intermission_framenum != 0)
+        ent->client->ps.stats[27] = 0x62a;
+    else
+        ent->client->ps.stats[27] = 0x629;
 
-	size = strlen (buf);
-	basey = 0;
+    size = strlen(buf);
+    basey = 0;
 
-	for (sideno = 0; sideno < 2; sideno++)
-	{
-		if (count[sideno] > 4)
-			count[sideno] = 4;
+    for (sideno = 0; sideno < 2; sideno++) {
+        if (count[sideno] > 4)
+            count[sideno] = 4;
 
-		for (i = 0; i < count[sideno]; i++)
-		{
-			cl = game.clients + rank[sideno][i];
-			player = g_edicts + 1 + rank[sideno][i];
-			y = basey + i * 8;
+        for (i = 0; i < count[sideno]; i++) {
+            cl = game.clients + rank[sideno][i];
+            player = g_edicts + 1 + rank[sideno][i];
+            y = basey + i * 8;
 
-			if (i == 3 && ent->client->resp.team == sideno &&
-				ent->client->resp.osp_r208 > 4)
-			{
-				player = ent;
-				cl = ent->client;
-				y += 2;
-				i = cl->resp.osp_r208 - 1;
-			}
+            if (i == 3 && ent->client->resp.team == sideno &&
+                ent->client->resp.osp_r208 > 4) {
+                player = ent;
+                cl = ent->client;
+                y += 2;
+                i = cl->resp.osp_r208 - 1;
+            }
 
-			if (cl->resp.enterframe < sync_frame)
-				nframes = level.framenum - sync_frame + 1;
-			else
-				nframes = level.framenum - cl->resp.enterframe + 1;
+            if (cl->resp.enterframe < sync_frame)
+                nframes = level.framenum - sync_frame + 1;
+            else
+                nframes = level.framenum - cl->resp.enterframe + 1;
 
-			if (nframes < 1)
-				nframes = 1;
+            if (nframes < 1)
+                nframes = 1;
 
-			if (cl->resp.score < 1)
-				eff = 0;
-			else if (!cl->resp.osp_r014 ||
-					 !(cl->resp.osp_r014 + cl->resp.score))
-				eff = 100;
-			else
-				eff = cl->resp.score * 100 /
-					  (cl->resp.score + cl->resp.osp_r014);
+            if (cl->resp.score < 1)
+                eff = 0;
+            else if (!cl->resp.osp_r014 ||
+                     !(cl->resp.osp_r014 + cl->resp.score))
+                eff = 100;
+            else
+                eff = cl->resp.score * 100 /
+                      (cl->resp.score + cl->resp.osp_r014);
 
-			// The team card is emitted once, above the first rowline.
-			if (!i)
-			{
-				sprintf (rowline, "%i", teams[tarr[sideno]].osp_m0f8);
-				for (m = 0; m < strlen (rowline); m++)
-					rowline[m] += 128;
+            // The team card is emitted once, above the first rowline.
+            if (!i) {
+                sprintf(rowline, "%i", teams[tarr[sideno]].osp_m0f8);
+                for (m = 0; m < strlen(rowline); m++)
+                    rowline[m] += 128;
 
-				if (level.intermissiontime == 0 || sideno)
-				{
-					Com_sprintf (temp, 1024,
-						"client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
-						"yv %i string2 \"Score: %s\"yv %i string2 \"Blunders: %i\""
-						"yv %i string2 \"# Players: %i\"",
-						basey - 16, rank[sideno][i], 0, 0, 0,
-						teams[tarr[sideno]].netname, basey - 8, rowline,
-						basey, teams[tarr[sideno]].osp_m104 + teams[tarr[sideno]].osp_m108,
-						basey + 8, OSP_teamCount (tarr[sideno]));
+                if (level.intermission_framenum == 0 || sideno) {
+                    Q_snprintf(temp, 1024,
+                               "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
+                               "yv %i string2 \"Score: %s\"yv %i string2 \"Blunders: %i\""
+                               "yv %i string2 \"# Players: %i\"",
+                               basey - 16, rank[sideno][i], 0, 0, 0,
+                               teams[tarr[sideno]].netname, basey - 8, rowline,
+                               basey, teams[tarr[sideno]].osp_m104 + teams[tarr[sideno]].osp_m108,
+                               basey + 8, OSP_teamCount(tarr[sideno]));
 
-					y += 26;
-					basey += 26;
-				}
-				else
-				{
-					OSP_getDateInfo (time);
+                    y += 26;
+                    basey += 26;
+                } else {
+                    OSP_getDateInfo(time);
 
-					if (manual_map == 1)
-						sprintf (str, "[ Voted map change ]");
-					else if (manual_map == 2)
-						sprintf (str, "[ Voted server config change ]");
-					else if (teams[0].osp_m124 == 1)
-						sprintf (str, "[ %s defeats %s: %d to %d ]",
-								 teams[0].greenname, teams[1].greenname,
-								 teams[0].osp_m0f8, teams[1].osp_m0f8);
-					else if (teams[1].osp_m124 == 1)
-						sprintf (str, "[ %s defeats %s: %d to %d ]",
-								 teams[1].greenname, teams[0].greenname,
-								 teams[1].osp_m0f8, teams[0].osp_m0f8);
-					else
-						sprintf (str, "[ Tied match! (%d to %d) ]",
-								 teams[1].osp_m0f8, teams[0].osp_m0f8);
+                    if (manual_map == 1)
+                        sprintf(str, "[ Voted map change ]");
+                    else if (manual_map == 2)
+                        sprintf(str, "[ Voted server config change ]");
+                    else if (teams[0].osp_m124 == 1)
+                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                                teams[0].greenname, teams[1].greenname,
+                                teams[0].osp_m0f8, teams[1].osp_m0f8);
+                    else if (teams[1].osp_m124 == 1)
+                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                                teams[1].greenname, teams[0].greenname,
+                                teams[1].osp_m0f8, teams[0].osp_m0f8);
+                    else
+                        sprintf(str, "[ Tied match! (%d to %d) ]",
+                                teams[1].osp_m0f8, teams[0].osp_m0f8);
 
-					Com_sprintf (temp, 1024,
-						"client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
-						"yv %i string2 \"Score: %s\"yv %i string2 \"Blunders: %i\""
-						"yv %i string2 \"# Players: %i\""
-						"xv 0 yv -43 cstring2 \"%s\"yv -25 cstring2 \"%s\"",
-						basey - 16, rank[sideno][i], 0, 0, 0,
-						teams[tarr[sideno]].netname, basey - 8, rowline,
-						basey, teams[tarr[sideno]].osp_m104 + teams[tarr[sideno]].osp_m108,
-						basey + 8, OSP_teamCount (tarr[sideno]), str, time);
+                    Q_snprintf(temp, 1024,
+                               "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
+                               "yv %i string2 \"Score: %s\"yv %i string2 \"Blunders: %i\""
+                               "yv %i string2 \"# Players: %i\""
+                               "xv 0 yv -43 cstring2 \"%s\"yv -25 cstring2 \"%s\"",
+                               basey - 16, rank[sideno][i], 0, 0, 0,
+                               teams[tarr[sideno]].netname, basey - 8, rowline,
+                               basey, teams[tarr[sideno]].osp_m104 + teams[tarr[sideno]].osp_m108,
+                               basey + 8, OSP_teamCount(tarr[sideno]), str, time);
 
-					y += 26;
-					basey += 26;
-				}
+                    y += 26;
+                    basey += 26;
+                }
 
-				kk = strlen (temp);
-				strcpy (buf + size, temp);
-				size += kk;
+                kk = strlen(temp);
+                strcpy(buf + size, temp);
+                size += kk;
 
-				if (level.intermissiontime != 0 && sync_stat > 2)
-					Com_sprintf (temp, 1024,
-						"xv 120 yv %i string \"Frg Dth Frt Su Eff%% Ping\"xv -16 ",
-						y);
-				else if (sync_stat == 4)
-					Com_sprintf (temp, 1024,
-						"xv 24 yv %i string \"Player          Frags Deaths Ping\"xv 8 ",
-						y);
-				else
-					Com_sprintf (temp, 1024,
-						"xv 8 yv %i string \"Player          MATCH_STATUS Time Ping\"xv 8 ",
-						y);
+                if (level.intermission_framenum != 0 && sync_stat > 2)
+                    Q_snprintf(temp, 1024,
+                               "xv 120 yv %i string \"Frg Dth Frt Su Eff%% Ping\"xv -16 ",
+                               y);
+                else if (sync_stat == 4)
+                    Q_snprintf(temp, 1024,
+                               "xv 24 yv %i string \"Player          Frags Deaths Ping\"xv 8 ",
+                               y);
+                else
+                    Q_snprintf(temp, 1024,
+                               "xv 8 yv %i string \"Player          MATCH_STATUS Time Ping\"xv 8 ",
+                               y);
 
-				y += 8;
-				basey += 8;
-				kk = strlen (temp);
-				strcpy (buf + size, temp);
-				size += kk;
-			}
+                y += 8;
+                basey += 8;
+                kk = strlen(temp);
+                strcpy(buf + size, temp);
+                size += kk;
+            }
 
-			if (sync_stat > 2)
-			{
-				if (level.intermissiontime != 0)
-					sprintf (rowline, "%-16s%4i%4i%4i%3i%4i%%%5i",
-							 cl->pers.netname, cl->resp.score,
-							 cl->resp.osp_r014, cl->resp.osp_r028,
-							 cl->resp.osp_r2c0, eff, cl->ping);
-				else
-					sprintf (rowline, "%i %-16s%4i   %3i   %4i", i + 1,
-							 cl->pers.netname, cl->resp.score,
-							 cl->resp.osp_r014, cl->ping);
+            if (sync_stat > 2) {
+                if (level.intermission_framenum != 0)
+                    sprintf(rowline, "%-16s%4i%4i%4i%3i%4i%%%5i",
+                            cl->pers.netname, cl->resp.score,
+                            cl->resp.osp_r014, cl->resp.osp_r028,
+                            cl->resp.osp_r2c0, eff, cl->ping);
+                else
+                    sprintf(rowline, "%i %-16s%4i   %3i   %4i", i + 1,
+                            cl->pers.netname, cl->resp.score,
+                            cl->resp.osp_r014, cl->ping);
 
-				if (player != ent)
-					Com_sprintf (temp, 1024, "yv %i string2 \"%s\"", y, rowline);
-				else
-					Com_sprintf (temp, 1024, "yv %i string \"%s\"", y, rowline);
-			}
-			else if (cl->resp.osp_r20c)
-			{
-				sprintf (rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
-						 nframes / 600, cl->ping);
-				Com_sprintf (temp, 1024, "yv %i string \"%s\"", y, rowline);
-			}
-			else
-			{
-				sprintf (rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
-						 nframes / 600, cl->ping);
-				Com_sprintf (temp, 1024, "yv %i string2 \"%s\"", y, rowline);
-			}
+                if (player != ent)
+                    Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+                else
+                    Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+            } else if (cl->resp.osp_r20c) {
+                sprintf(rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
+                        nframes / 600, cl->ping);
+                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+            } else {
+                sprintf(rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
+                        nframes / 600, cl->ping);
+                Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+            }
 
-			kk = strlen (temp);
-			if (size + kk > sizeof (buf))
-				break;
+            kk = strlen(temp);
+            if (size + kk > sizeof(buf))
+                break;
 
-			strcpy (buf + size, temp);
-			size += kk;
-		}
+            strcpy(buf + size, temp);
+            size += kk;
+        }
 
-		if (OSP_teamCount (tarr[sideno]) > 1 && level.intermissiontime != 0)
-		{
-			if (OSP_teamCount (0) + OSP_teamCount (1) < 8 &&
-				sync_stat > 2)
-			{
-				y += 11;
+        if (OSP_teamCount(tarr[sideno]) > 1 && level.intermission_framenum != 0) {
+            if (OSP_teamCount(0) + OSP_teamCount(1) < 8 &&
+                sync_stat > 2) {
+                y += 11;
 
-				if (teams[tarr[sideno]].osp_m0f8 < 1)
-					eff = 0;
-				else if (teams[tarr[sideno]].osp_m0fc == 0 ||
-						 teams[tarr[sideno]].osp_m0f8 + teams[tarr[sideno]].osp_m0fc == 0)
-					eff = 100;
-				else
-					eff = teams[tarr[sideno]].osp_m0f8 * 100 /
-						  (teams[tarr[sideno]].osp_m0f8 + teams[tarr[sideno]].osp_m0fc);
+                if (teams[tarr[sideno]].osp_m0f8 < 1)
+                    eff = 0;
+                else if (teams[tarr[sideno]].osp_m0fc == 0 ||
+                         teams[tarr[sideno]].osp_m0f8 + teams[tarr[sideno]].osp_m0fc == 0)
+                    eff = 100;
+                else
+                    eff = teams[tarr[sideno]].osp_m0f8 * 100 /
+                          (teams[tarr[sideno]].osp_m0f8 + teams[tarr[sideno]].osp_m0fc);
 
-				sprintf (rowline, " *** TOTALS:    %4i %3i  %2i %2i %3i%%",
-						 teams[tarr[sideno]].osp_m0f8, teams[tarr[sideno]].osp_m0fc,
-						 teams[tarr[sideno]].osp_m104, teams[tarr[sideno]].osp_m108, eff);
-				Com_sprintf (temp, 1024, "yv %i string \"%s\"", y, rowline);
+                sprintf(rowline, " *** TOTALS:    %4i %3i  %2i %2i %3i%%",
+                        teams[tarr[sideno]].osp_m0f8, teams[tarr[sideno]].osp_m0fc,
+                        teams[tarr[sideno]].osp_m104, teams[tarr[sideno]].osp_m108, eff);
+                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
 
-				kk = strlen (temp);
-				if (size + kk > sizeof (buf))
-					break;
+                kk = strlen(temp);
+                if (size + kk > sizeof(buf))
+                    break;
 
-				strcpy (buf + size, temp);
-				size += kk;
-			}
-		}
+                strcpy(buf + size, temp);
+                size += kk;
+            }
+        }
 
-		basey = y + 40;
-	}
+        basey = y + 40;
+    }
 
-	if (active_clients < 8)
-	{
-		y += 24;
+    if (active_clients < 8) {
+        y += 24;
 
-		for (i = 0; i < obscount; i++)
-		{
-			player = g_edicts + 1 + viewers[i];
+        for (i = 0; i < obscount; i++) {
+            player = g_edicts + 1 + viewers[i];
 
-			if (!i)
-			{
-				Com_sprintf (temp, 1024,
-					"xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
+            if (!i) {
+                Q_snprintf(temp, 1024,
+                           "xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
 
-				kk = strlen (temp);
-				if (size + kk > sizeof (buf))
-					break;
+                kk = strlen(temp);
+                if (size + kk > sizeof(buf))
+                    break;
 
-				strcpy (buf + size, temp);
-				size += kk;
-				y += 12;
-			}
+                strcpy(buf + size, temp);
+                size += kk;
+                y += 12;
+            }
 
-			if (player->osp_e39c)
-				Com_sprintf (temp, 1024, "yv %i string2 \"[Ref]%s (p:%d)\"", y,
-							 player->client->pers.netname, player->client->ping);
-			else
-				Com_sprintf (temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
-							 player->client->pers.netname, player->client->ping);
+            if (player->osp_e39c)
+                Q_snprintf(temp, 1024, "yv %i string2 \"[Ref]%s (p:%d)\"", y,
+                           player->client->pers.netname, player->client->ping);
+            else
+                Q_snprintf(temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
+                           player->client->pers.netname, player->client->ping);
 
-			kk = strlen (temp);
-			if (size + kk > sizeof (buf))
-				break;
+            kk = strlen(temp);
+            if (size + kk > sizeof(buf))
+                break;
 
-			strcpy (buf + size, temp);
-			size += kk;
-			y += 8;
-		}
-	}
+            strcpy(buf + size, temp);
+            size += kk;
+            y += 8;
+        }
+    }
 
-	gi.WriteByte (svc_layout);
-	gi.WriteString (buf);
+    gi.WriteByte(svc_layout);
+    gi.WriteString(buf);
 
-	if (level.intermissiontime != 0 &&
-		ent->client->resp.entered == ENTERED_ENTERED)
-		strcpy (old_scores, buf);
+    if (level.intermission_framenum != 0 &&
+        ent->client->resp.entered == ENTERED_ENTERED)
+        strcpy(old_scores, buf);
 }
 
 // The team scoreboard, large-roster variant -- reached ONLY from
@@ -2440,318 +2215,294 @@ void OSP_showTeamScores (edict_t *ent)
 // row 5 with a rank threshold of 6.
 // gamex86.dll: 1003D40E..1003E45F
 // gamei386.so: 0006A3A8..0006B3B6
-void OSP_showBIGTeamScores (edict_t *ent)
+void OSP_showBIGTeamScores(edict_t *ent)
 {
-	int			rank[2][256];
-	int			pscore[2][256];
-	int			viewers[256];
-	char		rowline[512];
-	char		str[256];
-	char		temp[1024];
-	char		buf[1400];
-	char		time[32];
-	int			tarr[2];
-	int			count[2];
-	int			i;
-	int			nframes;
-	int			m;
-	int			y;
-	int			sideno;
-	int			kk;
-	int			basey;
-	int			cscore;	/* invented: insertion-sort score snapshot */
-	int			obscount;
-	int			size;
-	gclient_t	*cl;
-	edict_t		*player;
+    int         rank[2][256];
+    int         pscore[2][256];
+    int         viewers[256];
+    char        rowline[512];
+    char        str[256];
+    char        temp[1024];
+    char        buf[1400];
+    char        time[32];
+    int         tarr[2];
+    int         count[2];
+    int         i;
+    int         nframes;
+    int         m;
+    int         y;
+    int         sideno;
+    int         kk;
+    int         basey;
+    int         cscore; /* invented: insertion-sort score snapshot */
+    int         obscount;
+    int         size;
+    gclient_t   *cl;
+    edict_t     *player;
 
-	y = 0;
-	obscount = 0;
-	size = 0;
+    y = 0;
+    obscount = 0;
+    size = 0;
 
-	tarr[0] = 0;
-	tarr[1] = 1;
+    tarr[0] = 0;
+    tarr[1] = 1;
 
-	for (sideno = 0; sideno < 2; sideno++)
-	{
-		count[sideno] = 0;
+    for (sideno = 0; sideno < 2; sideno++) {
+        count[sideno] = 0;
 
-		for (i = 0; i <= game.maxclients; i++)
-		{
-			player = g_edicts + 1 + i;
+        for (i = 0; i <= game.maxclients; i++) {
+            player = g_edicts + 1 + i;
 
-			if (!player->inuse || !player->client)
-				continue;
+            if (!player->inuse || !player->client)
+                continue;
 
-			// observers are collected once, on the first team's pass
-			if (!sideno && player->client->resp.entered != ENTERED_ENTERED)
-			{
-				viewers[obscount] = i;
-				obscount++;
-				continue;
-			}
+            // observers are collected once, on the first team's pass
+            if (!sideno && player->client->resp.entered != ENTERED_ENTERED) {
+                viewers[obscount] = i;
+                obscount++;
+                continue;
+            }
 
-			if (player->client->resp.team != tarr[sideno])
-				continue;
+            if (player->client->resp.team != tarr[sideno])
+                continue;
 
-			cscore = game.clients[i].resp.score;
+            cscore = game.clients[i].resp.score;
 
-			for (kk = 0; kk < count[sideno]; kk++)
-			{
-				if (cscore > pscore[sideno][kk])
-					break;
-				if (cscore == pscore[sideno][kk])
-				{
-					if (game.clients[i].resp.osp_r014 < game.clients[rank[sideno][kk]].resp.osp_r014)
-						break;
-					if (game.clients[i].resp.osp_r014 == game.clients[rank[sideno][kk]].resp.osp_r014 &&
-						game.clients[i].resp.osp_r2c0 < game.clients[rank[sideno][kk]].resp.osp_r2c0)
-						break;
-				}
-			}
+            for (kk = 0; kk < count[sideno]; kk++) {
+                if (cscore > pscore[sideno][kk])
+                    break;
+                if (cscore == pscore[sideno][kk]) {
+                    if (game.clients[i].resp.osp_r014 < game.clients[rank[sideno][kk]].resp.osp_r014)
+                        break;
+                    if (game.clients[i].resp.osp_r014 == game.clients[rank[sideno][kk]].resp.osp_r014 &&
+                        game.clients[i].resp.osp_r2c0 < game.clients[rank[sideno][kk]].resp.osp_r2c0)
+                        break;
+                }
+            }
 
-			for (m = count[sideno]; m > kk; m--)
-			{
-				rank[sideno][m] = rank[sideno][m - 1];
-				pscore[sideno][m] = pscore[sideno][m - 1];
-			}
+            for (m = count[sideno]; m > kk; m--) {
+                rank[sideno][m] = rank[sideno][m - 1];
+                pscore[sideno][m] = pscore[sideno][m - 1];
+            }
 
-			rank[sideno][kk] = i;
-			pscore[sideno][kk] = cscore;
-			count[sideno]++;
-		}
+            rank[sideno][kk] = i;
+            pscore[sideno][kk] = cscore;
+            count[sideno]++;
+        }
 
-		for (i = 0; i < count[sideno]; i++)
-		{
-			player = g_edicts + 1 + rank[sideno][i];
-			player->client->resp.osp_r208 = i + 1;
-		}
-	}
+        for (i = 0; i < count[sideno]; i++) {
+            player = g_edicts + 1 + rank[sideno][i];
+            player->client->resp.osp_r208 = i + 1;
+        }
+    }
 
-	buf[0] = 0;
+    buf[0] = 0;
 
-	if ((int)gi.cvar ("nglog_worldstats", "0", 0)->value)
-		ent->client->ps.stats[28] = 0x62b;
+    if ((int)gi.cvar("nglog_worldstats", "0", 0)->value)
+        ent->client->ps.stats[28] = 0x62b;
 
-	if (level.intermissiontime != 0)
-		ent->client->ps.stats[27] = 0x62a;
-	else
-		ent->client->ps.stats[27] = 0x629;
+    if (level.intermission_framenum != 0)
+        ent->client->ps.stats[27] = 0x62a;
+    else
+        ent->client->ps.stats[27] = 0x629;
 
-	size = strlen (buf);
-	basey = 0;
+    size = strlen(buf);
+    basey = 0;
 
-	for (sideno = 0; sideno < 2; sideno++)
-	{
-		if (count[sideno] > 6)
-			count[sideno] = 6;
+    for (sideno = 0; sideno < 2; sideno++) {
+        if (count[sideno] > 6)
+            count[sideno] = 6;
 
-		for (i = 0; i < count[sideno]; i++)
-		{
-			cl = game.clients + rank[sideno][i];
-			player = g_edicts + 1 + rank[sideno][i];
-			y = basey + i * 8;
+        for (i = 0; i < count[sideno]; i++) {
+            cl = game.clients + rank[sideno][i];
+            player = g_edicts + 1 + rank[sideno][i];
+            y = basey + i * 8;
 
-			if (i == 5 && ent->client->resp.team == sideno &&
-				ent->client->resp.osp_r208 > 6)
-			{
-				player = ent;
-				cl = ent->client;
-				y += 2;
-				i = cl->resp.osp_r208 - 1;
-			}
+            if (i == 5 && ent->client->resp.team == sideno &&
+                ent->client->resp.osp_r208 > 6) {
+                player = ent;
+                cl = ent->client;
+                y += 2;
+                i = cl->resp.osp_r208 - 1;
+            }
 
-			if (cl->resp.enterframe < sync_frame)
-				nframes = level.framenum - sync_frame + 1;
-			else
-				nframes = level.framenum - cl->resp.enterframe + 1;
+            if (cl->resp.enterframe < sync_frame)
+                nframes = level.framenum - sync_frame + 1;
+            else
+                nframes = level.framenum - cl->resp.enterframe + 1;
 
-			if (nframes < 1)
-				nframes = 1;
+            if (nframes < 1)
+                nframes = 1;
 
-			// The team card is emitted once, above the first rowline.
-			if (!i)
-			{
-				sprintf (rowline, "%i", teams[tarr[sideno]].osp_m0f8);
-				for (m = 0; m < strlen (rowline); m++)
-					rowline[m] += 128;
+            // The team card is emitted once, above the first rowline.
+            if (!i) {
+                sprintf(rowline, "%i", teams[tarr[sideno]].osp_m0f8);
+                for (m = 0; m < strlen(rowline); m++)
+                    rowline[m] += 128;
 
-				// The target passes the three y positions as basey-16, basey-8,
-				// and basey, respectively.
-				if (level.intermissiontime == 0 || sideno)
-				{
-					Com_sprintf (temp, 1024,
-						"xv 78 yv %i string \"%s\"yv %i string2 \"Score: %s\""
-						"yv %i string2 \"Skin: %s\"",
-						basey - 16, teams[tarr[sideno]].netname, basey - 8, rowline,
-						basey, teams[tarr[sideno]].skin);
+                // The target passes the three y positions as basey-16, basey-8,
+                // and basey, respectively.
+                if (level.intermission_framenum == 0 || sideno) {
+                    Q_snprintf(temp, 1024,
+                               "xv 78 yv %i string \"%s\"yv %i string2 \"Score: %s\""
+                               "yv %i string2 \"Skin: %s\"",
+                               basey - 16, teams[tarr[sideno]].netname, basey - 8, rowline,
+                               basey, teams[tarr[sideno]].skin);
 
-					y += 18;
-					basey += 18;
-				}
-				else
-				{
-					OSP_getDateInfo (time);
+                    y += 18;
+                    basey += 18;
+                } else {
+                    OSP_getDateInfo(time);
 
-					if (manual_map == 1)
-						sprintf (str, "[ Voted map change ]");
-					else if (manual_map == 2)
-						sprintf (str, "[ Voted server config change ]");
-					else if (teams[0].osp_m124 == 1)
-						sprintf (str, "[ %s defeats %s: %d to %d ]",
-								 teams[0].greenname, teams[1].greenname,
-								 teams[0].osp_m0f8, teams[1].osp_m0f8);
-					else if (teams[1].osp_m124 == 1)
-						sprintf (str, "[ %s defeats %s: %d to %d ]",
-								 teams[1].greenname, teams[0].greenname,
-								 teams[1].osp_m0f8, teams[0].osp_m0f8);
-					else
-						sprintf (str, "[ Tied match! (%d to %d) ]",
-								 teams[1].osp_m0f8, teams[0].osp_m0f8);
+                    if (manual_map == 1)
+                        sprintf(str, "[ Voted map change ]");
+                    else if (manual_map == 2)
+                        sprintf(str, "[ Voted server config change ]");
+                    else if (teams[0].osp_m124 == 1)
+                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                                teams[0].greenname, teams[1].greenname,
+                                teams[0].osp_m0f8, teams[1].osp_m0f8);
+                    else if (teams[1].osp_m124 == 1)
+                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                                teams[1].greenname, teams[0].greenname,
+                                teams[1].osp_m0f8, teams[0].osp_m0f8);
+                    else
+                        sprintf(str, "[ Tied match! (%d to %d) ]",
+                                teams[1].osp_m0f8, teams[0].osp_m0f8);
 
-					Com_sprintf (temp, 1024,
-						"xv 78 yv %i string \"%s\"yv %i string2 \"Score: %s\""
-						"yv %i string2 \"Skin: %s\""
-						"xv 0 yv -43 cstring2 \"%s\"yv -33 cstring2 \"%s\"",
-						basey - 16, teams[tarr[sideno]].netname, basey - 8, rowline,
-						basey, teams[tarr[sideno]].skin, str, time);
+                    Q_snprintf(temp, 1024,
+                               "xv 78 yv %i string \"%s\"yv %i string2 \"Score: %s\""
+                               "yv %i string2 \"Skin: %s\""
+                               "xv 0 yv -43 cstring2 \"%s\"yv -33 cstring2 \"%s\"",
+                               basey - 16, teams[tarr[sideno]].netname, basey - 8, rowline,
+                               basey, teams[tarr[sideno]].skin, str, time);
 
-					y += 18;
-					basey += 18;
-				}
+                    y += 18;
+                    basey += 18;
+                }
 
-				kk = strlen (temp);
-				strcpy (buf + size, temp);
-				size += kk;
+                kk = strlen(temp);
+                strcpy(buf + size, temp);
+                size += kk;
 
-				if (level.intermissiontime != 0 && sync_stat > 2)
-					Com_sprintf (temp, 1024,
-						"xv 140 yv %i string \"Frg Dth Frt Su Ping\"xv 4 ",
-						y);
-				else if (sync_stat == 4)
-					Com_sprintf (temp, 1024,
-						"xv 24 yv %i string \"Player          Frags Deaths Ping\"xv 8 ",
-						y);
-				else
-					Com_sprintf (temp, 1024,
-						"xv 8 yv %i string \"Player          MATCH_STATUS Time Ping\"xv 8 ",
-						y);
+                if (level.intermission_framenum != 0 && sync_stat > 2)
+                    Q_snprintf(temp, 1024,
+                               "xv 140 yv %i string \"Frg Dth Frt Su Ping\"xv 4 ",
+                               y);
+                else if (sync_stat == 4)
+                    Q_snprintf(temp, 1024,
+                               "xv 24 yv %i string \"Player          Frags Deaths Ping\"xv 8 ",
+                               y);
+                else
+                    Q_snprintf(temp, 1024,
+                               "xv 8 yv %i string \"Player          MATCH_STATUS Time Ping\"xv 8 ",
+                               y);
 
-				y += 8;
-				basey += 8;
+                y += 8;
+                basey += 8;
 
-				kk = strlen (temp);
-				strcpy (buf + size, temp);
-				size += kk;
-			}
+                kk = strlen(temp);
+                strcpy(buf + size, temp);
+                size += kk;
+            }
 
-			if (sync_stat > 2)
-			{
-				if (level.intermissiontime != 0)
-					sprintf (rowline, "%-16s%4i%4i%4i%3i%5i",
-							 cl->pers.netname, cl->resp.score,
-							 cl->resp.osp_r014, cl->resp.osp_r028,
-							 cl->resp.osp_r2c0, cl->ping);
-				else
-					sprintf (rowline, "%i %-16s%4i   %3i   %4i", i + 1,
-							 cl->pers.netname, cl->resp.score,
-							 cl->resp.osp_r014, cl->ping);
+            if (sync_stat > 2) {
+                if (level.intermission_framenum != 0)
+                    sprintf(rowline, "%-16s%4i%4i%4i%3i%5i",
+                            cl->pers.netname, cl->resp.score,
+                            cl->resp.osp_r014, cl->resp.osp_r028,
+                            cl->resp.osp_r2c0, cl->ping);
+                else
+                    sprintf(rowline, "%i %-16s%4i   %3i   %4i", i + 1,
+                            cl->pers.netname, cl->resp.score,
+                            cl->resp.osp_r014, cl->ping);
 
-				if (player != ent)
-					Com_sprintf (temp, 1024, "yv %i string2 \"%s\"", y, rowline);
-				else
-					Com_sprintf (temp, 1024, "yv %i string \"%s\"", y, rowline);
-			}
-			else if (cl->resp.osp_r20c)
-			{
-				sprintf (rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
-						 nframes / 600, cl->ping);
-				Com_sprintf (temp, 1024, "yv %i string \"%s\"", y, rowline);
-			}
-			else
-			{
-				sprintf (rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
-						 nframes / 600, cl->ping);
-				Com_sprintf (temp, 1024, "yv %i string2 \"%s\"", y, rowline);
-			}
+                if (player != ent)
+                    Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+                else
+                    Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+            } else if (cl->resp.osp_r20c) {
+                sprintf(rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
+                        nframes / 600, cl->ping);
+                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+            } else {
+                sprintf(rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
+                        nframes / 600, cl->ping);
+                Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+            }
 
-			kk = strlen (temp);
-			if (size + kk > sizeof (buf))
-				break;
+            kk = strlen(temp);
+            if (size + kk > sizeof(buf))
+                break;
 
-			strcpy (buf + size, temp);
-			size += kk;
-		}
+            strcpy(buf + size, temp);
+            size += kk;
+        }
 
-		if (OSP_teamCount (tarr[sideno]) > 1 && level.intermissiontime != 0)
-		{
-			if (OSP_teamCount (0) + OSP_teamCount (1) < 12 &&
-				sync_stat > 2)
-			{
-				y += 11;
+        if (OSP_teamCount(tarr[sideno]) > 1 && level.intermission_framenum != 0) {
+            if (OSP_teamCount(0) + OSP_teamCount(1) < 12 &&
+                sync_stat > 2) {
+                y += 11;
 
-				sprintf (rowline, " *** TOTALS:    %4i %3i  %2i %2i",
-						 teams[tarr[sideno]].osp_m0f8, teams[tarr[sideno]].osp_m0fc,
-						 teams[tarr[sideno]].osp_m104, teams[tarr[sideno]].osp_m108);
-				Com_sprintf (temp, 1024, "yv %i string \"%s\"", y, rowline);
+                sprintf(rowline, " *** TOTALS:    %4i %3i  %2i %2i",
+                        teams[tarr[sideno]].osp_m0f8, teams[tarr[sideno]].osp_m0fc,
+                        teams[tarr[sideno]].osp_m104, teams[tarr[sideno]].osp_m108);
+                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
 
-				kk = strlen (temp);
-				if (size + kk > sizeof (buf))
-					break;
+                kk = strlen(temp);
+                if (size + kk > sizeof(buf))
+                    break;
 
-				strcpy (buf + size, temp);
-				size += kk;
-			}
-		}
+                strcpy(buf + size, temp);
+                size += kk;
+            }
+        }
 
-		basey = y + 40;
-	}
+        basey = y + 40;
+    }
 
-	if (active_clients < 12)
-	{
-	y += 24;
+    if (active_clients < 12) {
+        y += 24;
 
-	for (i = 0; i < obscount; i++)
-	{
-		player = g_edicts + 1 + viewers[i];
+        for (i = 0; i < obscount; i++) {
+            player = g_edicts + 1 + viewers[i];
 
-		if (!i)
-		{
-			Com_sprintf (temp, 1024,
-				"xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
+            if (!i) {
+                Q_snprintf(temp, 1024,
+                           "xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
 
-			kk = strlen (temp);
-			if (size + kk > sizeof (buf))
-				break;
+                kk = strlen(temp);
+                if (size + kk > sizeof(buf))
+                    break;
 
-			strcpy (buf + size, temp);
-			size += kk;
-			y += 12;
-		}
+                strcpy(buf + size, temp);
+                size += kk;
+                y += 12;
+            }
 
-		if (player->osp_e39c)
-			Com_sprintf (temp, 1024, "yv %i string2 \"[Ref]%s (p:%d)\"", y,
-						 player->client->pers.netname, player->client->ping);
-		else
-			Com_sprintf (temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
-						 player->client->pers.netname, player->client->ping);
+            if (player->osp_e39c)
+                Q_snprintf(temp, 1024, "yv %i string2 \"[Ref]%s (p:%d)\"", y,
+                           player->client->pers.netname, player->client->ping);
+            else
+                Q_snprintf(temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
+                           player->client->pers.netname, player->client->ping);
 
-		kk = strlen (temp);
-		if (size + kk > sizeof (buf))
-			break;
+            kk = strlen(temp);
+            if (size + kk > sizeof(buf))
+                break;
 
-		strcpy (buf + size, temp);
-		size += kk;
-		y += 8;
-	}
-	}
+            strcpy(buf + size, temp);
+            size += kk;
+            y += 8;
+        }
+    }
 
-	gi.WriteByte (svc_layout);
-	gi.WriteString (buf);
+    gi.WriteByte(svc_layout);
+    gi.WriteString(buf);
 
-	if (level.intermissiontime != 0 &&
-		ent->client->resp.entered == ENTERED_ENTERED)
-		strcpy (old_scores, buf);
+    if (level.intermission_framenum != 0 &&
+        ent->client->resp.entered == ENTERED_ENTERED)
+        strcpy(old_scores, buf);
 }
 
 // The 1v1 scoreboard.  Unlike the deathmatch board this one is two player
@@ -2762,403 +2513,379 @@ void OSP_showBIGTeamScores (edict_t *ent)
 // go on unconditionally.
 // gamex86.dll: 1003E45F..1003EF69
 // gamei386.so: 0006B3B8..0006BDC1
-void OSP_show1v1Scores (edict_t *ent)
+void OSP_show1v1Scores(edict_t *ent)
 {
-	int			viewers[256];
-	char		rowline[512];
-	char		str[256];
-	char		temp[1024];
-	char		buf[1400];
-	char		time[32];
-	int			cids[2];
-	int			tarr[2];
-	int			i;
-	int			eff;
-	int			nframes;
-	int			y;
-	int			sideno;
-	int			kk;
-	int			basey;
-	int			obscount;
-	int			size;
-	gclient_t	*cl;
-	edict_t		*player;
+    int         viewers[256];
+    char        rowline[512];
+    char        str[256];
+    char        temp[1024];
+    char        buf[1400];
+    char        time[32];
+    int         cids[2];
+    int         tarr[2];
+    int         i;
+    int         eff;
+    int         nframes;
+    int         y;
+    int         sideno;
+    int         kk;
+    int         basey;
+    int         obscount;
+    int         size;
+    gclient_t   *cl;
+    edict_t     *player;
 
-	y = 0;
-	obscount = 0;
-	size = 0;
-	tarr[0] = 0;
-	tarr[1] = 1;
-	cids[0] = -1;
-	cids[1] = -1;
+    y = 0;
+    obscount = 0;
+    size = 0;
+    tarr[0] = 0;
+    tarr[1] = 1;
+    cids[0] = -1;
+    cids[1] = -1;
 
-	for (i = 0; i < game.maxclients; i++)
-	{
-		player = g_edicts + i + 1;
+    for (i = 0; i < game.maxclients; i++) {
+        player = g_edicts + i + 1;
 
-		if (!player->inuse || !player->client)
-			continue;
+        if (!player->inuse || !player->client)
+            continue;
 
-		if (player->client->resp.entered != ENTERED_ENTERED)
-		{
-			viewers[obscount] = i;
-			obscount++;
-			continue;
-		}
+        if (player->client->resp.entered != ENTERED_ENTERED) {
+            viewers[obscount] = i;
+            obscount++;
+            continue;
+        }
 
-		if (!player->client->resp.team)
-			cids[0] = i;
-		else if (player->client->resp.team == 1)
-			cids[1] = i;
-	}
+        if (!player->client->resp.team)
+            cids[0] = i;
+        else if (player->client->resp.team == 1)
+            cids[1] = i;
+    }
 
-	buf[0] = 0;
+    buf[0] = 0;
 
-	if ((int)gi.cvar ("nglog_worldstats", "0", 0)->value)
-		ent->client->ps.stats[28] = 0x62b;
+    if ((int)gi.cvar("nglog_worldstats", "0", 0)->value)
+        ent->client->ps.stats[28] = 0x62b;
 
-	if (level.intermissiontime != 0)
-		ent->client->ps.stats[27] = 0x62a;
-	else
-		ent->client->ps.stats[27] = 0x629;
+    if (level.intermission_framenum != 0)
+        ent->client->ps.stats[27] = 0x62a;
+    else
+        ent->client->ps.stats[27] = 0x629;
 
-	size = strlen (buf);
-	basey = 0;
+    size = strlen(buf);
+    basey = 0;
 
-	for (sideno = 0; sideno < 2; sideno++)
-	{
-		// An empty seat skips its card; the other one is still drawn.
-		if (cids[sideno] == -1)
-			continue;
+    for (sideno = 0; sideno < 2; sideno++) {
+        // An empty seat skips its card; the other one is still drawn.
+        if (cids[sideno] == -1)
+            continue;
 
-		cl = game.clients + cids[sideno];
-		// Computed and never read again within the loop -- dead, but
-		// faithfully reproduced.
-		player = g_edicts + 1 + cids[sideno];
-		y = basey;
+        cl = game.clients + cids[sideno];
+        // Computed and never read again within the loop -- dead, but
+        // faithfully reproduced.
+        player = g_edicts + 1 + cids[sideno];
+        y = basey;
 
-		if (cl->resp.enterframe < sync_frame)
-			nframes = level.framenum - sync_frame + 1;
-		else
-			nframes = level.framenum - cl->resp.enterframe + 1;
+        if (cl->resp.enterframe < sync_frame)
+            nframes = level.framenum - sync_frame + 1;
+        else
+            nframes = level.framenum - cl->resp.enterframe + 1;
 
-		if (nframes < 1)
-			nframes = 1;
+        if (nframes < 1)
+            nframes = 1;
 
-		if (cl->resp.score < 1)
-			eff = 0;
-		else if (!cl->resp.osp_r014 ||
-				 !(cl->resp.osp_r014 + cl->resp.score))
-			eff = 100;
-		else
-			eff = cl->resp.score * 100 /
-				  (cl->resp.score + cl->resp.osp_r014);
+        if (cl->resp.score < 1)
+            eff = 0;
+        else if (!cl->resp.osp_r014 ||
+                 !(cl->resp.osp_r014 + cl->resp.score))
+            eff = 100;
+        else
+            eff = cl->resp.score * 100 /
+                  (cl->resp.score + cl->resp.osp_r014);
 
-		// the team's frag total, in green
-		sprintf (rowline, "%i", teams[tarr[sideno]].osp_m0f8);
-		for (kk = 0; kk < strlen (rowline); kk++)
-			rowline[kk] += 128;
+        // the team's frag total, in green
+        sprintf(rowline, "%i", teams[tarr[sideno]].osp_m0f8);
+        for (kk = 0; kk < strlen(rowline); kk++)
+            rowline[kk] += 128;
 
-		// Only the first card at intermission carries the result line and
-		// the time; everything else uses the short banner.
-		if (level.intermissiontime == 0 || sideno)
-			Com_sprintf (temp, 1024,
-				"client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
-				"yv %i string2 \"Frags: %s\"yv %i string2 \"Suicides: %i\"",
-				basey - 16, cids[sideno], 0, 0, 0, teams[tarr[sideno]].netname,
-				basey - 4, rowline, basey + 4, teams[tarr[sideno]].osp_m108);
-		else
-		{
-			OSP_getDateInfo (time);
+        // Only the first card at intermission carries the result line and
+        // the time; everything else uses the short banner.
+        if (level.intermission_framenum == 0 || sideno)
+            Q_snprintf(temp, 1024,
+                       "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
+                       "yv %i string2 \"Frags: %s\"yv %i string2 \"Suicides: %i\"",
+                       basey - 16, cids[sideno], 0, 0, 0, teams[tarr[sideno]].netname,
+                       basey - 4, rowline, basey + 4, teams[tarr[sideno]].osp_m108);
+        else {
+            OSP_getDateInfo(time);
 
-			if (manual_map == 1)
-				sprintf (str, "[ Voted map change ]");
-			else if (manual_map == 2)
-				sprintf (str, "[ Voted server config change ]");
-			else if (teams[0].osp_m124 == 1)
-				sprintf (str, "[ %s defeats %s: %d to %d ]",
-						 teams[0].greenname, teams[1].greenname,
-						 teams[0].osp_m0f8, teams[1].osp_m0f8);
-			else if (teams[1].osp_m124 == 1)
-				sprintf (str, "[ %s defeats %s: %d to %d ]",
-						 teams[1].greenname, teams[0].greenname,
-						 teams[1].osp_m0f8, teams[0].osp_m0f8);
-			else
-				sprintf (str, "[ Tied match! (%d to %d) ]",
-						 teams[1].osp_m0f8, teams[0].osp_m0f8);
+            if (manual_map == 1)
+                sprintf(str, "[ Voted map change ]");
+            else if (manual_map == 2)
+                sprintf(str, "[ Voted server config change ]");
+            else if (teams[0].osp_m124 == 1)
+                sprintf(str, "[ %s defeats %s: %d to %d ]",
+                        teams[0].greenname, teams[1].greenname,
+                        teams[0].osp_m0f8, teams[1].osp_m0f8);
+            else if (teams[1].osp_m124 == 1)
+                sprintf(str, "[ %s defeats %s: %d to %d ]",
+                        teams[1].greenname, teams[0].greenname,
+                        teams[1].osp_m0f8, teams[0].osp_m0f8);
+            else
+                sprintf(str, "[ Tied match! (%d to %d) ]",
+                        teams[1].osp_m0f8, teams[0].osp_m0f8);
 
-			Com_sprintf (temp, 1024,
-				"client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
-				"yv %i string2 \"Frags: %s\"yv %i string2 \"Suicides: %i\""
-				"xv 0 yv -43 cstring2 \"%s\"yv -25 cstring2 \"%s\"",
-				basey - 16, cids[sideno], 0, 0, 0, teams[tarr[sideno]].netname,
-				basey - 4, rowline, basey + 4, teams[tarr[sideno]].osp_m108, str, time);
-		}
+            Q_snprintf(temp, 1024,
+                       "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
+                       "yv %i string2 \"Frags: %s\"yv %i string2 \"Suicides: %i\""
+                       "xv 0 yv -43 cstring2 \"%s\"yv -25 cstring2 \"%s\"",
+                       basey - 16, cids[sideno], 0, 0, 0, teams[tarr[sideno]].netname,
+                       basey - 4, rowline, basey + 4, teams[tarr[sideno]].osp_m108, str, time);
+        }
 
-		// Real advances BOTH accumulators at each step, even though `basey` is
-		// dead from here until it is reassigned `y + 48` below.
-		y += 26;
-		basey += 26;
-		kk = strlen (temp);
-		strcpy (buf + size, temp);
-		size += kk;
+        // Real advances BOTH accumulators at each step, even though `basey` is
+        // dead from here until it is reassigned `y + 48` below.
+        y += 26;
+        basey += 26;
+        kk = strlen(temp);
+        strcpy(buf + size, temp);
+        size += kk;
 
-		if (level.intermissiontime != 0 && sync_stat > 2)
-			Com_sprintf (temp, 1024,
-				"xv -8 yv %i string \"Player          Frags Deaths Eff%% FPH Ping\"xv -8 ",
-				y);
-		else if (sync_stat == 4)
-			Com_sprintf (temp, 1024,
-				"xv 0 yv %i string \"Player          Frags Deaths Ping\"xv 0 ",
-				y);
-		else
-			Com_sprintf (temp, 1024,
-				"xv 8 yv %i string \"Player          Frags Deaths Time Ping\"xv 8 ",
-				y);
+        if (level.intermission_framenum != 0 && sync_stat > 2)
+            Q_snprintf(temp, 1024,
+                       "xv -8 yv %i string \"Player          Frags Deaths Eff%% FPH Ping\"xv -8 ",
+                       y);
+        else if (sync_stat == 4)
+            Q_snprintf(temp, 1024,
+                       "xv 0 yv %i string \"Player          Frags Deaths Ping\"xv 0 ",
+                       y);
+        else
+            Q_snprintf(temp, 1024,
+                       "xv 8 yv %i string \"Player          Frags Deaths Time Ping\"xv 8 ",
+                       y);
 
-		y += 8;
-		basey += 8;
-		kk = strlen (temp);
-		strcpy (buf + size, temp);
-		size += kk;
+        y += 8;
+        basey += 8;
+        kk = strlen(temp);
+        strcpy(buf + size, temp);
+        size += kk;
 
-		if (sync_stat > 2)
-		{
-			if (level.intermissiontime != 0)
-				sprintf (rowline, "%-16s%4i%6i%6i%%%4i%5i", cl->pers.netname,
-						 cl->resp.score, cl->resp.osp_r014, eff,
-						 cl->resp.score * 36000 / nframes, cl->ping);
-			else
-				sprintf (rowline, "%-16s%4i   %3i   %4i", cl->pers.netname,
-						 cl->resp.score, cl->resp.osp_r014, cl->ping);
+        if (sync_stat > 2) {
+            if (level.intermission_framenum != 0)
+                sprintf(rowline, "%-16s%4i%6i%6i%%%4i%5i", cl->pers.netname,
+                        cl->resp.score, cl->resp.osp_r014, eff,
+                        cl->resp.score * 36000 / nframes, cl->ping);
+            else
+                sprintf(rowline, "%-16s%4i   %3i   %4i", cl->pers.netname,
+                        cl->resp.score, cl->resp.osp_r014, cl->ping);
 
-			Com_sprintf (temp, 1024, "yv %i string2 \"%s\"", y, rowline);
-		}
-		else if (cl->resp.osp_r20c)
-		{
-			sprintf (rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
-					 nframes / 600, cl->ping);
-			Com_sprintf (temp, 1024, "yv %i string \"%s\"", y, rowline);
-		}
-		else
-		{
-			sprintf (rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
-					 nframes / 600, cl->ping);
-			Com_sprintf (temp, 1024, "yv %i string2 \"%s\"", y, rowline);
-		}
+            Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+        } else if (cl->resp.osp_r20c) {
+            sprintf(rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
+                    nframes / 600, cl->ping);
+            Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+        } else {
+            sprintf(rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
+                    nframes / 600, cl->ping);
+            Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+        }
 
-		kk = strlen (temp);
-		if (size + kk > sizeof (buf))
-			break;
+        kk = strlen(temp);
+        if (size + kk > sizeof(buf))
+            break;
 
-		strcpy (buf + size, temp);
-		size += kk;
-		basey = y + 48;
-	}
+        strcpy(buf + size, temp);
+        size += kk;
+        basey = y + 48;
+    }
 
-	y += 24;
+    y += 24;
 
-	for (i = 0; i < obscount; i++)
-	{
-		player = g_edicts + 1 + viewers[i];
+    for (i = 0; i < obscount; i++) {
+        player = g_edicts + 1 + viewers[i];
 
-		if (!i)
-		{
-			Com_sprintf (temp, 1024,
-				"xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
+        if (!i) {
+            Q_snprintf(temp, 1024,
+                       "xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
 
-			kk = strlen (temp);
-			if (size + kk > sizeof (buf))
-				break;
+            kk = strlen(temp);
+            if (size + kk > sizeof(buf))
+                break;
 
-			strcpy (buf + size, temp);
-			size += kk;
-			y += 12;
-		}
+            strcpy(buf + size, temp);
+            size += kk;
+            y += 12;
+        }
 
-		Com_sprintf (temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
-					 player->client->pers.netname, player->client->ping);
+        Q_snprintf(temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
+                   player->client->pers.netname, player->client->ping);
 
-		kk = strlen (temp);
-		if (size + kk > sizeof (buf))
-			break;
+        kk = strlen(temp);
+        if (size + kk > sizeof(buf))
+            break;
 
-		strcpy (buf + size, temp);
-		size += kk;
-		y += 8;
-	}
+        strcpy(buf + size, temp);
+        size += kk;
+        y += 8;
+    }
 
-	gi.WriteByte (svc_layout);
-	gi.WriteString (buf);
+    gi.WriteByte(svc_layout);
+    gi.WriteString(buf);
 
-	if (level.intermissiontime != 0 &&
-		ent->client->resp.entered == ENTERED_ENTERED)
-		strcpy (old_scores, buf);
+    if (level.intermission_framenum != 0 &&
+        ent->client->resp.entered == ENTERED_ENTERED)
+        strcpy(old_scores, buf);
 }
 
 // id CTF's 23-entry table, a NAMED global here rather than CTF's file-static.
 // Two changes from CTF's: the two `item_flag_team*` rows are gone (this mod
 // has no flags to stand near) and every priority is therefore one lower.
-loc_t	loc_names[23] =
-{
-	{	"item_quad",				1	},
-	{	"item_invulnerability",		1	},
-	{	"weapon_bfg",				2	},
-	{	"weapon_railgun",			3	},
-	{	"weapon_rocketlauncher",	3	},
-	{	"weapon_hyperblaster",		3	},
-	{	"weapon_chaingun",			3	},
-	{	"weapon_grenadelauncher",	3	},
-	{	"weapon_machinegun",		3	},
-	{	"weapon_supershotgun",		3	},
-	{	"weapon_shotgun",			3	},
-	{	"item_power_screen",		4	},
-	{	"item_power_shield",		4	},
-	{	"item_armor_body",			5	},
-	{	"item_armor_combat",		5	},
-	{	"item_armor_jacket",		5	},
-	{	"item_silencer",			6	},
-	{	"item_breather",			6	},
-	{	"item_enviro",				6	},
-	{	"item_adrenaline",			6	},
-	{	"item_bandolier",			7	},
-	{	"item_pack",				7	},
-	{	NULL,						0	}
+loc_t   loc_names[23] = {
+    {   "item_quad",                1   },
+    {   "item_invulnerability",     1   },
+    {   "weapon_bfg",               2   },
+    {   "weapon_railgun",           3   },
+    {   "weapon_rocketlauncher",    3   },
+    {   "weapon_hyperblaster",      3   },
+    {   "weapon_chaingun",          3   },
+    {   "weapon_grenadelauncher",   3   },
+    {   "weapon_machinegun",        3   },
+    {   "weapon_supershotgun",      3   },
+    {   "weapon_shotgun",           3   },
+    {   "item_power_screen",        4   },
+    {   "item_power_shield",        4   },
+    {   "item_armor_body",          5   },
+    {   "item_armor_combat",        5   },
+    {   "item_armor_jacket",        5   },
+    {   "item_silencer",            6   },
+    {   "item_breather",            6   },
+    {   "item_enviro",              6   },
+    {   "item_adrenaline",          6   },
+    {   "item_bandolier",           7   },
+    {   "item_pack",                7   },
+    {   NULL,                       0   }
 };
 
 // %l -- name the nearest landmark.  CTF's CTFSay_Team_Location with the
 // capture-the-flag half removed, so there is no "the red " / "the blue ".
 // gamex86.dll: 1003F349..1003F6B9
 // gamei386.so: 0006BDC1..0006C0C7
-static void sayteam_location (edict_t *who, char *buf)
+static void sayteam_location(edict_t *who, char *buf)
 {
-	edict_t		*what = NULL;
-	edict_t		*hot = NULL;
-	float		hotdist = 999999, newdist;
-	vec3_t		v;
-	int			hotindex = 999;
-	int			prevprio = -1;	// invented, dead -- never read again
-	int			i;
-	gitem_t		*item;
-	qboolean	hotsee = false;
-	qboolean	cansee;
+    edict_t     *what = NULL;
+    edict_t     *hot = NULL;
+    float       hotdist = 999999, newdist;
+    vec3_t      v;
+    int         hotindex = 999;
+    int         prevprio = -1;  // invented, dead -- never read again
+    int         i;
+    const gitem_t   *item;
+    bool    hotsee = false;
+    bool    cansee;
 
-	while ((what = loc_findradius (what, who->s.origin, 1024)) != NULL)
-	{
-		for (i = 0; loc_names[i].classname; i++)
-			if (strcmp (what->classname, loc_names[i].classname) == 0)
-				break;
-		if (!loc_names[i].classname)
-			continue;
+    while ((what = loc_findradius(what, who->s.origin, 1024)) != NULL) {
+        for (i = 0; loc_names[i].classname; i++)
+            if (strcmp(what->classname, loc_names[i].classname) == 0)
+                break;
+        if (!loc_names[i].classname)
+            continue;
 
-		// something we can see gets priority over something we can't
-		cansee = loc_CanSee (what, who);
-		if (cansee && !hotsee)
-		{
-			hotsee = true;
-			hotindex = loc_names[i].priority;
-			hot = what;
-			VectorSubtract (what->s.origin, who->s.origin, v);
-			hotdist = VectorLength (v);
-			continue;
-		}
+        // something we can see gets priority over something we can't
+        cansee = loc_CanSee(what, who);
+        if (cansee && !hotsee) {
+            hotsee = true;
+            hotindex = loc_names[i].priority;
+            hot = what;
+            VectorSubtract(what->s.origin, who->s.origin, v);
+            hotdist = VectorLength(v);
+            continue;
+        }
 
-		if (hotsee && !cansee)
-			continue;
-		if (hotsee && hotindex < loc_names[i].priority)
-			continue;
+        if (hotsee && !cansee)
+            continue;
+        if (hotsee && hotindex < loc_names[i].priority)
+            continue;
 
-		VectorSubtract (what->s.origin, who->s.origin, v);
-		newdist = VectorLength (v);
+        VectorSubtract(what->s.origin, who->s.origin, v);
+        newdist = VectorLength(v);
 
-		if (newdist < hotdist ||
-			(cansee && loc_names[i].priority < hotindex))
-		{
-			hot = what;
-			hotdist = newdist;
-			hotindex = i;
-			hotsee = loc_CanSee (hot, who);
-		}
-	}
+        if (newdist < hotdist ||
+            (cansee && loc_names[i].priority < hotindex)) {
+            hot = what;
+            hotdist = newdist;
+            hotindex = i;
+            hotsee = loc_CanSee(hot, who);
+        }
+    }
 
-	if (!hot)
-	{
-		strcpy (buf, "nowhere");
-		return;
-	}
+    if (!hot) {
+        strcpy(buf, "nowhere");
+        return;
+    }
 
-	what = NULL;
-	while ((what = G_Find (what, FOFS (classname), hot->classname)) != NULL)
-	{
-		if (what == hot)
-			continue;
-		break;
-	}
+    what = NULL;
+    while ((what = G_Find(what, FOFS(classname), hot->classname)) != NULL) {
+        if (what == hot)
+            continue;
+        break;
+    }
 
-	if ((item = FindItemByClassname (hot->classname)) == NULL)
-	{
-		strcpy (buf, "nowhere");
-		return;
-	}
+    if ((item = FindItemByClassname(hot->classname)) == NULL) {
+        strcpy(buf, "nowhere");
+        return;
+    }
 
-	if (who->waterlevel)
-		strcpy (buf, "in the water ");
-	else
-		*buf = 0;
+    if (who->waterlevel)
+        strcpy(buf, "in the water ");
+    else
+        *buf = 0;
 
-	VectorSubtract (who->s.origin, hot->s.origin, v);
-	if (fabs (v[2]) > fabs (v[0]) && fabs (v[2]) > fabs (v[1]))
-		if (v[2] > 0)
-			strcat (buf, "above ");
-		else
-			strcat (buf, "below ");
-	else
-		strcat (buf, "near ");
+    VectorSubtract(who->s.origin, hot->s.origin, v);
+    if (fabs(v[2]) > fabs(v[0]) && fabs(v[2]) > fabs(v[1]))
+        if (v[2] > 0)
+            strcat(buf, "above ");
+        else
+            strcat(buf, "below ");
+    else
+        strcat(buf, "near ");
 
-	strcat (buf, "the ");
-	strcat (buf, item->pickup_name);
+    strcat(buf, "the ");
+    strcat(buf, item->pickup_name);
 }
-
 
 // %a -- CTF's CTFSay_Team_Armor, unchanged; its whole string set is present.
 // gamex86.dll: 1003F6B9..1003F7E4
 // gamei386.so: 0006C0C7..0006C209
-static void sayteam_armor (edict_t *who, char *buf)
+static void sayteam_armor(edict_t *who, char *buf)
 {
-	gitem_t		*item;
-	int			index, cells;
-	int			power_armor_type;
+    const gitem_t   *item;
+    int         index, cells;
+    int         power_armor_type;
 
-	*buf = 0;
+    *buf = 0;
 
-	power_armor_type = PowerArmorType (who);
-	if (power_armor_type)
-	{
-		cells = who->client->pers.inventory[ITEM_INDEX (FindItem ("cells"))];
-		if (cells)
-			sprintf (buf + strlen (buf), "%s with %i cells ",
-					 (power_armor_type == POWER_ARMOR_SCREEN) ?
-					 "Power Screen" : "Power Shield", cells);
-	}
+    power_armor_type = PowerArmorType(who);
+    if (power_armor_type) {
+        cells = who->client->pers.inventory[ITEM_INDEX(FindItem("cells"))];
+        if (cells)
+            sprintf(buf + strlen(buf), "%s with %i cells ",
+                    (power_armor_type == POWER_ARMOR_SCREEN) ?
+                    "Power Screen" : "Power Shield", cells);
+    }
 
-	index = ArmorIndex (who);
-	if (index)
-	{
-		item = GetItemByIndex (index);
-		if (item)
-		{
-			if (*buf)
-				strcat (buf, "and ");
-			sprintf (buf + strlen (buf), "%i units of %s",
-					 who->client->pers.inventory[index], item->pickup_name);
-		}
-	}
+    index = ArmorIndex(who);
+    if (index) {
+        item = GetItemByIndex(index);
+        if (item) {
+            if (*buf)
+                strcat(buf, "and ");
+            sprintf(buf + strlen(buf), "%i units of %s",
+                    who->client->pers.inventory[index], item->pickup_name);
+        }
+    }
 
-	if (!*buf)
-		strcpy (buf, "no armor");
+    if (!*buf)
+        strcpy(buf, "no armor");
 }
-
-
 
 // <INVENTED NAMES> for three file-statics the ELF cannot see: gcc -O3
 // inlines all three back into OSP_sayteam_cmd.  The VC6 image has them as
@@ -3167,43 +2894,43 @@ static void sayteam_armor (edict_t *who, char *buf)
 // %h -- "dead" below zero, otherwise the health count.
 // gamex86.dll: 1003F7E4..1003F823
 // gamei386.so: absent
-static void sayteam_health (edict_t *who, char *buf)
+static void sayteam_health(edict_t *who, char *buf)
 {
-	if (who->health <= 0)
-		strcpy (buf, "dead");
-	else
-		sprintf (buf, "%i health", who->health);
+    if (who->health <= 0)
+        strcpy(buf, "dead");
+    else
+        sprintf(buf, "%i health", who->health);
 }
 
 // %w -- the weapon in hand, or "none".
 // gamex86.dll: 1003F823..1003F866
 // gamei386.so: absent
-static void sayteam_weapon (edict_t *who, char *buf)
+static void sayteam_weapon(edict_t *who, char *buf)
 {
-	if (who->client->pers.weapon)
-		strcpy (buf, who->client->pers.weapon->pickup_name);
-	else
-		strcpy (buf, "none");
+    if (who->client->pers.weapon)
+        strcpy(buf, who->client->pers.weapon->pickup_name);
+    else
+        strcpy(buf, "none");
 }
 
 // %r and %t -- whichever rune is held. Both escapes share this one body; the
 // two case labels in the caller are separate, the code behind them is not.
 // gamex86.dll: 1003F866..1003F933
 // gamei386.so: absent
-static void sayteam_runes (edict_t *who, char *buf)
+static void sayteam_runes(edict_t *who, char *buf)
 {
-	if (who->client->ps.stats[STAT_RUNE_RESIST])
-		strcpy (buf, "the RESIST rune");
-	else if (who->client->ps.stats[STAT_RUNE_STRENGTH])
-		strcpy (buf, "the STRENGTH rune");
-	else if (who->client->ps.stats[STAT_RUNE_HASTE])
-		strcpy (buf, "the HASTE rune");
-	else if (who->client->ps.stats[STAT_RUNE_REGEN])
-		strcpy (buf, "the REGEN rune");
-	else if (who->client->ps.stats[STAT_RUNE_VAMPIRE])
-		strcpy (buf, "the VAMPIRE rune");
-	else
-		strcpy (buf, "no runes");
+    if (who->client->ps.stats[STAT_RUNE_RESIST])
+        strcpy(buf, "the RESIST rune");
+    else if (who->client->ps.stats[STAT_RUNE_STRENGTH])
+        strcpy(buf, "the STRENGTH rune");
+    else if (who->client->ps.stats[STAT_RUNE_HASTE])
+        strcpy(buf, "the HASTE rune");
+    else if (who->client->ps.stats[STAT_RUNE_REGEN])
+        strcpy(buf, "the REGEN rune");
+    else if (who->client->ps.stats[STAT_RUNE_VAMPIRE])
+        strcpy(buf, "the VAMPIRE rune");
+    else
+        strcpy(buf, "no runes");
 }
 
 // %n -- the mod's own: name every teammate the caller can actually see, as
@@ -3211,187 +2938,172 @@ static void sayteam_runes (edict_t *who, char *buf)
 // " and " rather than ", ".
 // gamex86.dll: 1003F933..1003FB12
 // gamei386.so: 0006C209..0006C450
-static void sayteam_sight (edict_t *who, char *buf)
+static void sayteam_sight(edict_t *who, char *buf)
 {
-	char	list[1024];
-	char	names[1024];
-	edict_t	*e;
-	int		i;
-	int		counts;
+    char    list[1024];
+    char    names[1024];
+    edict_t *e;
+    int     i;
+    int     counts;
 
-	// counts, then names[0], then list[0] -- and the last two are ONE chained
-	// assignment.
-	counts = 0;
-	list[0] = names[0] = 0;
+    // counts, then names[0], then list[0] -- and the last two are ONE chained
+    // assignment.
+    counts = 0;
+    list[0] = names[0] = 0;
 
-	for (i = 1; i <= maxclients->value; i++)
-	{
-		e = g_edicts + i;
+    for (i = 1; i <= game.maxclients; i++) {
+        e = g_edicts + i;
 
-		if (!e->inuse ||
-			e->client->resp.entered != ENTERED_ENTERED ||
-			e == who ||
-			!loc_CanSee (e, who))
-			continue;
+        if (!e->inuse ||
+            e->client->resp.entered != ENTERED_ENTERED ||
+            e == who ||
+            !loc_CanSee(e, who))
+            continue;
 
-		if (names[0])
-		{
-			if (strlen (list) + strlen (names) + 3 < 1024)
-			{
-				if (counts)
-					strcat (list, ", ");
-				strcat (list, names);
-				names[0] = 0;
-			}
-			counts++;
-		}
+        if (names[0]) {
+            if (strlen(list) + strlen(names) + 3 < 1024) {
+                if (counts)
+                    strcat(list, ", ");
+                strcat(list, names);
+                names[0] = 0;
+            }
+            counts++;
+        }
 
-		strcpy (names, e->client->pers.netname);
-	}
+        strcpy(names, e->client->pers.netname);
+    }
 
-	if (names[0])
-	{
-		if (strlen (list) + strlen (names) + 6 < 1024)
-		{
-			if (counts)
-				strcat (list, " and ");
-			strcat (list, names);
-		}
+    if (names[0]) {
+        if (strlen(list) + strlen(names) + 6 < 1024) {
+            if (counts)
+                strcat(list, " and ");
+            strcat(list, names);
+        }
 
-		strcpy (buf, list);
-	}
-	else
-		strcpy (buf, "no one");
+        strcpy(buf, list);
+    } else
+        strcpy(buf, "no one");
 }
-
 
 // "say_team".  id CTF's CTFSay_Team: expand the % escapes into outmsg, then
 // send the result to everyone on the caller's team.
 // gamex86.dll: 1003EF69..1003F349
 // gamei386.so: 0006C450..0006C979
-void OSP_sayteam_cmd (edict_t *ent, char *msg)
+void OSP_sayteam_cmd(edict_t *ent, char *msg)
 {
-	char	outmsg[1024];
-	char	scratch[1024];
-	char	tmp[2048];
-	char	*p;
-	int		t;
-	edict_t	*cp;
+    char    outmsg[1024];
+    char    scratch[1024];
+    char    tmp[2048];
+    char    *p;
+    int     t;
+    edict_t *cp;
 
-	outmsg[0] = 0;
+    outmsg[0] = 0;
 
-	if (*msg == '"')
-	{
-		msg[strlen (msg) - 1] = 0;
-		msg++;
-	}
+    if (*msg == '"') {
+        msg[strlen(msg) - 1] = 0;
+        msg++;
+    }
 
-	for (p = outmsg; *msg && (p - outmsg) < sizeof (outmsg) - 1; msg++)
-	{
-		if (*msg == '%')
-		{
-			switch (*++msg)
-			{
-			case 'l':
-			case 'L':
-				sayteam_location (ent, scratch);
-				strcpy (p, scratch);
-				p += strlen (scratch);
-				break;
+    for (p = outmsg; *msg && (p - outmsg) < sizeof(outmsg) - 1; msg++) {
+        if (*msg == '%') {
+            switch (*++msg) {
+            case 'l':
+            case 'L':
+                sayteam_location(ent, scratch);
+                strcpy(p, scratch);
+                p += strlen(scratch);
+                break;
 
-			case 'a':
-			case 'A':
-				sayteam_armor (ent, scratch);
-				strcpy (p, scratch);
-				p += strlen (scratch);
-				break;
+            case 'a':
+            case 'A':
+                sayteam_armor(ent, scratch);
+                strcpy(p, scratch);
+                p += strlen(scratch);
+                break;
 
-			case 'h':
-			case 'H':
-				sayteam_health (ent, scratch);
-				strcpy (p, scratch);
-				p += strlen (scratch);
-				break;
+            case 'h':
+            case 'H':
+                sayteam_health(ent, scratch);
+                strcpy(p, scratch);
+                p += strlen(scratch);
+                break;
 
-			case 'w':
-			case 'W':
-				sayteam_weapon (ent, scratch);
-				strcpy (p, scratch);
-				p += strlen (scratch);
-				break;
+            case 'w':
+            case 'W':
+                sayteam_weapon(ent, scratch);
+                strcpy(p, scratch);
+                p += strlen(scratch);
+                break;
 
-			case 'n':
-			case 'N':
-				sayteam_sight (ent, scratch);
-				strcpy (p, scratch);
-				p += strlen (scratch);
-				break;
+            case 'n':
+            case 'N':
+                sayteam_sight(ent, scratch);
+                strcpy(p, scratch);
+                p += strlen(scratch);
+                break;
 
-			case 'r':
-			case 'R':
-				sayteam_runes (ent, scratch);
-				strcpy (p, scratch);
-				p += strlen (scratch);
-				break;
+            case 'r':
+            case 'R':
+                sayteam_runes(ent, scratch);
+                strcpy(p, scratch);
+                p += strlen(scratch);
+                break;
 
-			case 't':
-			case 'T':
-				sayteam_runes (ent, scratch);
-				strcpy (p, scratch);
-				p += strlen (scratch);
-				break;
+            case 't':
+            case 'T':
+                sayteam_runes(ent, scratch);
+                strcpy(p, scratch);
+                p += strlen(scratch);
+                break;
 
-			default:
-				*p++ = *msg;
-			}
-		}
-		else
-			*p++ = *msg;
-	}
-	*p = 0;
+            default:
+                *p++ = *msg;
+            }
+        } else
+            *p++ = *msg;
+    }
+    *p = 0;
 
-	sprintf (tmp, "(%s): %s\n", ent->client->pers.netname, outmsg);
+    sprintf(tmp, "(%s): %s\n", ent->client->pers.netname, outmsg);
 
-	for (t = 1; t <= maxclients->value; t++)
-	{
-		cp = g_edicts + t;
+    for (t = 1; t <= game.maxclients; t++) {
+        cp = g_edicts + t;
 
-		if (!cp->inuse)
-			continue;
-		if (cp->client->resp.team == ent->client->resp.team)
-			gi.cprintf (cp, PRINT_CHAT, "%s", tmp);
-	}
+        if (!cp->inuse)
+            continue;
+        if (cp->client->resp.team == ent->client->resp.team)
+            gi.cprintf(cp, PRINT_CHAT, "%s", tmp);
+    }
 }
-
 
 // CTF's loc_findradius, unchanged, and it really is placed AFTER
 // OSP_sayteam_cmd in the real link order.
 // gamex86.dll: 1003FB12..1003FBF0
 // gamei386.so: 0006C979..0006CA24
-static edict_t *loc_findradius (edict_t *from, vec3_t org, float rad)
+static edict_t *loc_findradius(edict_t *from, vec3_t org, float rad)
 {
-	vec3_t	eorg;
-	int		j;
+    vec3_t  eorg;
+    int     j;
 
-	if (!from)
-		from = g_edicts;
-	else
-		from++;
+    if (!from)
+        from = g_edicts;
+    else
+        from++;
 
-	for ( ; from < &g_edicts[globals.num_edicts]; from++)
-	{
-		if (!from->inuse)
-			continue;
+    for (; from < &g_edicts[globals.num_edicts]; from++) {
+        if (!from->inuse)
+            continue;
 
-		for (j = 0; j < 3; j++)
-			eorg[j] = org[j] - (from->s.origin[j] +
-								(from->mins[j] + from->maxs[j]) * 0.5);
+        for (j = 0; j < 3; j++)
+            eorg[j] = org[j] - (from->s.origin[j] +
+                                (from->mins[j] + from->maxs[j]) * 0.5f);
 
-		if (VectorLength (eorg) > rad)
-			continue;
+        if (VectorLength(eorg) > rad)
+            continue;
 
-		return from;
-	}
+        return from;
+    }
 
-	return NULL;
+    return NULL;
 }

@@ -20,131 +20,117 @@
 #include "g_local.h"
 #include <errno.h>
 
-int	buffer_lines = 0;
-int	wbuffer_lines = 0;
+int buffer_lines = 0;
+int wbuffer_lines = 0;
 FILE * log_file = NULL;
 FILE * worldlog_file = NULL;
-int	__nglog_worldlog = 0;
-int	__nglog_num_errs = 0;
-int	__nglog_ngstats_exec = 0;
-char	__nglog_error_msg[8][4096];
-char	__nglog_ngstats_cfg[1024];
-char	__nglog_worldlog_tag[64];
-char	__nglog_worldlog_prefix[1024];
-char	__nglog_rel_path[1024];
-char	__nglog_logpath[1024];
-int	__nglog_buffer;
-int	__nglog_flush;
-char	__nglog_log_prefix[1024];
-char	__nglog_logname[1024];
-int	__nglog_logstyle;
-char	__nglog_ngstats_logdir[1024];
-char	__nglog_worldlog_path[1024];
-char	__nglog_worldlog_name[1024];
-
+int __nglog_worldlog = 0;
+int __nglog_num_errs = 0;
+int __nglog_ngstats_exec = 0;
+char    __nglog_error_msg[8][4096];
+char    __nglog_ngstats_cfg[1024];
+char    __nglog_worldlog_tag[64];
+char    __nglog_worldlog_prefix[1024];
+char    __nglog_rel_path[1024];
+char    __nglog_logpath[1024];
+int __nglog_buffer;
+int __nglog_flush;
+char    __nglog_log_prefix[1024];
+char    __nglog_logname[1024];
+int __nglog_logstyle;
+char    __nglog_ngstats_logdir[1024];
+char    __nglog_worldlog_path[1024];
+char    __nglog_worldlog_name[1024];
 
 // gamex86.dll: 1004CE60..1004D2AD
 // gamei386.so: 0006E3F8..0006E7B9
-int ngLog_init (void)
+int ngLog_init(void)
 {
-	char	opmode[8];
-	char	stamp[64];
-	int		exists;
+    char    opmode[8];
+    char    stamp[64];
+    int     exists;
 
-	if (log_file || worldlog_file)
-		ngLog_logClose (0, NULL);
+    if (log_file || worldlog_file)
+        ngLog_logClose(0, NULL);
 
-	ngLog_errorMsgClear ();
-	ngLog_initMark ();
+    ngLog_errorMsgClear();
+    ngLog_initMark();
 
-	if (__nglog_logstyle == 1 || __nglog_logstyle == atoi ("5"))
-		strcpy (opmode, "a+");
-	else if (__nglog_logstyle == 2)
-		strcpy (opmode, "w");
-	else if (__nglog_logstyle == 3)
-	{
-		strcpy (opmode, "w");
-		ngLog_rotateFile ();
-	}
-	else if (__nglog_logstyle == 4)
-	{
-		strcpy (opmode, "w");
-		strcpy (__nglog_logname, __nglog_logpath);
-		ngLog_getDateInfo (stamp, 1);
-		strcat (__nglog_logname, stamp);
-		strcat (__nglog_logname, ".");
-		strcat (__nglog_logname, __nglog_worldlog_tag);
-		strcpy (__nglog_log_prefix, __nglog_logname);
-		strcat (__nglog_logname, ".tmp");
-	}
-	else
-	{
-		sprintf (__nglog_error_msg[__nglog_num_errs++],
-			"ngLog logging disabled.\n");
-		if (!__nglog_worldlog)
-			return -1;
-	}
+    if (__nglog_logstyle == 1 || __nglog_logstyle == Q_atoi("5"))
+        strcpy(opmode, "a+");
+    else if (__nglog_logstyle == 2)
+        strcpy(opmode, "w");
+    else if (__nglog_logstyle == 3) {
+        strcpy(opmode, "w");
+        ngLog_rotateFile();
+    } else if (__nglog_logstyle == 4) {
+        strcpy(opmode, "w");
+        strcpy(__nglog_logname, __nglog_logpath);
+        ngLog_getDateInfo(stamp, 1);
+        strcat(__nglog_logname, stamp);
+        strcat(__nglog_logname, ".");
+        strcat(__nglog_logname, __nglog_worldlog_tag);
+        strcpy(__nglog_log_prefix, __nglog_logname);
+        strcat(__nglog_logname, ".tmp");
+    } else {
+        sprintf(__nglog_error_msg[__nglog_num_errs++],
+                "ngLog logging disabled.\n");
+        if (!__nglog_worldlog)
+            return -1;
+    }
 
-	if (__nglog_logstyle)
-	{
-		exists = ngLog_fileExists (__nglog_logname);
+    if (__nglog_logstyle) {
+        exists = ngLog_fileExists(__nglog_logname);
 
-		if (exists == 2)
-		{
-			sprintf (__nglog_error_msg[__nglog_num_errs++],
-				"Error on opening %s, %d (%d)\n", __nglog_logname, errno,
-				__nglog_logstyle);
-			if (!__nglog_worldlog)
-				return -1;
-		}
-	}
+        if (exists == 2) {
+            sprintf(__nglog_error_msg[__nglog_num_errs++],
+                    "Error on opening %s, %d (%d)\n", __nglog_logname, errno,
+                    __nglog_logstyle);
+            if (!__nglog_worldlog)
+                return -1;
+        }
+    }
 
-	if (__nglog_logstyle)
-	{
-		log_file = fopen (__nglog_logname, opmode);
-		if (!log_file)
-		{
-			sprintf (__nglog_error_msg[__nglog_num_errs++],
-				"Couldn't create logfile %s: %d (%d)\n", __nglog_logname, errno,
-				__nglog_logstyle);
-			if (!__nglog_worldlog)
-				return -1;
-		}
-	}
+    if (__nglog_logstyle) {
+        log_file = fopen(__nglog_logname, opmode);
+        if (!log_file) {
+            sprintf(__nglog_error_msg[__nglog_num_errs++],
+                    "Couldn't create logfile %s: %d (%d)\n", __nglog_logname, errno,
+                    __nglog_logstyle);
+            if (!__nglog_worldlog)
+                return -1;
+        }
+    }
 
-	if (__nglog_logstyle == 4)
-		sprintf (__nglog_error_msg[__nglog_num_errs++],
-			"ngStats logging enabled.\n");
+    if (__nglog_logstyle == 4)
+        sprintf(__nglog_error_msg[__nglog_num_errs++],
+                "ngStats logging enabled.\n");
 
-	if (__nglog_worldlog)
-	{
-		strcpy (__nglog_worldlog_name, __nglog_worldlog_path);
-		ngLog_getDateInfo (stamp, 1);
-		strcat (__nglog_worldlog_name, stamp);
-		strcat (__nglog_worldlog_name, ".");
-		strcat (__nglog_worldlog_name, __nglog_worldlog_tag);
-		strcpy (__nglog_worldlog_prefix, __nglog_worldlog_name);
-		strcat (__nglog_worldlog_name, ".tmp");
-		worldlog_file = fopen (__nglog_worldlog_name, "w");
-		if (!worldlog_file)
-		{
-			sprintf (__nglog_error_msg[__nglog_num_errs++],
-				"*** Couldn't create ngWorldStats logfile %s: %d\n",
-				__nglog_worldlog_name, errno);
-			sprintf (__nglog_error_msg[__nglog_num_errs++],
-				"ngWorldStats logging disabled.\n");
-			if (!log_file || !__nglog_logstyle)
-				return -1;
-		}
-		else
-			sprintf (__nglog_error_msg[__nglog_num_errs++],
-				"ngWorldStats logging enabled.\n");
-	}
-	else
-		sprintf (__nglog_error_msg[__nglog_num_errs++],
-			"ngWorldStats logging disabled.\n");
+    if (__nglog_worldlog) {
+        strcpy(__nglog_worldlog_name, __nglog_worldlog_path);
+        ngLog_getDateInfo(stamp, 1);
+        strcat(__nglog_worldlog_name, stamp);
+        strcat(__nglog_worldlog_name, ".");
+        strcat(__nglog_worldlog_name, __nglog_worldlog_tag);
+        strcpy(__nglog_worldlog_prefix, __nglog_worldlog_name);
+        strcat(__nglog_worldlog_name, ".tmp");
+        worldlog_file = fopen(__nglog_worldlog_name, "w");
+        if (!worldlog_file) {
+            sprintf(__nglog_error_msg[__nglog_num_errs++],
+                    "*** Couldn't create ngWorldStats logfile %s: %d\n",
+                    __nglog_worldlog_name, errno);
+            sprintf(__nglog_error_msg[__nglog_num_errs++],
+                    "ngWorldStats logging disabled.\n");
+            if (!log_file || !__nglog_logstyle)
+                return -1;
+        } else
+            sprintf(__nglog_error_msg[__nglog_num_errs++],
+                    "ngWorldStats logging enabled.\n");
+    } else
+        sprintf(__nglog_error_msg[__nglog_num_errs++],
+                "ngWorldStats logging disabled.\n");
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -156,76 +142,68 @@ Append one line to whichever of the two logs `which` selects (0 = both).
 */
 // gamex86.dll: 1004D2AD..1004D52A
 // gamei386.so: 0006E7BC..0006E9A9
-void ngLog_logWrite (char *line, int which)
+void ngLog_logWrite(char *line, int which)
 {
-	char	buf[4096];
-	int		len;
-	int		wrote;
+    char    buf[4096];
+    int     len;
+    int     wrote;
 
-	if (!log_file && !worldlog_file)
-		return;
+    if (!log_file && !worldlog_file)
+        return;
 
-	sprintf (buf, "%s\n", line);
-	len = strlen (buf);
-	ngLog_errorMsgClear ();
+    sprintf(buf, "%s\n", line);
+    len = strlen(buf);
+    ngLog_errorMsgClear();
 
-	if (__nglog_logstyle && log_file && which != 2)
-	{
-		wrote = fprintf (log_file, "%s", buf);
-		if (wrote != len)
-		{
-			sprintf (__nglog_error_msg[__nglog_num_errs++],
-				"Error writing to %s: %d != %d (%d)\n",
-				__nglog_logname, wrote, len, errno);
-			ngLog_logClose (1, NULL);
-			return;
-		}
+    if (__nglog_logstyle && log_file && which != 2) {
+        wrote = fprintf(log_file, "%s", buf);
+        if (wrote != len) {
+            sprintf(__nglog_error_msg[__nglog_num_errs++],
+                    "Error writing to %s: %d != %d (%d)\n",
+                    __nglog_logname, wrote, len, errno);
+            ngLog_logClose(1, NULL);
+            return;
+        }
 
-		if (!__nglog_flush)
-			ngLog_logFlush (log_file);
-		else if (__nglog_flush == 1)
-		{
-			buffer_lines++;
-			if (buffer_lines > __nglog_buffer)
-			{
-				buffer_lines = 0;
-				ngLog_logFlush (log_file);
-			}
-		}
-	}
+        if (!__nglog_flush)
+            ngLog_logFlush(log_file);
+        else if (__nglog_flush == 1) {
+            buffer_lines++;
+            if (buffer_lines > __nglog_buffer) {
+                buffer_lines = 0;
+                ngLog_logFlush(log_file);
+            }
+        }
+    }
 
-	if (__nglog_worldlog && worldlog_file && which != 1)
-	{
-		ngLog_inputLine (buf);
-		wrote = fwrite (buf, 1, len, worldlog_file);
-		if (wrote != len)
-		{
-			sprintf (__nglog_error_msg[__nglog_num_errs++],
-				"Error writing to ngWorldStats log: %d != %d (%d)\n",
-				wrote, len, errno);
-			ngLog_logClose (2, NULL);
-			return;
-		}
+    if (__nglog_worldlog && worldlog_file && which != 1) {
+        ngLog_inputLine(buf);
+        wrote = fwrite(buf, 1, len, worldlog_file);
+        if (wrote != len) {
+            sprintf(__nglog_error_msg[__nglog_num_errs++],
+                    "Error writing to ngWorldStats log: %d != %d (%d)\n",
+                    wrote, len, errno);
+            ngLog_logClose(2, NULL);
+            return;
+        }
 
-		if (!__nglog_flush)
-			ngLog_logFlush (worldlog_file);
-		else if (__nglog_flush == 1)
-		{
-			wbuffer_lines++;
-			if (wbuffer_lines > __nglog_buffer)
-			{
-				wbuffer_lines = 0;
-				ngLog_logFlush (worldlog_file);
-			}
-		}
-	}
+        if (!__nglog_flush)
+            ngLog_logFlush(worldlog_file);
+        else if (__nglog_flush == 1) {
+            wbuffer_lines++;
+            if (wbuffer_lines > __nglog_buffer) {
+                wbuffer_lines = 0;
+                ngLog_logFlush(worldlog_file);
+            }
+        }
+    }
 }
 
 // gamex86.dll: 1004D52A..1004D53B
 // gamei386.so: 0006E9AC..0006E9C9
-void ngLog_logFlush (FILE *f)
+void ngLog_logFlush(FILE *f)
 {
-	fflush (f);
+    fflush(f);
 }
 
 /*
@@ -237,60 +215,60 @@ Build the ngStatsQ2T command line. It only formats it -- the caller runs it.
 */
 // gamex86.dll: 1004D53B..1004D71D
 // gamei386.so: 0006E9CC..0006EAB0
-void ngLog_ngStatsCall (int arg)
+void ngLog_ngStatsCall(int arg)
 {
-	// The MSVC frame emits the three aggregate initialisers in DECLARATION
-	// order, and real's order is si, process, flag -- which is what puts the Win32
-	// pair ahead of `flag` here.  gcc sees neither of them, and expands the
-	// initialiser as the same 6-byte block move it gives strcpy of a literal.
-	char	cmd[2048];
+    // The MSVC frame emits the three aggregate initialisers in DECLARATION
+    // order, and real's order is si, process, flag -- which is what puts the Win32
+    // pair ahead of `flag` here.  gcc sees neither of them, and expands the
+    // initialiser as the same 6-byte block move it gives strcpy of a literal.
+    char    cmd[2048];
 #ifdef _WIN32
-	STARTUPINFO			si = {0};
-	PROCESS_INFORMATION	process = {0};
+    STARTUPINFO         si = {0};
+    PROCESS_INFORMATION process = {0};
 #endif
-	char	flag[6] = "false";
-	char	exepath[1024];
-	char	cfgpath[1024];
-	char	cwd[1024];
+    char    flag[6] = "false";
+    char    exepath[1024];
+    char    cfgpath[1024];
+    char    cwd[1024];
 
-	if (arg)
-		strcpy (flag, "true");
+    if (arg)
+        strcpy(flag, "true");
 
-	strcpy (cwd, __nglog_log_prefix);
-	strcat (cwd, ".log");
+    strcpy(cwd, __nglog_log_prefix);
+    strcat(cwd, ".log");
 
 #ifdef _WIN32
-	si.cb = sizeof (si);
-	si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-	if (arg)
-		si.wShowWindow = SW_SHOW;
-	else
-		si.wShowWindow = SW_HIDE;
-	si.hStdInput = NULL;
-	si.hStdOutput = NULL;
-	si.hStdError = NULL;
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+    if (arg)
+        si.wShowWindow = SW_SHOW;
+    else
+        si.wShowWindow = SW_HIDE;
+    si.hStdInput = NULL;
+    si.hStdOutput = NULL;
+    si.hStdError = NULL;
 #endif
 
-	getcwd (cwd, 1024);
+    getcwd(cwd, 1024);
 
 #ifdef _WIN32
-	sprintf (exepath, "%s\\%s\\ngStats\\ngStatsQ2T.exe", cwd, __nglog_rel_path);
-	sprintf (cfgpath, "%s\\%s\\ngStats\\%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
-	sprintf (cmd, "%s -b %s -c %s\\%s\\ngStats\\%s %s", exepath, flag,
-		cwd, __nglog_rel_path, __nglog_ngstats_cfg, cfgpath);
+    sprintf(exepath, "%s\\%s\\ngStats\\ngStatsQ2T.exe", cwd, __nglog_rel_path);
+    sprintf(cfgpath, "%s\\%s\\ngStats\\%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
+    sprintf(cmd, "%s -b %s -c %s\\%s\\ngStats\\%s %s", exepath, flag,
+            cwd, __nglog_rel_path, __nglog_ngstats_cfg, cfgpath);
 
-	// DETACHED_PROCESS for the silent end-of-map run,
-	// CREATE_NEW_PROCESS_GROUP for the interactive one.
-	if (!arg)
-		CreateProcess (NULL, cmd, NULL, NULL, FALSE, DETACHED_PROCESS,
-			NULL, NULL, &si, &process);
-	else
-		CreateProcess (NULL, cmd, NULL, NULL, FALSE, CREATE_NEW_PROCESS_GROUP,
-			NULL, NULL, &si, &process);
+    // DETACHED_PROCESS for the silent end-of-map run,
+    // CREATE_NEW_PROCESS_GROUP for the interactive one.
+    if (!arg)
+        CreateProcess(NULL, cmd, NULL, NULL, FALSE, DETACHED_PROCESS,
+                      NULL, NULL, &si, &process);
+    else
+        CreateProcess(NULL, cmd, NULL, NULL, FALSE, CREATE_NEW_PROCESS_GROUP,
+                      NULL, NULL, &si, &process);
 #else
-	sprintf (exepath, "%s/%s/ngStats/bin/ngStatsQ2T", cwd, __nglog_rel_path);
-	sprintf (cfgpath, "%s/%s/ngStats/%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
-	sprintf (cmd, "%s -b %s -c %s %s &", exepath, flag, __nglog_ngstats_cfg, cfgpath);
+    sprintf(exepath, "%s/%s/ngStats/bin/ngStatsQ2T", cwd, __nglog_rel_path);
+    sprintf(cfgpath, "%s/%s/ngStats/%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
+    sprintf(cmd, "%s -b %s -c %s %s &", exepath, flag, __nglog_ngstats_cfg, cfgpath);
 #endif
 }
 
@@ -304,101 +282,96 @@ for it, and hand the finished log to ngStats / ngWorldStats.
 */
 // gamex86.dll: 1004D71D..1004D959
 // gamei386.so: 0006EAB0..0006EC2A
-void ngLog_logClose (int which, int reason)
+void ngLog_logClose(int which, int reason)
 {
-	if (which != 2)
-	{
-		if (log_file)
-		{
-			fflush (log_file);
-			fclose (log_file);
-			log_file = NULL;
-			if (__nglog_logstyle == 4)
-			{
-				char	name[1024];
+    if (which != 2) {
+        if (log_file) {
+            fflush(log_file);
+            fclose(log_file);
+            log_file = NULL;
+            if (__nglog_logstyle == 4) {
+                char    name[1024];
 
-				strcpy (name, __nglog_log_prefix);
-				strcat (name, ".log");
-				rename (__nglog_logname, name);
-			}
-		}
+                strcpy(name, __nglog_log_prefix);
+                strcat(name, ".log");
+                rename(__nglog_logname, name);
+            }
+        }
 
-		if (__nglog_logstyle == 4 && __nglog_ngstats_exec)
-			ngLog_ngStatsCall (reason);
-	}
+        if (__nglog_logstyle == 4 && __nglog_ngstats_exec)
+            ngLog_ngStatsCall(reason);
+    }
 
-	if (worldlog_file && which != 1)
-	{
-		// A second buffer, not `name` again: MSVC gives it its own slot, gcc
-		// reuses name's because name's block has already closed.
-		char	cwd[1024];
-		char	cmd[2048];
-		char	exepath[1024];
-		char	logdir[1024];
+    if (worldlog_file && which != 1) {
+        // A second buffer, not `name` again: MSVC gives it its own slot, gcc
+        // reuses name's because name's block has already closed.
+        char    cwd[1024];
+        char    cmd[2048];
+        char    exepath[1024];
+        char    logdir[1024];
 #ifdef _WIN32
-		STARTUPINFO			sinfo = {0};
-		PROCESS_INFORMATION	process = {0};
+        STARTUPINFO         sinfo = {0};
+        PROCESS_INFORMATION process = {0};
 #endif
-		fflush (worldlog_file);
-		fclose (worldlog_file);
-		worldlog_file = NULL;
-		strcpy (cwd, __nglog_worldlog_prefix);
-		strcat (cwd, ".log");
-		rename (__nglog_worldlog_name, cwd);
+        fflush(worldlog_file);
+        fclose(worldlog_file);
+        worldlog_file = NULL;
+        strcpy(cwd, __nglog_worldlog_prefix);
+        strcat(cwd, ".log");
+        rename(__nglog_worldlog_name, cwd);
 
 #ifdef _WIN32
-			// sinfo/process are declared INSIDE this block: real's zeroing sits partway
-			// into the function rather than at entry.
-		sinfo.cb = sizeof (sinfo);
-		sinfo.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-		sinfo.wShowWindow = SW_HIDE;
-		sinfo.hStdInput = NULL;
-		sinfo.hStdOutput = NULL;
-		sinfo.hStdError = NULL;
+        // sinfo/process are declared INSIDE this block: real's zeroing sits partway
+        // into the function rather than at entry.
+        sinfo.cb = sizeof(sinfo);
+        sinfo.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+        sinfo.wShowWindow = SW_HIDE;
+        sinfo.hStdInput = NULL;
+        sinfo.hStdOutput = NULL;
+        sinfo.hStdError = NULL;
 #endif
 
-		getcwd (cwd, 1024);
+        getcwd(cwd, 1024);
 #ifdef _WIN32
-		sprintf (exepath, "%s\\%s\\ngWorldStats\\bin\\ngWorldStats.exe", cwd, __nglog_rel_path);
-		sprintf (logdir, "%s\\%s\\ngWorldStats\\logs", cwd, __nglog_rel_path);
-		sprintf (cmd, "%s -d %s -g Quake2Tourney", exepath, logdir);
-		CreateProcess (NULL, cmd, NULL, NULL, FALSE, DETACHED_PROCESS,
-			NULL, NULL, &sinfo, &process);
+        sprintf(exepath, "%s\\%s\\ngWorldStats\\bin\\ngWorldStats.exe", cwd, __nglog_rel_path);
+        sprintf(logdir, "%s\\%s\\ngWorldStats\\logs", cwd, __nglog_rel_path);
+        sprintf(cmd, "%s -d %s -g Quake2Tourney", exepath, logdir);
+        CreateProcess(NULL, cmd, NULL, NULL, FALSE, DETACHED_PROCESS,
+                      NULL, NULL, &sinfo, &process);
 #else
-		sprintf (exepath, "%s/%s/ngWorldStats/bin/ngWorldStats", cwd, __nglog_rel_path);
-		sprintf (logdir, "%s/%s/ngWorldStats/logs", cwd, __nglog_rel_path);
-		sprintf (cmd, "%s -d %s -g Quake2Tourney &", exepath, logdir);
-		system (cmd);
+        sprintf(exepath, "%s/%s/ngWorldStats/bin/ngWorldStats", cwd, __nglog_rel_path);
+        sprintf(logdir, "%s/%s/ngWorldStats/logs", cwd, __nglog_rel_path);
+        sprintf(cmd, "%s -d %s -g Quake2Tourney &", exepath, logdir);
+        system(cmd);
 #endif
-	}
+    }
 }
 
 // gamex86.dll: 1004D959..1004D9A1
 // gamei386.so: 0006EC2C..0006EC78
-int ngLog_fileExists (char *name)
+int ngLog_fileExists(char *name)
 {
-	FILE	*f;
+    FILE    *f;
 
-	f = fopen (name, "r");
-	if (!f)
-	{
-		if (errno == ENOENT)
-			return 0;
-		return 2;
-	}
-	fclose (f);
-	return 1;
+    f = fopen(name, "r");
+    if (!f) {
+        if (errno == ENOENT)
+            return 0;
+        return 2;
+    }
+    fclose(f);
+    return 1;
 }
 
 // gamex86.dll: 1004D9A1..1004D9DA
 // gamei386.so: 0006EC78..0006ECB3
-void ngLog_errorMsgClear (void)
+void ngLog_errorMsgClear(void)
 {
-	int		i;
+    int     i;
 
-	for (i = 0; i < 8; i++)
-		__nglog_error_msg[i][0] = '\0';
-	__nglog_num_errs = 0;
+    for (i = 0; i < 8; i++)
+        __nglog_error_msg[i][0] = '\0';
+    __nglog_num_errs = 0;
 }
 
 /*
@@ -416,34 +389,34 @@ an OLDNAMES alias).
 */
 // gamex86.dll: 1004D9DA..1004DAB2
 // gamei386.so: 0006ECB4..0006ED64
-void ngLog_getDateInfo (char *out, int full)
+void ngLog_getDateInfo(char *out, int full)
 {
-	struct timeb	tb;
-	time_t			t;
-	struct tm		*ltime;
+    struct timeb    tb;
+    time_t          t;
+    struct tm       *ltime;
 #ifndef _WIN32
-	short			tz;
+    short           tz;
 #endif
 
-	ftime (&tb);
+    ftime(&tb);
 #ifndef _WIN32
-	tz = tb.timezone;
+    tz = tb.timezone;
 #endif
-	time (&t);
-	ltime = localtime (&t);
+    time(&t);
+    ltime = localtime(&t);
 
-	if (full)
-		sprintf (out, "%d.%.2d.%.2d.%.2d.%.2d.%.2d.%.2d.%+2.1f",
-			ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour,
-			ltime->tm_min, ltime->tm_sec, tb.millitm,
+    if (full)
+        sprintf(out, "%d.%.2d.%.2d.%.2d.%.2d.%.2d.%.2d.%+2.1f",
+                ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour,
+                ltime->tm_min, ltime->tm_sec, tb.millitm,
 #ifdef _WIN32
-			-(float)(_timezone / 3600));
+                -(float)(_timezone / 3600));
 #else
-			-(float)(tz / 3600));
+                -(float)(tz / 3600));
 #endif
-	else
-		sprintf (out, "%d.%.2d.%.2d.%.2d.%.2d",
-			ltime->tm_year, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour, ltime->tm_min);
+    else
+        sprintf(out, "%d.%.2d.%.2d.%.2d.%.2d",
+                ltime->tm_year, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour, ltime->tm_min);
 }
 
 /*
@@ -455,41 +428,38 @@ Find the first free `<base>NN.<ext>` and make that the log name.
 */
 // gamex86.dll: 1004DAB2..1004DC28
 // gamei386.so: 0006ED64..0006EEBF
-void ngLog_rotateFile (void)
+void ngLog_rotateFile(void)
 {
-	char	stem[1024];
-	char	name[1024];
-	char	*suffix;
-	int		n;
+    char    stem[1024];
+    char    name[1024];
+    char    *suffix;
+    int     n;
 
-	n = 0;
-	strcpy (stem, __nglog_logname);
-	suffix = strrchr (stem, '.');
-	if (suffix)
-	{
-		*suffix = '\0';
-		suffix++;
-	}
+    n = 0;
+    strcpy(stem, __nglog_logname);
+    suffix = strrchr(stem, '.');
+    if (suffix) {
+        *suffix = '\0';
+        suffix++;
+    }
 
-	strcpy (name, stem);
-	if (suffix)
-	{
-		strcat (name, ".");
-		strcat (name, suffix);
-	}
+    strcpy(name, stem);
+    if (suffix) {
+        strcat(name, ".");
+        strcat(name, suffix);
+    }
 
-	while (ngLog_fileExists (name) == 1)
-	{
-		if (suffix)
-			sprintf (name, "%s%.2d.%s", stem, n, suffix);
-		else
-			sprintf (name, "%s%.2d", stem, n);
-		n++;
-	}
+    while (ngLog_fileExists(name) == 1) {
+        if (suffix)
+            sprintf(name, "%s%.2d.%s", stem, n, suffix);
+        else
+            sprintf(name, "%s%.2d", stem, n);
+        n++;
+    }
 
-	strcpy (__nglog_logname, name);
-	sprintf (__nglog_error_msg[__nglog_num_errs++], "Writing to log %s\n",
-		__nglog_logname);
+    strcpy(__nglog_logname, name);
+    sprintf(__nglog_error_msg[__nglog_num_errs++], "Writing to log %s\n",
+            __nglog_logname);
 }
 
 /*
@@ -501,28 +471,26 @@ This machine's dotted-quad, or an error string in the same buffer.
 */
 // gamex86.dll: 1004DC28..1004DCE0
 // gamei386.so: 0006EEC0..0006EF58
-char *ngLog_hostAddr (void)
+char *ngLog_hostAddr(void)
 {
-	static char		address[128];
-	static char		host[256];
-	struct hostent	*h;
-	unsigned char	*hostaddr;	// <INVENTED NAME>
+    static char     address[128];
+    static char     host[256];
+    struct hostent  *h;
+    unsigned char   *hostaddr;  // <INVENTED NAME>
 
-	if (gethostname (host, 256))
-	{
-		sprintf (address, "ERROR: no name");
-		return address;
-	}
+    if (gethostname(host, 256)) {
+        sprintf(address, "ERROR: no name");
+        return address;
+    }
 
-	h = gethostbyname (host);
-	if (!h)
-	{
-		sprintf (address, "ERROR: can't convert name\n");
-		return address;
-	}
+    h = gethostbyname(host);
+    if (!h) {
+        sprintf(address, "ERROR: can't convert name\n");
+        return address;
+    }
 
-	hostaddr = (unsigned char *)h->h_addr_list[0];
-	sprintf (address, "%d.%d.%d.%d",
-		hostaddr[0], hostaddr[1], hostaddr[2], hostaddr[3]);
-	return address;
+    hostaddr = (unsigned char *)h->h_addr_list[0];
+    sprintf(address, "%d.%d.%d.%d",
+            hostaddr[0], hostaddr[1], hostaddr[2], hostaddr[3]);
+    return address;
 }

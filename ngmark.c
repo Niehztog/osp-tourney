@@ -4,14 +4,13 @@
 
 #include "g_local.h"
 
-MD5_CTX	context;
-
+MD5_CTX context;
 
 // gamex86.dll: 1004DCE0..1004DCF2
 // gamei386.so: 0006EF58..0006EF78
-void ngLog_initMark (void)
+void ngLog_initMark(void)
 {
-	MD5Init (&context);
+    MD5Init(&context);
 }
 
 /*
@@ -23,15 +22,15 @@ Fold one line into the running checksum, then scramble it in place.
 */
 // gamex86.dll: 1004DCF2..1004DD52
 // gamei386.so: 0006EF78..0006EFC9
-void ngLog_inputLine (char *line)
+void ngLog_inputLine(char *line)
 {
-	int		len;
-	int		i;
+    int     len;
+    int     i;
 
-	len = strlen (line);
-	MD5Update (&context, line, len);
-	for (i = 0; i < len; i++)
-		line[i] = line[i] ^ 0xa7;
+    len = strlen(line);
+    MD5Update(&context, line, len);
+    for (i = 0; i < len; i++)
+        line[i] = line[i] ^ 0xa7;
 }
 
 /*
@@ -43,24 +42,23 @@ Close out the running checksum and write it as 32 hex digits.
 */
 // gamex86.dll: 1004DD52..1004DE1E
 // gamei386.so: 0006EFCC..0006F086
-void ngLog_giveMark (char *out)
+void ngLog_giveMark(char *out)
 {
-	unsigned char	mark[16];
-	char			salt[2048];
-	char			hexchars[1024];
-	unsigned int	i;
+    unsigned char   mark[16];
+    char            salt[2048];
+    char            hexchars[1024];
+    unsigned int    i;
 
-	ngLog_transMark (salt, (int *)&i);
-	MD5Update (&context, salt, i);
-	MD5Final (mark, &context);
+    ngLog_transMark(salt, (int *)&i);
+    MD5Update(&context, salt, i);
+    MD5Final(mark, &context);
 
-	salt[0] = '\0';
-	for (i = 0; i < 16; i++)
-	{
-		sprintf (hexchars, "%02x", mark[i]);
-		strcat (salt, hexchars);
-	}
-	strcpy (out, salt);
+    salt[0] = '\0';
+    for (i = 0; i < 16; i++) {
+        sprintf(hexchars, "%02x", mark[i]);
+        strcat(salt, hexchars);
+    }
+    strcpy(out, salt);
 }
 
 /*
@@ -73,31 +71,30 @@ one, so it does not disturb the log mark.
 */
 // gamex86.dll: 1004DE1E..1004DEFF
 // gamei386.so: 0006F088..0006F1AB
-char *ngLog_playerIdentifier (char *a, char *b)
+char *ngLog_playerIdentifier(char *a, char *b)
 {
-	// 2048, not 256: real's .bss puts the next TU's first static exactly 0x800
-	// bytes further on.  Nothing in either audit can see a static buffer's
-	// SIZE -- the ELF masks the [ebx+-disp] that reaches it.
-	static char		idbuf[2048];
-	MD5_CTX			md5ctx;
-	unsigned char	digest[16];
-	char			hexchars[1024];
-	int				i;
+    // 2048, not 256: real's .bss puts the next TU's first static exactly 0x800
+    // bytes further on.  Nothing in either audit can see a static buffer's
+    // SIZE -- the ELF masks the [ebx+-disp] that reaches it.
+    static char     idbuf[2048];
+    MD5_CTX         md5ctx;
+    unsigned char   digest[16];
+    char            hexchars[1024];
+    int             i;
 
-	MD5Init (&md5ctx);
-	MD5Update (&md5ctx, a, strlen (a));
-	MD5Update (&md5ctx, b, strlen (b));
-	ngLog_transMark (idbuf, &i);
-	MD5Update (&md5ctx, idbuf, i);
-	MD5Final (digest, &md5ctx);
+    MD5Init(&md5ctx);
+    MD5Update(&md5ctx, a, strlen(a));
+    MD5Update(&md5ctx, b, strlen(b));
+    ngLog_transMark(idbuf, &i);
+    MD5Update(&md5ctx, idbuf, i);
+    MD5Final(digest, &md5ctx);
 
-	idbuf[0] = '\0';
-	for (i = 0; i < 16; i++)
-	{
-		sprintf (hexchars, "%02x", digest[i]);
-		strcat (idbuf, hexchars);
-	}
-	return idbuf;
+    idbuf[0] = '\0';
+    for (i = 0; i < 16; i++) {
+        sprintf(hexchars, "%02x", digest[i]);
+        strcat(idbuf, hexchars);
+    }
+    return idbuf;
 }
 
 /*
@@ -110,29 +107,29 @@ plaintext copy afterwards so it is never resident.
 */
 // gamex86.dll: 1004DEFF..1004E113
 // gamei386.so: 0006F1AC..0006F257
-void ngLog_transMark (char *out, int *count)
+void ngLog_transMark(char *out, int *count)
 {
-	char		scratch[16];
-	char		buf[128];
-	// "ngUS@ ngL0G Kw@ke2 1mplem3ntati0n" ^ 0xa9, 33 ints.
-	int			salttab[33] = {
-		0xc7, 0xce, 0xfc, 0xfa, 0xe9, 0x89, 0xc7, 0xce, 0xe5, 0x99, 0xee,
-		0x89, 0xe2, 0xde, 0xe9, 0xc2, 0xcc, 0x9b, 0x89, 0x98, 0xc4, 0xd9,
-		0xc5, 0xcc, 0xc4, 0x9a, 0xc7, 0xdd, 0xc8, 0xdd, 0xc0, 0x99, 0xc7 };
-	int			i;
+    char        scratch[16];
+    char        buf[128];
+    // "ngUS@ ngL0G Kw@ke2 1mplem3ntati0n" ^ 0xa9, 33 ints.
+    int         salttab[33] = {
+        0xc7, 0xce, 0xfc, 0xfa, 0xe9, 0x89, 0xc7, 0xce, 0xe5, 0x99, 0xee,
+        0x89, 0xe2, 0xde, 0xe9, 0xc2, 0xcc, 0x9b, 0x89, 0x98, 0xc4, 0xd9,
+        0xc5, 0xcc, 0xc4, 0x9a, 0xc7, 0xdd, 0xc8, 0xdd, 0xc0, 0x99, 0xc7
+    };
+    int         i;
 
-	buf[0] = '\0';
-	*count = 33;
+    buf[0] = '\0';
+    *count = 33;
 
-	for (i = 0; i < *count; i++)
-	{
-		sprintf (scratch, "%c", salttab[i] ^ 0xa9);
-		strcat (buf, scratch);
-	}
-	strcpy (out, buf);
+    for (i = 0; i < *count; i++) {
+        sprintf(scratch, "%c", salttab[i] ^ 0xa9);
+        strcat(buf, scratch);
+    }
+    strcpy(out, buf);
 
-	for (i = 0; i < *count; i++)
-		buf[i] = '\0';
+    for (i = 0; i < *count; i++)
+        buf[i] = '\0';
 }
 
 //=============================================================================
@@ -504,198 +501,180 @@ unsigned int len;
 // and the sentinel yaw 0x3f49.
 //=============================================================================
 
-void ClientDisconnect (edict_t *ent);
+void ClientDisconnect(edict_t *ent);
 
 // File statics.  The loop counter really is a static in the original, and the
 // DECLARATION ORDER is read off real's .bss run, which lays these out in
 // exactly this sequence -- including a 4-byte object between zb_delta and
 // zb_shoot that nothing in the image references.  Only that object's
 // existence and size are evidence; its name and type are <INVENTED>.
-static int			zb_count;
-static float		zb_delta[2];
-static int			zb_pad;
-static byte			zb_shoot;
-static float		zb_distance;
-static gclient_t	*zb_target;
+static int          zb_count;
+static float        zb_delta[2];
+static int          zb_pad;
+static byte         zb_shoot;
+static float        zb_distance;
+static gclient_t    *zb_target;
 
 // gamex86.dll: 1004F312..1004F692
 // gamei386.so: 0006FEF8..000701B4
-qboolean OSP_botDetect (edict_t *ent, usercmd_t *ucmd)
+bool OSP_botDetect(edict_t *ent, usercmd_t *ucmd)
 {
-	char	why[32];
+    char    why[32];
 
-	zb_target = ent->client;
+    zb_target = ent->client;
 
-	if (zb_target->resp.entered != ENTERED_ENTERED ||
-		zb_target->ping > 500 ||
-		zb_target->osp_t024 == level.framenum ||
-		zb_target->resp.osp_r07c[0])
-		return false;
+    if (zb_target->resp.entered != ENTERED_ENTERED ||
+        zb_target->ping > 500 ||
+        zb_target->osp_t024 == level.framenum ||
+        zb_target->resp.osp_r07c[0])
+        return false;
 
-	// a movement command never carries an impulse
-	if (ucmd->impulse)
-	{
-		OnBotDetection (ent, "i");
-		return true;
-	}
+    // a movement command never carries an impulse
+    if (ucmd->impulse) {
+        OnBotDetection(ent, "i");
+        return true;
+    }
 
-	zb_shoot = ucmd->buttons & BUTTON_ATTACK;
-	// Written `^`, not `!=`: both operands are 0 or BUTTON_ATTACK, so the XOR
-	// is the edge-detect spelling.
-	if (zb_shoot ^ zb_target->osp_t01c[0])
-	{
-		zb_target->osp_t01c[0] = zb_shoot;
+    zb_shoot = ucmd->buttons & BUTTON_ATTACK;
+    // Written `^`, not `!=`: both operands are 0 or BUTTON_ATTACK, so the XOR
+    // is the edge-detect spelling.
+    if (zb_shoot ^ zb_target->osp_t01c[0]) {
+        zb_target->osp_t01c[0] = zb_shoot;
 
-		// An empty then-arm, the Gladiator SDK's idiom: /Od then jumps INTO
-		// the else on the float test and skips it with a separate jmp.
-		if (!zb_shoot && zb_target->osp_t020 < 39000)
-		{
-		}
-		else
-		{
-			if (!ucmd->msec || (zb_shoot && abs(ucmd->angles[0]) == 0x3f49))
-			{
-				zb_target->osp_t020 = 0;
-			}
-			else
-			{
-				for (zb_count = 0; zb_count < 2; zb_count++)
-				{
-					zb_delta[zb_count] = (float)(ucmd->angles[zb_count] - zb_target->osp_t028[zb_count]);
-					if (zb_delta[zb_count] > 32768)
-						zb_delta[zb_count] -= 65536;
-					else if (zb_delta[zb_count] < -32768)
-						zb_delta[zb_count] += 65536;
-				}
+        // An empty then-arm, the Gladiator SDK's idiom: /Od then jumps INTO
+        // the else on the float test and skips it with a separate jmp.
+        if (!zb_shoot && zb_target->osp_t020 < 39000) {
+        } else {
+            if (!ucmd->msec || (zb_shoot && abs(ucmd->angles[0]) == 0x3f49)) {
+                zb_target->osp_t020 = 0;
+            } else {
+                for (zb_count = 0; zb_count < 2; zb_count++) {
+                    zb_delta[zb_count] = (float)(ucmd->angles[zb_count] - zb_target->osp_t028[zb_count]);
+                    if (zb_delta[zb_count] > 32768)
+                        zb_delta[zb_count] -= 65536;
+                    else if (zb_delta[zb_count] < -32768)
+                        zb_delta[zb_count] += 65536;
+                }
 
-				zb_distance = (zb_delta[0] * zb_delta[0] + zb_delta[1] * zb_delta[1]) / ucmd->msec;
+                zb_distance = (zb_delta[0] * zb_delta[0] + zb_delta[1] * zb_delta[1]) / ucmd->msec;
 
-				if (zb_shoot)
-				{
-					zb_target->osp_t020 = zb_distance;
-					return false;
-				}
+                if (zb_shoot) {
+                    zb_target->osp_t020 = zb_distance;
+                    return false;
+                }
 
-				if (zb_distance <= 0)
-				{
-					zb_target->osp_t034[0]++;
-					zb_target->osp_t020 = 0;
-					zb_target->osp_t024 = level.framenum;
-					if (zb_target->osp_t034[0] >= 2)
-					{
-						if (zb_distance <= 0)
-							sprintf (why, "r (%f)", zb_distance);
-						else
-							sprintf (why, "p (%f)", zb_distance);
-						OnBotDetection (ent, why);
-						return true;
-					}
-				}
-			}
-		}
-	}
+                if (zb_distance <= 0) {
+                    zb_target->osp_t034[0]++;
+                    zb_target->osp_t020 = 0;
+                    zb_target->osp_t024 = level.framenum;
+                    if (zb_target->osp_t034[0] >= 2) {
+                        if (zb_distance <= 0)
+                            sprintf(why, "r (%f)", zb_distance);
+                        else
+                            sprintf(why, "p (%f)", zb_distance);
+                        OnBotDetection(ent, why);
+                        return true;
+                    }
+                }
+            }
+        }
+    }
 
-	if (!zb_shoot)
-		for (zb_count = 0; zb_count < 2; zb_count++)
-			zb_target->osp_t028[zb_count] = ucmd->angles[zb_count];
+    if (!zb_shoot)
+        for (zb_count = 0; zb_count < 2; zb_count++)
+            zb_target->osp_t028[zb_count] = ucmd->angles[zb_count];
 
-	return false;
+    return false;
 }
 
 // gamex86.dll: 1004F692..1004F819
 // gamei386.so: 000701B4..00070316
-void OnBotDetection (edict_t *ent, char *why)
+void OnBotDetection(edict_t *ent, char *why)
 {
-	int		tents[9] = { 1, 2, 3, 9, 12, 14, 17, 18, 20 };
-	int		nrand;
-	int		i;
+    int     tents[9] = { 1, 2, 3, 9, 12, 14, 17, 18, 20 };
+    int     nrand;
+    int     i;
 
-	ent->client->resp.osp_r07c[0] = 1;
-	ent->client->resp.score = -99;
-	q2log_playerZBOT (ent, why);
-	gi.bprintf (PRINT_HIGH, "%s was kicked for using a BOT!\n",
-		ent->client->pers.netname);
+    ent->client->resp.osp_r07c[0] = 1;
+    ent->client->resp.score = -99;
+    q2log_playerZBOT(ent, why);
+    gi.bprintf(PRINT_HIGH, "%s was kicked for using a BOT!\n",
+               ent->client->pers.netname);
 
-	if (server_log)
-	{
-		OSP_getPlayerAddr (ent);
-		OSP_logAdminLog ("BotDetect: %s (%s) [%s]", ent->client->pers.netname,
-			why, ent->osp_e37c);
-	}
+    if (server_log) {
+        OSP_getPlayerAddr(ent);
+        OSP_logAdminLog("BotDetect: %s (%s) [%s]", ent->client->pers.netname,
+                        why, ent->osp_e37c);
+    }
 
-	ent->movetype = MOVETYPE_NOCLIP;
-	i = rand () % 9;
-	gi.WriteByte (tents[i]);
-	nrand = rand () % 3;
-	for (i = 0; i < nrand; i++)
-		gi.WriteByte (rand () % 256);
-	gi.unicast (ent, true);
-	ent->client->osp_t034[0] = 0;
-	gi.WriteByte (7);
-	gi.unicast (ent, true);
-	ClientDisconnect (ent);
+    ent->movetype = MOVETYPE_NOCLIP;
+    i = Q_rand() % 9;
+    gi.WriteByte(tents[i]);
+    nrand = Q_rand() % 3;
+    for (i = 0; i < nrand; i++)
+        gi.WriteByte(Q_rand() % 256);
+    gi.unicast(ent, true);
+    ent->client->osp_t034[0] = 0;
+    gi.WriteByte(7);
+    gi.unicast(ent, true);
+    ClientDisconnect(ent);
 }
 
 // gamex86.dll: 1004F819..1004FA00
 // gamei386.so: 00070318..00070500
-void OSP_speedDetect (edict_t *ent)
+void OSP_speedDetect(edict_t *ent)
 {
-	// FUNCTION-scope, although only the `else` uses it: real's PE gives it the
-	// SHALLOWEST slot, and MSVC lays every nested block's locals out below all
-	// the function-scope ones.
-	int		when;
+    // FUNCTION-scope, although only the `else` uses it: real's PE gives it the
+    // SHALLOWEST slot, and MSVC lays every nested block's locals out below all
+    // the function-scope ones.
+    int     when;
 
-	gi.WriteByte (svc_stufftext);
-	gi.WriteString ("cmd _init_state $timescale\n");
-	gi.unicast (ent, true);
+    gi.WriteByte(svc_stufftext);
+    gi.WriteString("cmd _init_state $timescale\n");
+    gi.unicast(ent, true);
 
-	if (ent->client->pers.spectator >= 3)
-	{
-		// The temp-entity types the punishment picks from.  Declared here, not
-		// at the top of the function.
-		int		tents[9] = { 1, 2, 3, 9, 12, 14, 17, 18, 20 };
-		int		num;
-		int		i;
+    if (ent->client->pers.spectator >= 3) {
+        // The temp-entity types the punishment picks from.  Declared here, not
+        // at the top of the function.
+        int     tents[9] = { 1, 2, 3, 9, 12, 14, 17, 18, 20 };
+        int     num;
+        int     i;
 
-		gi.centerprintf (ent, "Speed cheating not allowed!\n");
-		gi.bprintf (PRINT_HIGH, "%s was kicked for SPEED CHEATING!\n",
-			ent->client->pers.netname);
+        gi.centerprintf(ent, "Speed cheating not allowed!\n");
+        gi.bprintf(PRINT_HIGH, "%s was kicked for SPEED CHEATING!\n",
+                   ent->client->pers.netname);
 
-		if (server_log)
-		{
-			OSP_getPlayerAddr (ent);
-			OSP_logAdminLog ("SpeedDetect: %s [%f]", ent->client->pers.netname,
-				ent->client->pers.spectator);
-		}
+        if (server_log) {
+            OSP_getPlayerAddr(ent);
+            OSP_logAdminLog("SpeedDetect: %s [%f]", ent->client->pers.netname,
+                            ent->client->pers.spectator);
+        }
 
-		ent->movetype = MOVETYPE_NOCLIP;
-		i = rand () % 9;
-		gi.WriteByte (tents[i]);
-		num = rand () % 3;
-		for (i = 0; i < num; i++)
-			gi.WriteByte (rand () % 256);
-		gi.unicast (ent, true);
-		ent->client->osp_t034[0] = 0;
-		gi.WriteByte (7);
-		gi.unicast (ent, true);
-		ClientDisconnect (ent);
-	}
-	else
-	{
-		// The + 200 belongs to `when`'s own initialiser; the store adds
-		// level.framenum to it separately.
-		when = (int)((rand () & 0x7fff) / 32767.0f * 30.0) + 200;
-		ent->client->resp.osp_r2b4 = level.framenum + when;
-	}
+        ent->movetype = MOVETYPE_NOCLIP;
+        i = Q_rand() % 9;
+        gi.WriteByte(tents[i]);
+        num = Q_rand() % 3;
+        for (i = 0; i < num; i++)
+            gi.WriteByte(Q_rand() % 256);
+        gi.unicast(ent, true);
+        ent->client->osp_t034[0] = 0;
+        gi.WriteByte(7);
+        gi.unicast(ent, true);
+        ClientDisconnect(ent);
+    } else {
+        // The + 200 belongs to `when`'s own initialiser; the store adds
+        // level.framenum to it separately.
+        when = (int)((Q_rand() & 0x7fff) / 32767.0f * 30.0f) + 200;
+        ent->client->resp.osp_r2b4 = level.framenum + when;
+    }
 }
 
 // gamex86.dll: 1004FA00..1004FA60
 // gamei386.so: 00070500..0007057C
-void OSP_speedCheat_cmd (edict_t *ent)
+void OSP_speedCheat_cmd(edict_t *ent)
 {
-	if (atoi (gi.argv (1)) > 1)
-	{
-		ent->client->pers.spectator++;
-		gi.dprintf ("Speed > 1!!! (%d)\n", atoi (gi.argv (1)));
-	}
+    if (Q_atoi(gi.argv(1)) > 1) {
+        ent->client->pers.spectator++;
+        gi.dprintf("Speed > 1!!! (%d)\n", Q_atoi(gi.argv(1)));
+    }
 }

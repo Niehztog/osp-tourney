@@ -14,7 +14,7 @@ void BotAddDeathmatch(edict_t *ent);
 //removes one deathmatch bot
 void BotRemoveDeathmatch(edict_t *ent);
 //moves a bot to a free client edict
-qboolean BotMoveToFreeClientEdict(edict_t *bot);
+bool BotMoveToFreeClientEdict(edict_t *bot);
 //lets a human client become a bot
 void BotBecomeDeathmatch(edict_t *ent);
 //destroys a bot

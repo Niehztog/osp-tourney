@@ -7,5 +7,4 @@
 // Tab Size:     3
 //===========================================================================
 
-qboolean BotCmd(char *cmd, edict_t *ent, int server);
-
+bool BotCmd(char *cmd, edict_t *ent, int server);
