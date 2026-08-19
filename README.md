@@ -1,3 +1,36 @@
+# OSP Tourney DM — Q2PRO enhancements
+
+This branch (`q2pro-enhancements`) takes the OSP Tourney DM reconstruction and
+brings it up to date: **every commit Q2PRO has made to id's `baseq2` game
+source is replayed on top of it** — 188 of them, from the 3.20 import to
+current master.
+
+That brings in the modern game API, frame-number timers, the rewritten
+savegame system, protocol extensions, and twenty years of accumulated crash,
+overflow and out-of-bounds fixes. tourney's own code comes through intact: all
+267 cvars, all 138 client commands, all 108 spawn classnames, the arena and
+team system, the runes, the bot glue, the ngWorldStats logging and the menu
+engine.
+
+Two fixes are the port's own rather than Q2PRO's: `pers.spectator` stays an
+`int` because tourney also counts speed-cheat strikes in it, and the two buffer
+overruns the reconstruction reproduces on purpose are fixed here.
+
+* [doc/q2pro-port.md](doc/q2pro-port.md) — how the replay was done, which
+  passes were re-run rather than diffed, every deviation, and what was checked.
+
+Build it the same way as the reconstruction: `make`. Output is `game<cpu>.so`,
+which is what Q2PRO looks for.
+
+**This is not the reconstruction.** That lives on `main`, where 1044 of 1051
+Linux functions and 1050 of 1082 Windows functions are byte-identical to the
+shipped v2.75 binaries. This tree has been reformatted, retyped and
+restructured, and nothing in it assembles to those images any more — don't use
+it for address matching, and don't compare it against the binaries. The
+`asm_matching/` oracles are only meaningful on `main`.
+
+---
+
 # OSP Tourney DM
 
 OSP Tourney DM is a tournament/deathmatch mod for Quake II, released by
