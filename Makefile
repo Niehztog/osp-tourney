@@ -1,34 +1,46 @@
-# OSP Tourney DM -- native Makefile.
+# OSP Tourney DM on the Q2PRO game API -- native Makefile.
 #
-# Same variables, same debug/release split, same
-# $(BUILDDIR)/game$(ARCH).$(SHLIBEXT) target as id's Quake II 3.20 game SDK
-# Makefile, which this mod was built from. `make` alone builds debug only;
-# `make all` builds both. GAME_OBJS is listed in the link order of the
-# original v2.75 release.
+# Same shape as the reconstruction's Makefile: same debug/release split, same
+# $(BUILDDIR)/game$(ARCH).$(SHLIBEXT) target, same one-rule-per-TU tail, and
+# GAME_OBJS still in the link order recovered from the shipped binary. Link
+# order no longer decides anything here -- this tree does not byte-match the
+# original -- but it is kept because it is recovered evidence, not taste.
+#
+# THIS IS NOT THE ORACLE, and unlike on the reconstruction branch there is no
+# oracle to be: the astyle pass, the retyping and the API changes mean nothing
+# in this tree assembles to the shipped image. asm_matching/ still works, but
+# only against `main`.
 
 BUILD_DEBUG_DIR=debug
 BUILD_RELEASE_DIR=release
 
-ARCH:=$(shell uname -m | sed -e 's/i.86/i386/' -e 's/^armv.*/arm/')
+# Q2PRO looks for game<CPUSTRING><suffix> next to the mod directory, and its
+# CPUSTRING is meson's cpu_family: x86_64, x86, arm, aarch64.
+ARCH:=$(shell uname -m | sed -e 's/i.86/x86/' -e 's/^armv.*/arm/')
 
 CC=gcc
-BASE_CFLAGS=-Dstricmp=strcasecmp
 
-# Matches the original release's compiler flags.
-RELEASE_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -O3
-DEBUG_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -g
+# config.h is Q2PRO's build configuration for a standalone game library, and
+# shared/ holds the engine headers the game links against (shared.h, game.h,
+# list.h, platform.h) plus shared.c.
+INCLUDES=-I. -Ishared
+BASE_CFLAGS=-DHAVE_CONFIG_H $(INCLUDES) -Dstricmp=strcasecmp
 
-# Not in the 1999 Makefile; required to build 1999 C with a current gcc.
-#  -std=gnu99                    the tree predates C99-by-default diagnostics
+RELEASE_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -O2
+DEBUG_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -g -O0
+
+# Required to build 1999 C with a current gcc.
 #  -fno-strict-aliasing -fwrapv  the workspace standard for this era of code
+#  -w                            the tree still carries ~515 warnings, nearly
+#                                all pre-existing (the original produces 663);
+#                                doc/q2pro-port.md has the breakdown
 #  -fno-stack-protector,
-#  -D_FORTIFY_SOURCE=0           this tree DELIBERATELY reproduces the mod's own
-#                                buffer overruns (OSP_defaultteam_cmd strncpy's
-#                                with a 128 limit into 80 bytes;
-#                                OSP_startDemos writes name[2][16] at index 2).
-#                                They are faithful, not defects, and modern
-#                                glibc aborts on the first one during map spawn.
-MODERN_CFLAGS=-std=gnu99 -fno-strict-aliasing -fwrapv -w \
+#  -D_FORTIFY_SOURCE=0           the two overruns the reconstruction reproduces
+#                                on purpose are fixed here (OSP_defaultteam_cmd
+#                                and OSP_startDemos), but the mod's own string
+#                                handling has not been audited end to end, so
+#                                the relaxation stays until it has been.
+MODERN_CFLAGS=-fno-strict-aliasing -fwrapv -w \
 	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector
 
 LDFLAGS=-ldl -lm
@@ -36,7 +48,7 @@ LDFLAGS=-ldl -lm
 SHLIBEXT=so
 
 SHLIBCFLAGS=-fPIC
-SHLIBLDFLAGS=-shared
+SHLIBLDFLAGS=-shared -Wl,--no-undefined
 
 DO_CC=$(CC) $(CFLAGS) -o $@ -c $<
 DO_SHLIB_CC=$(CC) $(CFLAGS) $(SHLIBCFLAGS) -o $@ -c $<
@@ -55,6 +67,8 @@ all: build_debug build_release
 
 targets: $(TARGETS)
 
+# In the link order recovered from the shipped gamei386.so, with q_shared.o
+# replaced by the engine's shared.c and Q2PRO's generated g_ptrs.c appended.
 GAME_OBJS = \
 	$(BUILDDIR)/g_ai.o \
 	$(BUILDDIR)/g_cmds.o \
@@ -81,7 +95,7 @@ GAME_OBJS = \
 	$(BUILDDIR)/p_trail.o \
 	$(BUILDDIR)/p_view.o \
 	$(BUILDDIR)/p_weapon.o \
-	$(BUILDDIR)/q_shared.o \
+	$(BUILDDIR)/shared_shared.o \
 	$(BUILDDIR)/osp_config.o \
 	$(BUILDDIR)/osp_main.o \
 	$(BUILDDIR)/osp_display.o \
@@ -109,171 +123,13 @@ GAME_OBJS = \
 	$(BUILDDIR)/bl_debug.o \
 	$(BUILDDIR)/bl_main.o \
 	$(BUILDDIR)/bl_redirgi.o \
-	$(BUILDDIR)/bl_spawn.o
+	$(BUILDDIR)/bl_spawn.o \
+	$(BUILDDIR)/g_ptrs.o
 
 $(BUILDDIR)/game$(ARCH).$(SHLIBEXT) : $(GAME_OBJS)
 	$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(GAME_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/g_ai.o :         g_ai.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_cmds.o :       g_cmds.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_combat.o :     g_combat.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_func.o :       g_func.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_items.o :      g_items.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_main.o :       g_main.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_monsters.o :   g_monsters.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_misc.o :       g_misc.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_monster.o :    g_monster.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_phys.o :       g_phys.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_save.o :       g_save.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_spawn.o :      g_spawn.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_svcmds.o :     g_svcmds.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_target.o :     g_target.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_trigger.o :    g_trigger.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_turret.o :     g_turret.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_utils.o :      g_utils.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_weapon.o :     g_weapon.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/m_move.o :       m_move.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/p_camera.o :     p_camera.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/p_client.o :     p_client.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/p_hud.o :        p_hud.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/p_trail.o :      p_trail.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/p_view.o :       p_view.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/p_weapon.o :     p_weapon.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/q_shared.o :     q_shared.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_config.o :   osp_config.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_display.o :  osp_display.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_main.o :     osp_main.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_observe.o :  osp_observe.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_chase.o :      g_chase.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_cmds.o :     osp_cmds.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_hook.o :     osp_hook.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_hiscore.o :  osp_hiscore.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_menus.o :    osp_menus.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_runes.o :    osp_runes.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_teams.o :    osp_teams.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_players.o :  osp_players.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_plist.o :    osp_plist.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_maps.o :     osp_maps.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/ngmark.o :       ngmark.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/nglog.o :        nglog.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/md5c.o :         md5c.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_detect.o :   osp_detect.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/q2log.o :        q2log.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/sl_write.o :     sl_write.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/stdlog.o :       stdlog.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/p_menu.o :       p_menu.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/bl_botcfg.o :    bl_botcfg.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/bl_cmd.o :       bl_cmd.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/bl_debug.o :     bl_debug.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/bl_main.o :      bl_main.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/bl_redirgi.o :   bl_redirgi.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/bl_spawn.o :     bl_spawn.c
+$(BUILDDIR)/%.o : %.c
 	$(DO_SHLIB_CC)
 
 #####
@@ -281,10 +137,10 @@ $(BUILDDIR)/bl_spawn.o :     bl_spawn.c
 clean: clean-debug clean-release
 
 clean-debug:
-	$(MAKE) clean2 BUILDDIR=$(BUILD_DEBUG_DIR) CFLAGS="$(DEBUG_CFLAGS)"
+	$(MAKE) clean2 BUILDDIR=$(BUILD_DEBUG_DIR)
 
 clean-release:
-	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(RELEASE_CFLAGS)"
+	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR)
 
 clean2:
-	-rm -f $(GAME_OBJS) $(TARGETS)
+	-rm -f $(GAME_OBJS)
