@@ -238,35 +238,18 @@ REFEREE-CLIENT COMMANDS:
 
 Client Variables:
 -----------------
-ngWorldStats from NetGames USA (http://www.netgamesusa.com) is a new
-Internet-wide logging system that is used to track ALL events related
-to a player when they play on an ngWorldStats-enabled server.  However,
-to keep track of unique individuals, a requirement is needed from the
-client to uniquely identify them from the rest of the game-playing world.
- 
-To ensure that a client's stats are not added into another player's stats
-when one or more players are using the same name, the client can put the
-following line in their autoexec.cfg file (or any startup script):
+This build no longer contains the ngWorldStats client identifier.  v2.75 asked
+every connecting client to send back the contents of its own
+"ngWorldStats_password" cvar so that NetGames USA's worldwide stats database
+could tell two players with the same name apart.  That service has been offline
+for over two decades, the password crossed the network in cleartext, and any
+server could collect the one its visitors used elsewhere, so the whole
+mechanism is gone: the "ngWorldStats_password" cvar is ignored, no
+"_ngws_client_id" command is stuffed to the client, and the
+"ngWorldStats_Status" serverinfo variable no longer exists.
 
-		set ngWorldStats_password my_special_password_string
-
-The "my_special_password_string" is any sequence of characters and can be any
-length in size.  It is *highly* recommended to use a string of at least eight
-characters, but this is not a requirement.  ngWorldStats identifiers are based
-on both the player's name and ngWorldStats_password string.  Thus, if a client
-changes either their name or ngWorldStats_password string, then they will have
-a different unique player within the ngWorldStats database.  Visit:
-
-	http://Quake2.ngWorldStats.com/
-
-for more information on ngWorldStats for Quake2.
-
-Players can determine if a server is ngWorldStats-enabled by looking at the
-severinfo variable "ngWorldStats_Status" on game browser utilities such as
-GameSpy.  If the value of this variable is "*** ENABLED ***", then all events
-will be sent to the main ngWorldStats collector sites.  A value of
-"<<< Disabled >>>" means that no player stat information is being recorded to
-the global ngWorldStats system.
+Per-game statistics are now written to a file on the server instead -- see the
+"statsfile" and "statsname" settings in server-settings.txt.
 
 
 There are two variables that have been set up that allow for clients to

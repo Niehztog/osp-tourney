@@ -306,7 +306,8 @@ void T_Damage(edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_t
 
     if (m_mode > 1 && targ != attacker && targ->client && attacker->client &&
         targ->client->resp.team == attacker->client->resp.team) {
-        if (!teams[targ->client->resp.team].osp_m11c &&
+        if ((unsigned)targ->client->resp.team < 2 &&
+            !teams[targ->client->resp.team].osp_m11c &&
             !(dflags & DAMAGE_NO_PROTECTION))
             damage = 0;
         else
@@ -315,7 +316,10 @@ void T_Damage(edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_t
     meansOfDeath = mod;
 
     if (targ == attacker) {
-        if (m_mode > 1 && !teams[targ->client->resp.team].osp_m120)
+        // targ is not necessarily a client here -- a barrel can hurt itself
+        if (m_mode > 1 && targ->client &&
+            (unsigned)targ->client->resp.team < 2 &&
+            !teams[targ->client->resp.team].osp_m120)
             damage = 0;
         else if (m_mode < 2 && !(int)ffa_hurtself->value)
             damage = 0;

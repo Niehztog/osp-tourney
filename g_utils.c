@@ -360,9 +360,9 @@ void G_FreeEdict(edict_t *ed)
 {
     if (ed->item) {
         if (ed->item->use == Use_Quad && ed->nextthink <= level.framenum)
-            q2log_expireItem("Quad", 0, ed - g_edicts);
+            OSP_Stats_ItemExpire("Quad", NULL, ed - g_edicts);
         if (ed->item->use == Use_Invulnerability && ed->nextthink <= level.framenum)
-            q2log_expireItem("Invulnerability", 0, ed - g_edicts);
+            OSP_Stats_ItemExpire("Invulnerability", NULL, ed - g_edicts);
     }
 
     gi.unlinkentity(ed);        // unlink from world

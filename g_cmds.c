@@ -1,6 +1,7 @@
 
 #include "g_local.h"
 #include "m_player.h"
+#include "bl_redirgi.h"
 
 // gamex86.dll: 10009780..10009815
 // gamei386.so: 000153C4..00015450
@@ -745,7 +746,6 @@ static void Cmd_PutAway_f(edict_t *ent)
     ent->client->showhelp = false;
     ent->client->showinventory = false;
     ent->client->ps.stats[STAT_OSP_LAYOUT1] = 0;
-    ent->client->ps.stats[STAT_OSP_LAYOUT2] = 0;
 }
 
 // gamex86.dll: 1000ABFC..1000AC68
@@ -862,7 +862,7 @@ static void Cmd_Wave_f(edict_t *ent)
     }
 }
 
-static bool FloodProtect(edict_t *ent)
+bool FloodProtect(edict_t *ent)
 {
     int i, msgs = flood_msgs->value;
     gclient_t *cl = ent->client;
@@ -931,7 +931,7 @@ static void Cmd_Say_f(edict_t *ent, bool team, bool arg0)
     // don't let text be too long for malicious reasons
     text[150] = 0;
 
-    q2log_playerChat(text);
+    OSP_Stats_Chat(text);
     Q_strlcat(text, "\n", sizeof(text));
 
     if (!team) {
@@ -1065,10 +1065,6 @@ void ClientCommand(edict_t *ent)
     }
     if (m_mode == 2 && !Q_stricmp(cmdstr, "_default_join_code")) {
         OSP_defaultjoincode_cmd(ent);
-        return;
-    }
-    if (!Q_stricmp(cmdstr, "_ngws_client_id")) {
-        q2log_clientid_cmd(ent);
         return;
     }
     if (bot_watch && !Q_stricmp(cmdstr, "_init_state")) {
@@ -1237,7 +1233,7 @@ void ClientCommand(edict_t *ent)
         else if (!Q_stricmp(cmdstr, "r_allready") && m_mode > 0)
             OSP_allready_svcmd();
         else if (!Q_stricmp(cmdstr, "r_allnotready") && m_mode > 0)
-            OSP_allnotready_svcmd((edict_t *)true);
+            OSP_allnotready_svcmd(true);
         else if ((!Q_stricmp(cmdstr, "r_stopmatch") ||
                   !Q_stricmp(cmdstr, "r_endmatch")) && m_mode > 0)
             OSP_rstopmatch_cmd(ent);

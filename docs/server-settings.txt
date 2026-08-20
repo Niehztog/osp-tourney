@@ -333,104 +333,46 @@ set client_recover 0
 //      LOGGING PARAMETERS
 // ############################
 //
-// nglog_logstyle: [NetGames USA Event Log logging]
-//      0 = Do not record ngLog logfile
-//	  1 = Append to exisiting log file
-//	  2 = Create/overwrite existing log file
-//	  3 = Create/Rotate through logfile name.
-//	* 4 = Create uniquely named logs for every map played.
-//		This setting is required to automatically process
-//		logs through ngStats while Tourney is running.
+// statsfile: [local game-event / statistics log]
+//	  0 = Do not record a stats log
+//	* 1 = Append one JSON object per game event to <statsname>
 //
-//	[ *** Note: If you enable ngLog logging, then any Standard
-//	 	    Logging options you enable below will be ignored.
-//		    That is, you can only have one logging facility
-//		    running at a time, with ngLog taking precedence. ]
+//	This replaces the ngLog / ngWorldStats / ngStats logging that v2.75
+//	shipped with.  NetGames USA's collectors and their ngStats and
+//	ngWorldStats post-processors have been offline for over two decades, so
+//	nothing is uploaded and no external program is launched any more; the
+//	same events are written locally instead, one JSON object per line.
 //
-// nglog_logname:
-//	Name of ngLog logfile to record (default = "nglog.log").  This
-//	setting is disregarded if <nglog_logstyle> is set to 4.
+//	The file is appended to and never rewritten, so it survives a server
+//	dying mid-match and can be tailed, grepped or fed to anything that can
+//	parse JSON.  Player, team and map names are \u-escaped, so a quote or a
+//	coloured name cannot corrupt a line.
 //
-// nglog_flush:
-//      0 = Flush every write
-//	  1 = Flush after "nglog_buffer" entries
-//	* 2 = Flush using system default
+// statsname:
+//	Name of the stats log, relative to your <basedir>/<gamedir> directory
+//	(default = "osptourney.jsonl").
 //
-// nglog_buffer:
-//	Number of lines to buffer before write (if buffered writes enabled)
-//	(default = 5).
-//
-// nglog_logchat:
+// stats_logchat:
 //    * 0 = Do not log chat messages
 //	  1 = Log chat messages
 //
-// nglog_logallpickups:
-//	* 0 = Disable logging of non-critical item picups.
+// stats_logallpickups:
+//	* 0 = Log only the powerful item pickups (quad, invulnerability, runes,
+//		weapons, armor, mega health).
 //	  1 = Log every single item that is picked up in the game
 //		(potential performance problem).
-//
-// nglog_worldstats:
-//	  0 = Disable ngWorldStats logging.
-//	* 1 = Enable ngWorldStats logging.
-//
-// The below settings are for the ngStats log processing system that can
-// be invoked within OSP Tourney DM.  This system will automatically update
-// player database information after each map is finished for subsequent
-// HTML viewing.  The descriptions below describe what is needed to configure
-// this option.  Note, these options are valid only if <nglog_logstyle> is
-// set to "4":
-//
-// nglog_ngstats_exec:
-//	  0 = Disable automatic ngStats backend processing after each map.
-//	* 1 = Automatically perform ngStats processing after each map.
-//		----> This option gives flexibility to server admins who may be
-//			running a server on a platform that is not currently
-//			supported by ngStats processing utilities, but would like
-//			to process logs at a later time on an ngStats-capable
-//			platform.
-//
-// nglog_ngstats_browser:
-//	  0 = Do NOT launch a browser after the server has been shut down
-//		(default for dedicated servers).
-//	* 1 = Launch the local default web browser with ngStats-processed
-//		information after Quake2 has been shut down (default for
-//		listen servers).
-//
-// nglog_ngstats_cfg:
-//	Specifies the ngStats configuration file to use in processing the
-//	server's logs.  This config name MUST be relative to the
-//	"NetGamesUSA.com/ngStats" directory under the main Quake2/ directory
-//	(default = "ngStatsQ2T.cfg").
-//
-// nglog_ngstats_logdir:
-//	Specifies where to write ngStats-format logfiles.  Again, this name
-//	MUST be relative to the	"NetGamesUSA.com/ngStats" directory under
-//	the main Quake2/ directory (default = "logs").
-//
-//	----> The idea here on the last two settings listed above is to allow
-//		for server operators with more than one server running on their
-//		machine to have seperate databases maintained for each server.
-//		By placing the logs in different directories and using different
-//		ngStats config files, each servers logs will be guaranteed to
-//		be seperate (unless, of course, you use the same log directory
-//		and the same .cfg file :) )
-//
-// nglog_ngstats_vidrestart:
-//	* 0 = Do not do a hard refresh on the display when Quake2 is refocussed
-//		after viewing ngStats information.
-//	  1 = Perform hard rest on video after returning to Quake2.  Note, this
-//		has a potential for crashing the server.
 //
 // -------------------------------------------------------------------------------
 //
 // sl_log_method:  (Standard Log)
 //	* 0 = Do not record a log
 //	  1 = Record events to local file
-//	  2 = Send events via UDP to a log collector
-//	  4 = Send events via TCP to a log collector
-//	---> This is a bitmask variable to allow for multiple configurations.
-//	     (i.e. a value of 5 would record local file as well as send all
-//		   events via TCP to a log collector.)
+//	---> This is a bitmask variable in the Standard Log specification; the
+//	     UDP (2) and TCP (4) collector bits are not implemented here, and
+//	     never were.
+//	---> The Standard Log and the JSON stats log above are independent.  In
+//	     v2.75 they shared one file writer and enabling ngLog logging
+//	     silently cleared sl_log_method; that no longer happens.
 //
 // sl_filename:
 //	Name of log file if recording to local file.  Note that this filename
@@ -452,18 +394,10 @@ set client_recover 0
 // Other socket-based parameters for Standard Logging which may appear in other
 // mods utilizing the Standard Log are not supported in OSP Tourney DM.
 //
-set nglog_logstyle 4
-set nglog_logname "tourney/nglog.log"
-set nglog_flush 0
-set nglog_buffer 5
-set nglog_logchat 0
-set nglog_logallpickups 0
-set nglog_worldstats 1
-set nglog_ngstats_exec 1
-set nglog_ngstats_browser 0
-set nglog_ngstats_cfg "ngStatsQ2T.cfg"
-set nglog_ngstats_logdir "logs"
-set nglog_ngstats_vidrestart 0
+set statsfile 1
+set statsname "osptourney.jsonl"
+set stats_logchat 0
+set stats_logallpickups 0
 
 set sl_log_method 0
 set sl_filename "tourney/frags.log"

@@ -299,7 +299,7 @@ void    ServerCommand(void)
     else if (Q_stricmp(cmd, "allready") == 0)
         OSP_allready_svcmd();
     else if (Q_stricmp(cmd, "allnotready") == 0)
-        OSP_allnotready_svcmd(1);
+        OSP_allnotready_svcmd(true);
     else if (Q_stricmp(cmd, "mpause") == 0)
         OSP_rmpause_cmd();
     else if (Q_stricmp(cmd, "stopmatch") == 0)

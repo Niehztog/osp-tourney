@@ -9,6 +9,7 @@
 #include "g_local.h"
 #include "bl_main.h"
 #include "bl_botcfg.h"
+#include "bl_redirgi.h"
 
 // The pause command's own state.  Defined HERE, not in osp_main.c: real's ELF
 // has it in the .data word after osp_display.c's motd_read, and real's DLL puts
@@ -78,8 +79,8 @@ void OSP_talkto_cmd(edict_t *ent)
 
     msg[0] = 0;
     for (i = 2; i < gi.argc(); i++) {
-        strcat(msg, " ");
-        strcat(msg, gi.argv(i));
+        Q_strlcat(msg, " ", sizeof(msg));
+        Q_strlcat(msg, gi.argv(i), sizeof(msg));
     }
 
     p = msg;
@@ -88,44 +89,17 @@ void OSP_talkto_cmd(edict_t *ent)
         p[strlen(p) - 1] = 0;
     }
 
-    strcat(text, p);
-    strcat(text2, p);
+    Q_strlcat(text, p, sizeof(text));
+    Q_strlcat(text2, p, sizeof(text2));
     text[150] = 0;
     text2[170] = 0;
 
-    if (flood_msgs->value != 0 && !match_paused) {
-        gclient_t   *cl;
-        int         i;
+    if (!match_paused && FloodProtect(ent))
+        return;
 
-        cl = ent->client;
-
-        if (level.time < cl->flood_locktill) {
-            gi.cprintf(ent, PRINT_HIGH,
-                       "You can't talk for %d more seconds\n",
-                       (int)(cl->flood_locktill - level.time) + 1);
-            return;
-        }
-
-        i = cl->flood_whenhead - flood_msgs->value + 1;
-        if (i < 0)
-            i += 10;
-
-        if (cl->flood_when[i] &&
-            level.time - cl->flood_when[i] < flood_persecond->value) {
-            cl->flood_locktill = level.time + flood_waitdelay->value;
-            gi.cprintf(ent, PRINT_CHAT,
-                       "Flood protection:  You can't talk for %d seconds.\n",
-                       (int)flood_waitdelay->value);
-            return;
-        }
-
-        cl->flood_whenhead = (unsigned int)(cl->flood_whenhead + 1) % 10;
-        cl->flood_when[cl->flood_whenhead] = level.time;
-    }
-
-    q2log_playerChat(text);
-    strcat(text, "\n");
-    strcat(text2, "\n");
+    OSP_Stats_Chat(text);
+    Q_strlcat(text, "\n", sizeof(text));
+    Q_strlcat(text2, "\n", sizeof(text2));
 
     if (dedicated->value)
         gi.dprintf("%s", text);
@@ -293,11 +267,8 @@ void OSP_notready_cmd(edict_t *ent, int quiet)
         cli->client->ps.stats[17] = 0;
 
         if (cli->client->resp.osp_r234) {
-            char    stop[32];
-
             gi.WriteByte(svc_stufftext);
-            strcpy(stop, "stop\n");
-            gi.WriteString(stop);
+            gi.WriteString("stop\n");
             gi.unicast(cli, true);
         }
     }
@@ -543,7 +514,7 @@ void OSP_ffajoin_cmd(edict_t *ent)
     ent->client->resp.osp_r09c--;
     EntityListAdd(ent);
     OSP_DoRankSort();
-    q2log_playerEntered(ent);
+    OSP_Stats_PlayerEnter(ent);
 }
 
 // "vote <what> <value>".  Two calling conventions: with mode 0 the command
@@ -559,6 +530,7 @@ void OSP_vote_cmd(edict_t *ent, int mode, int nargs, char *what, char *value)
 {
     char    *arg1;
     char    *arg2;
+    char    kickid[16];
     cvar_t  *bfg_cv;
     cvar_t  *quad_cv;
     bot_t   *bp;
@@ -817,8 +789,12 @@ void OSP_vote_cmd(edict_t *ent, int mode, int nargs, char *what, char *value)
                            "\n*** Cannot vote to kick referees!\n");
                 return;
             } else {
-                // The vote carries the ID, not the name.
-                sprintf(arg2, "%d", kick->client->resp.clientid);
+                // The vote carries the ID, not the name.  It is built into a
+                // local: arg2 points into the engine's tokenizer buffer, and a
+                // short token there has no room for a three-digit id.
+                Q_snprintf(kickid, sizeof(kickid), "%d",
+                           kick->client->resp.clientid);
+                arg2 = kickid;
                 vote_item = 0x1000;
             }
         }
@@ -842,7 +818,7 @@ void OSP_vote_cmd(edict_t *ent, int mode, int nargs, char *what, char *value)
                        "Sorry server is full, cannot add anymore bots.\n");
         else if (bots_votedin == (int)vote_bots_max->value)
             gi.cprintf(ent, PRINT_HIGH, "Sorry, cannot add anymore bots.\n");
-        else if (Q_atoi(arg2) < 0 || Q_atoi(arg2) > nbots)
+        else if (Q_atoi(arg2) < 0 || Q_atoi(arg2) >= nbots)
             gi.cprintf(ent, PRINT_HIGH, "Voted bot # out of range\n");
         else
             vote_item = 0x100;
@@ -898,7 +874,7 @@ void OSP_vote_cmd(edict_t *ent, int mode, int nargs, char *what, char *value)
     if (vote_item) {
         vote_inprogress = 1;
         vote_frametime = level.framenum + (int)vote_time->value * 10;
-        strcpy(vote_value, arg2);
+        Q_strlcpy(vote_value, arg2 ? arg2 : "", sizeof(vote_value));
         vote_yea = 1;
         ent->client->resp.osp_r2d8 = 1;
 
@@ -911,7 +887,7 @@ void OSP_vote_cmd(edict_t *ent, int mode, int nargs, char *what, char *value)
         gi.bprintf(PRINT_HIGH, "%s has initiated a vote!\n",
                    ent->client->pers.greenname);
         OSP_voteinfo(ent, 1);
-        q2log_voteInfo("Propose", arg1, arg2);
+        OSP_Stats_Vote("Propose", arg1, arg2);
         OSP_checkVote();
     }
 }
@@ -923,6 +899,7 @@ int OSP_votePercent(edict_t *ent, int what)
     edict_t     *e;
     int         i;
     int         botcount;
+    int         voters;
     int         yes;
     int         no;
 
@@ -944,21 +921,23 @@ int OSP_votePercent(edict_t *ent, int what)
     }
     botglobals.numbots = botcount;
 
+    // Every arm divides by a head count that goes to zero once the last
+    // human leaves, which used to take the server down with SIGFPE.
     if (!(int)vote_countspectators->value) {
-        if (!active_clients || active_clients - botglobals.numbots <= 0) {
-            yes = vote_yea * 100 / (connected_clients - botglobals.numbots);
-            no = vote_nay * 100 / (connected_clients - botglobals.numbots);
-        } else {
-            yes = vote_yea * 100 / (active_clients - botglobals.numbots);
-            no = vote_nay * 100 / (active_clients - botglobals.numbots);
-        }
-    } else if (sync_stat != 4) {
-        yes = vote_yea * 100 / (connected_clients - botglobals.numbots);
-        no = vote_nay * 100 / (connected_clients - botglobals.numbots);
-    } else {
-        yes = vote_yea * 100 / (active_clients - botglobals.numbots);
-        no = vote_nay * 100 / (active_clients - botglobals.numbots);
-    }
+        if (!active_clients || active_clients - botglobals.numbots <= 0)
+            voters = connected_clients - botglobals.numbots;
+        else
+            voters = active_clients - botglobals.numbots;
+    } else if (sync_stat != 4)
+        voters = connected_clients - botglobals.numbots;
+    else
+        voters = active_clients - botglobals.numbots;
+
+    if (voters < 1)
+        voters = 1;
+
+    yes = vote_yea * 100 / voters;
+    no = vote_nay * 100 / voters;
 
     if (what == 1) {
         gi.cprintf(ent, PRINT_HIGH,
@@ -967,25 +946,40 @@ int OSP_votePercent(edict_t *ent, int what)
                    (int)vote_threshold->value);
     } else if (what == 2)
         return yes;
-    else
-        // what == 3: `ent` is really a char * -- OSP_menuVotePercent passes the
-        // menu entry's text buffer, which is what makes this a sprintf.
-        sprintf((char *)ent, "%d%% Accepted, %d%% Declined.\n", yes, no);
 
     return 0;
+}
+
+/*
+==============
+OSP_voteSummary
+
+The same two percentages as one menu line.  v2.75 got here by casting the
+menu's text buffer to edict_t * and passing it as `ent`, which left the write
+unbounded as well as untyped.
+==============
+*/
+void OSP_voteSummary(char *out, size_t size)
+{
+    int     yes;
+
+    yes = OSP_votePercent(NULL, 2);
+    Q_snprintf(out, size, "%d%% Accepted, %d%% Declined.", yes,
+               vote_nay * 100 / (vote_yea + vote_nay > 0 ?
+                                 vote_yea + vote_nay : 1));
 }
 
 // gamex86.dll: 1001FE09..1001FE9B
 // gamei386.so: 00057EC8..00057F7A
 void OSP_map_vote(void)
 {
-    q2log_voteInfo("Pass", "map", vote_value);
+    OSP_Stats_Vote("Pass", "map", vote_value);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: map - %s", vote_value);
 
     if (OSP_mapExists(NULL, vote_value, true)) {
         sl_SoftGameEnd(&gi, level);
-        q2log_gameEnd("player map vote", 0);
+        OSP_Stats_MatchEnd("player map vote");
         manual_map = 1;
         EndDMLevel();
     }
@@ -997,13 +991,13 @@ void OSP_config_vote(void)
 {
     char        cmd[256];
 
-    q2log_voteInfo("Pass", "config", vote_value);
+    OSP_Stats_Vote("Pass", "config", vote_value);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: config - %s", vote_value);
 
     if (OSP_configExists(NULL, vote_value)) {
         sl_SoftGameEnd(&gi, level);
-        q2log_gameEnd("player config vote", 0);
+        OSP_Stats_MatchEnd("player config vote");
         manual_map = 2;
         gi.cvar_set("__current_config", vote_value);
         gi.dprintf("Changing to config: %s\n", vote_value);
@@ -1011,7 +1005,6 @@ void OSP_config_vote(void)
         gi.AddCommandString(cmd);
         OSP_loadMaps();
         EndDMLevel();
-        gi.cvar_set("__dummy_nglog_name", "");
     }
 }
 
@@ -1020,7 +1013,7 @@ void OSP_config_vote(void)
 void OSP_timelimit_vote(void)
 {
     gi.bprintf(PRINT_HIGH, "New timelimit: %s\n", vote_value);
-    q2log_voteInfo("Pass", "timelimit", vote_value);
+    OSP_Stats_Vote("Pass", "timelimit", vote_value);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: timelimit - %s", vote_value);
     gi.cvar_set("timelimit", vote_value);
@@ -1033,7 +1026,7 @@ void OSP_timelimit_vote(void)
 void OSP_fraglimit_vote(void)
 {
     gi.bprintf(PRINT_HIGH, "New fraglimit: %s\n", vote_value);
-    q2log_voteInfo("Pass", "fraglimit", vote_value);
+    OSP_Stats_Vote("Pass", "fraglimit", vote_value);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: fraglimit - %s", vote_value);
     gi.cvar_set("fraglimit", vote_value);
@@ -1050,12 +1043,12 @@ void OSP_hook_vote(void)
 
     if ((int)hook_enable->value) {
         gi.bprintf(PRINT_HIGH, "Hook is ENABLED.\n");
-        q2log_voteInfo("Pass", "hook", "enabled");
+        OSP_Stats_Vote("Pass", "hook", "enabled");
         if (server_log)
             OSP_logAdminLog("Vote_Pass: hook - enabled");
     } else {
         gi.bprintf(PRINT_HIGH, "Hook is DISABLED.\n");
-        q2log_voteInfo("Pass", "hook", "disabled");
+        OSP_Stats_Vote("Pass", "hook", "disabled");
         if (server_log)
             OSP_logAdminLog("Vote_Pass: hook - disabled");
     }
@@ -1072,7 +1065,7 @@ void OSP_runes_vote(void)
     if (Q_atoi(vote_value)) {
         rune_stat = RUNE_RESIST | RUNE_STRENGTH | RUNE_HASTE | RUNE_REGEN | RUNE_VAMPIRE;
         gi.bprintf(PRINT_HIGH, "Runes are ENABLED.\n");
-        q2log_voteInfo("Pass", "runes", "enabled");
+        OSP_Stats_Vote("Pass", "runes", "enabled");
         if (server_log)
             OSP_logAdminLog("Vote_Pass: runes - enabled");
         runespawn = 0;
@@ -1080,7 +1073,7 @@ void OSP_runes_vote(void)
     } else {
         rune_stat = 0;
         gi.bprintf(PRINT_HIGH, "Runes are DISABLED.\n");
-        q2log_voteInfo("Pass", "runes", "disabled");
+        OSP_Stats_Vote("Pass", "runes", "disabled");
         if (server_log)
             OSP_logAdminLog("Vote_Pass: runes - disabled");
         OSP_removeRunes();
@@ -1095,7 +1088,7 @@ void OSP_runes_vote(void)
 void OSP_toggle_vote(void)
 {
     gi.bprintf(PRINT_HIGH, "New item toggles passed!\n");
-    q2log_voteInfo("Pass", "item_toggle", vote_value);
+    OSP_Stats_Vote("Pass", "item_toggle", vote_value);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: items - %s", vote_value);
     item_settings = Q_atoi(vote_value);
@@ -1118,7 +1111,7 @@ void OSP_bfg_vote(void)
         if (server_log)
             OSP_logAdminLog("Vote_Pass: bfg - enabled");
     }
-    q2log_voteInfo("Pass", "bfg_status", vote_value);
+    OSP_Stats_Vote("Pass", "bfg_status", vote_value);
     OSP_changeItems();
     OSP_setShowParams();
 }
@@ -1138,7 +1131,7 @@ void OSP_quad_vote(void)
         if (server_log)
             OSP_logAdminLog("Vote_Pass: quad - enabled");
     }
-    q2log_voteInfo("Pass", "quad_status", vote_value);
+    OSP_Stats_Vote("Pass", "quad_status", vote_value);
     OSP_changeItems();
     OSP_setShowParams();
 }
@@ -1151,7 +1144,7 @@ void OSP_quad_vote(void)
 // gamei386.so: 000585FC..000587D8
 void OSP_kick_vote(void)
 {
-    char    scratch[32];
+    char    scratch[64];
     int     t;
     edict_t *cli;
 
@@ -1165,9 +1158,9 @@ void OSP_kick_vote(void)
         if (cli->osp_e39c) {
             gi.bprintf(PRINT_HIGH,
                        "** CANNOT KICK REFEREES BY VOTE -- vote ignored.\n");
-            sprintf(scratch, "%s [ID: %d] (REFEREE)", cli->client->pers.netname,
-                    cli->client->resp.clientid);
-            q2log_voteInfo("Fail", "kick_player", scratch);
+            Q_snprintf(scratch, sizeof(scratch), "%s [ID: %d] (REFEREE)",
+                       cli->client->pers.netname, cli->client->resp.clientid);
+            OSP_Stats_Vote("Fail", "kick_player", scratch);
 
             if (server_log)
                 OSP_logAdminLog("Vote_Fail: kick_player - %s", scratch);
@@ -1177,9 +1170,9 @@ void OSP_kick_vote(void)
 
         gi.bprintf(PRINT_HIGH, "%s has been kicked by vote.\n",
                    cli->client->pers.netname);
-        sprintf(scratch, "%s [ID: %d]", cli->client->pers.netname,
-                cli->client->resp.clientid);
-        q2log_voteInfo("Pass", "kick_player", scratch);
+        Q_snprintf(scratch, sizeof(scratch), "%s [ID: %d]",
+                   cli->client->pers.netname, cli->client->resp.clientid);
+        OSP_Stats_Vote("Pass", "kick_player", scratch);
 
         if (server_log)
             OSP_logAdminLog("Vote_Pass: kick_player - %s", scratch);
@@ -1206,16 +1199,23 @@ void OSP_specbot_vote(void)
     for (count = 0, bot = botlist; bot; bot = bot->next, count++)
         ;
 
-    for (i = 0, bot = botlist; i < Q_atoi(vote_value);
+    // CheckForNewBotFile() may have shortened the list since the vote was
+    // proposed, so walk it defensively rather than trusting the index.
+    for (i = 0, bot = botlist; bot && i < Q_atoi(vote_value);
          i++, bot = bot->next)
         ;
+
+    if (!bot) {
+        gi.bprintf(PRINT_HIGH, "Voted bot is no longer available.\n");
+        return;
+    }
 
     BotServerCommand("sv", "addbot", bot->name, bot->skin, bot->charfile,
                      bot->charname, NULL);
     bots_votedin++;
     gi.bprintf(PRINT_HIGH, "Bot: \"%s\" added!\n", bot->name);
     OSP_setShowParams();
-    q2log_voteInfo("Pass", "specbot", bot->name);
+    OSP_Stats_Vote("Pass", "specbot", bot->name);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: specific_bot - %s", bot->name);
 }
@@ -1236,7 +1236,7 @@ void OSP_addbots_vote(void)
     else
         gi.bprintf(PRINT_HIGH, "%s new bots added!\n", vote_value);
 
-    q2log_voteInfo("Pass", "addbots", vote_value);
+    OSP_Stats_Vote("Pass", "addbots", vote_value);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: addbots - %s", vote_value);
     OSP_setShowParams();
@@ -1248,7 +1248,7 @@ void OSP_removebots_vote(void)
 {
     int         i;
 
-    q2log_voteInfo("Pass", "removebots", vote_value);
+    OSP_Stats_Vote("Pass", "removebots", vote_value);
     if (server_log)
         OSP_logAdminLog("Vote_Pass: removebots - %s", vote_value);
 
@@ -1429,7 +1429,7 @@ void OSP_checkVote(void)
         gi.bprintf(PRINT_HIGH, "Vote failed: %d to %d\n", vote_nay, vote_yea);
         OSP_clearVotes();
         OSP_closeMenus();
-        q2log_voteInfo("Fail", NULL, NULL);
+        OSP_Stats_Vote("Fail", NULL, NULL);
     }
 }
 
@@ -1465,44 +1465,46 @@ void OSP_voteinfo(edict_t *ent, bool broadcast)
     int     t;
     edict_t *cp;
 
+    Q_strlcpy(scratch, "Vote error, invalid vote item active", sizeof(scratch));
+
     if (vote_item == 0x10) {
         if (!Q_atoi(vote_value))
-            strcpy(scratch, "Set the \"hook\" to DISABLED");
+            Q_strlcpy(scratch, "Set the \"hook\" to DISABLED", sizeof(scratch));
         else
-            strcpy(scratch, "Set the \"hook\" to ENABLED");
+            Q_strlcpy(scratch, "Set the \"hook\" to ENABLED", sizeof(scratch));
     } else if (vote_item == 0x800) {
         if (!Q_atoi(vote_value))
-            strcpy(scratch, "Set all \"runes\" to DISABLED");
+            Q_strlcpy(scratch, "Set all \"runes\" to DISABLED", sizeof(scratch));
         else
-            strcpy(scratch, "Set all \"runes\" to ENABLED");
+            Q_strlcpy(scratch, "Set all \"runes\" to ENABLED", sizeof(scratch));
     } else if (vote_item == 4) {
         if (!Q_atoi(vote_value))
-            strcpy(scratch, "Set the \"timelimit\" to OFF");
+            Q_strlcpy(scratch, "Set the \"timelimit\" to OFF", sizeof(scratch));
         else
-            sprintf(scratch, "Set \"timelimit\" to %d minute(s)",
+            Q_snprintf(scratch, sizeof(scratch), "Set \"timelimit\" to %d minute(s)",
                     Q_atoi(vote_value));
     } else if (vote_item == 8) {
         if (!Q_atoi(vote_value))
-            strcpy(scratch, "Set the \"fraglimit\" to NONE");
+            Q_strlcpy(scratch, "Set the \"fraglimit\" to NONE", sizeof(scratch));
         else
-            sprintf(scratch, "Set \"fraglimit\" to %d frag(s)",
+            Q_snprintf(scratch, sizeof(scratch), "Set \"fraglimit\" to %d frag(s)",
                     Q_atoi(vote_value));
     } else if (vote_item == 1)
-        sprintf(scratch, "Change current map to \"%s\"", vote_value);
+        Q_snprintf(scratch, sizeof(scratch), "Change current map to \"%s\"", vote_value);
     else if (vote_item == 2)
-        sprintf(scratch, "Change current server config to \"%s\"", vote_value);
+        Q_snprintf(scratch, sizeof(scratch), "Change current server config to \"%s\"", vote_value);
     else if (vote_item == 0x20)
         OSP_listItems(scratch);
     else if (vote_item == 0x40) {
         if (!Q_atoi(vote_value))
-            strcpy(scratch, "Set the BFG to DISABLED");
+            Q_strlcpy(scratch, "Set the BFG to DISABLED", sizeof(scratch));
         else
-            strcpy(scratch, "Set the BFG to ENABLED");
+            Q_strlcpy(scratch, "Set the BFG to ENABLED", sizeof(scratch));
     } else if (vote_item == 0x80) {
         if (!Q_atoi(vote_value))
-            strcpy(scratch, "Set the Quad to DISABLED");
+            Q_strlcpy(scratch, "Set the Quad to DISABLED", sizeof(scratch));
         else
-            strcpy(scratch, "Set the Quad to ENABLED");
+            Q_strlcpy(scratch, "Set the Quad to ENABLED", sizeof(scratch));
     } else if (vote_item == 0x1000) {
         for (t = 1; t <= game.maxclients; t++) {
             cp = g_edicts + t;
@@ -1511,23 +1513,23 @@ void OSP_voteinfo(edict_t *ent, bool broadcast)
                 cp->client->resp.clientid != Q_atoi(vote_value))
                 continue;
 
-            sprintf(scratch, "Kick Player: %s", cp->client->pers.netname);
+            Q_snprintf(scratch, sizeof(scratch), "Kick Player: %s", cp->client->pers.netname);
             break;
         }
     } else if (vote_item == 0x100)
-        strcpy(scratch, "Add 1 Gladiator bot.");
+        Q_strlcpy(scratch, "Add 1 Gladiator bot.", sizeof(scratch));
     else if (vote_item == 0x200) {
         if (Q_atoi(vote_value) == 1)
-            strcpy(scratch, "Add 1 Gladiator bot.");
+            Q_strlcpy(scratch, "Add 1 Gladiator bot.", sizeof(scratch));
         else
-            sprintf(scratch, "Add %d Gladiator bots.", Q_atoi(vote_value));
+            Q_snprintf(scratch, sizeof(scratch), "Add %d Gladiator bots.", Q_atoi(vote_value));
     } else if (vote_item == 0x400) {
         if (Q_atoi(vote_value) == 1)
-            strcpy(scratch, "Remove 1 Gladiator bot.");
+            Q_strlcpy(scratch, "Remove 1 Gladiator bot.", sizeof(scratch));
         else
-            sprintf(scratch, "Remove %d Gladiator bots.", Q_atoi(vote_value));
+            Q_snprintf(scratch, sizeof(scratch), "Remove %d Gladiator bots.", Q_atoi(vote_value));
     } else
-        strcpy(scratch, "Vote error, invalid vote item active");
+        Q_strlcpy(scratch, "Vote error, invalid vote item active", sizeof(scratch));
 
     if (!broadcast) {
         gi.cprintf(ent, PRINT_HIGH, "Proposal: %s\n", scratch);
@@ -1552,26 +1554,22 @@ void OSP_listItems(char *out)
     char    buf[256];
     int     any;
     cvar_t  *bfg;
-    cvar_t  *cells;
     cvar_t  *powershield;
     cvar_t  *quad;
     cvar_t  *invul;
     cvar_t  *teamhurtself;
     cvar_t  *ffahurtself;
-    cvar_t  *teamhurtteam;
     int     want;
     int     dmf;
 
     any = 0;
 
     bfg = gi.cvar("allow_bfg", "1", 0);
-    cells = gi.cvar("allow_ammo_cells", "1", 0);
     powershield = gi.cvar("allow_item_powershield", "1", 0);
     quad = gi.cvar("allow_item_quad", "1", 0);
     invul = gi.cvar("allow_item_invul", "1", 0);
     teamhurtself = gi.cvar("team_hurtself", "1", 0);
     ffahurtself = gi.cvar("ffa_hurtself", "1", 0);
-    teamhurtteam = gi.cvar("team_hurtteam", "1", 0);
 
     buf[0] = 0;
     want = Q_atoi(vote_value);
@@ -1707,7 +1705,7 @@ void OSP_listItems(char *out)
         any = 1;
     }
 
-    strcpy(out, buf);
+    Q_strlcpy(out, buf, sizeof(buf));
 }
 
 // "time" -- call a time-out, or a time-in on a match you paused yourself.
@@ -1903,7 +1901,7 @@ void OSP_muzzle_cmd(edict_t *ent)
 void OSP_isreferee_cmd(edict_t *ent)
 {
     if (!(int)referee_enable->value || !referee_password->string[0] ||
-        !strncmp(referee_password->string, "none", 4)) {
+        !strcmp(referee_password->string, "none")) {
         if (gi.argc() == 3)
             gi.cprintf(ent, PRINT_HIGH, "Referee status disabled.\n");
         ent->osp_e39c = 0;
@@ -1920,17 +1918,17 @@ void OSP_isreferee_cmd(edict_t *ent)
         return;
     }
 
-    if (strncmp(referee_password->string, gi.argv(2),
-                strlen(referee_password->string))) {
-        gi.cprintf(ent, PRINT_HIGH, "Referee password required or incorrect.\n");
-        gi.WriteByte(svc_disconnect);
-        gi.unicast(ent, true);
-        ClientDisconnect(ent);
+    // A prefix compare authenticated anything starting with the password,
+    // and a mismatch used to drop the client outright -- so a stale
+    // ref_passwd in a config locked its owner out of the server.  Neither is
+    // wanted: compare the whole string and just decline.
+    if (strcmp(referee_password->string, gi.argv(2))) {
+        ent->osp_e39c = 0;
         return;
     }
 
     gi.bprintf(PRINT_HIGH, "** Referee %s joined the match!\n",
-               ent->client->pers.netname + 16);
+               ent->client->pers.greenname);
     ent->osp_e39c = 1;
     ent->client->resp.osp_r02c = 1;
 }
@@ -2136,7 +2134,7 @@ void OSP_rmap_cmd(edict_t *ent)
 
     if (OSP_mapExists(ent, gi.argv(1), true)) {
         sl_SoftGameEnd(&gi, level);
-        q2log_gameEnd("referee map change", 0);
+        OSP_Stats_MatchEnd("referee map change");
         manual_map = 1;
         EndDMLevel();
     }
@@ -2166,9 +2164,9 @@ void OSP_rtimelimit_cmd(edict_t *ent)
     if (setval > (int)menu_maxtime->value)
         setval = (int)menu_maxtime->value;
 
-    sprintf(num, "%d", setval);
+    Q_snprintf(num, sizeof(num), "%d", setval);
     gi.cvar_set("timelimit", num);
-    strcpy(default_timelimit, num);
+    Q_strlcpy(default_timelimit, num, sizeof(default_timelimit));
     OSP_setShowParams();
 
     if (!Q_atoi(num))
@@ -2207,9 +2205,9 @@ void OSP_rfraglimit_cmd(edict_t *ent)
     if (setval > (int)menu_maxfrag->value)
         setval = (int)menu_maxfrag->value;
 
-    sprintf(num, "%d", setval);
+    Q_snprintf(num, sizeof(num), "%d", setval);
     gi.cvar_set("fraglimit", num);
-    strcpy(default_fraglimit, num);
+    Q_strlcpy(default_fraglimit, num, sizeof(default_fraglimit));
     OSP_setShowParams();
 
     if (!Q_atoi(num))
@@ -2240,7 +2238,7 @@ void OSP_rstopmatch_cmd(edict_t *ent)
     }
 
     if (m_mode == 1) {
-        OSP_allnotready_svcmd(NULL);
+        OSP_allnotready_svcmd(false);
         OSP_clearClients();
     } else {
         for (i = 0; i < 2; i++) {
@@ -2259,7 +2257,7 @@ void OSP_rstopmatch_cmd(edict_t *ent)
     else
         gi.bprintf(PRINT_CHAT, "Match terminated by console!!\n");
 
-    OSP_allnotready_svcmd(NULL);
+    OSP_allnotready_svcmd(false);
     OSP_clearClients();
 
     if (server_log) {
@@ -2292,9 +2290,9 @@ void OSP_rban_cmd(edict_t *ent, char *who)
                        "Usage: r_ban <player_name|player_id>\n");
             return;
         }
-        strncpy(bname, gi.args(), 15);
+        Q_strlcpy(bname, gi.args(), sizeof(bname));
     } else
-        strncpy(bname, who, 15);
+        Q_strlcpy(bname, who, sizeof(bname));
     victim = OSP_findPlayer(bname);
 
     if (!victim) {
@@ -2324,7 +2322,7 @@ void OSP_rban_cmd(edict_t *ent, char *who)
         return;
     }
 
-    strncpy(bname, victim->client->pers.netname, 15);
+    Q_strlcpy(bname, victim->client->pers.netname, sizeof(bname));
     OSP_getPlayerAddr(victim);
     ret = OSP_addBan(bname, victim->osp_e37c);
     if (!ret) {
@@ -2369,7 +2367,7 @@ void OSP_rbanaddr_cmd(edict_t *ent)
         return;
     }
 
-    strncpy(banip, gi.argv(1), 15);
+    Q_strlcpy(banip, gi.argv(1), sizeof(banip));
     i = OSP_addBan(NULL, banip);
     if (!i) {
         gi.cprintf(ent, PRINT_HIGH, "Address \"%s\" already in ban list!\n",
@@ -2416,7 +2414,7 @@ void OSP_runban_cmd(edict_t *ent)
         return;
     }
 
-    strncpy(name, gi.args(), 15);
+    Q_strlcpy(name, gi.args(), sizeof(name));
     if (OSP_removeBan(name, NULL)) {
         gi.cprintf(ent, PRINT_HIGH, "Playername \"%s\" removed from ban list.\n",
                    name);
@@ -2439,7 +2437,7 @@ void OSP_runbanaddr_cmd(edict_t *ent)
         return;
     }
 
-    strncpy(addr, gi.argv(1), 15);
+    Q_strlcpy(addr, gi.argv(1), sizeof(addr));
     if (OSP_removeBan(NULL, addr)) {
         gi.cprintf(ent, PRINT_HIGH, "Address \"%s\" removed from ban list.\n",
                    addr);
@@ -2475,7 +2473,7 @@ void OSP_allready_svcmd(void)
 
 // gamex86.dll: 100233EC..10023565
 // gamei386.so: 0005BB94..0005BD2C
-void OSP_allnotready_svcmd(edict_t *ent)
+void OSP_allnotready_svcmd(bool announce)
 {
     edict_t     *e;
     int         i;
@@ -2506,7 +2504,7 @@ void OSP_allnotready_svcmd(edict_t *ent)
         }
     }
 
-    if (ent)
+    if (announce)
         gi.bprintf(PRINT_HIGH, "All clients set to NOT ready!\n");
 
     sync_stat = 0;

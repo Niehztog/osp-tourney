@@ -21,7 +21,7 @@ char    conf_name[50][64];
 // gamei386.so: 00047B3C..00048056
 void OSP_configLoad(void)
 {
-    char    cfgpath[64];
+    char    cfgpath[MAX_OSPATH];
     char    line[1024];
     int     i;
     FILE    *cf = NULL;
@@ -40,11 +40,8 @@ void OSP_configLoad(void)
     conf_size = 0;
 
     if (gamedir && base) {
-        sprintf(cfgpath, "%s/%s/", base->string, gamedir->string);
-        if (cfglist)
-            strcat(cfgpath, cfglist->string);
-        else
-            strcat(cfgpath, "serverconfigs.txt");
+        Q_snprintf(cfgpath, sizeof(cfgpath), "%s/%s/%s", base->string,
+                   gamedir->string, cfglist ? cfglist->string : "serverconfigs.txt");
 
         cf = fopen(cfgpath, "r");
         if (cf) {
@@ -67,13 +64,13 @@ void OSP_configLoad(void)
                     if ((e = strchr(line, '\t'))) {
                         *e = 0;
                         e++;
-                        strncpy(conf_info[i], e, 63);
-                        conf_info[i][63] = 0;
+                        Q_strlcpy(conf_info[i], e, sizeof(conf_info[i]));
                     }
 
-                    sprintf(cfgpath, "%s/%s/%s", base->string, gamedir->string, line);
+                    Q_snprintf(cfgpath, sizeof(cfgpath), "%s/%s/%s", base->string,
+                               gamedir->string, line);
                     if (OSP_configFileExists(cfgpath))
-                        strncpy(conf_name[i], line, 63);
+                        Q_strlcpy(conf_name[i], line, sizeof(conf_name[i]));
                     else
                         i--;
                 } else
@@ -81,7 +78,7 @@ void OSP_configLoad(void)
             }
 
             fclose(cf);
-            conf_size = i;
+            conf_size = i > 0 ? i : 0;
 
             if (!conf_size) {
                 gi.dprintf("No server configs found.\n\n");
@@ -98,8 +95,9 @@ void OSP_configLoad(void)
 
                 if ((int)cfgdefault->value && cdefn->string &&
                     strcmp(cdefn->string, "default")) {
-                    sprintf(cfgpath, "%s/%s/%s", base->string, gamedir->string,
-                            cdefn->string);
+                    Q_snprintf(cfgpath, sizeof(cfgpath), "%s/%s/%s",
+                               base->string, gamedir->string,
+                               cdefn->string);
 
                     if (OSP_configFileExists(cfgpath))
                         gi.dprintf("** Default config is: %s\n",
@@ -161,8 +159,9 @@ bool OSP_configExists(edict_t *ent, char *name)
             return true;
 
         if (conf_info[i][0] && !Q_stricmp(name, conf_info[i])) {
+            // `name` is vote_value, which is the same size as conf_name[]
             if (!ent)
-                strcpy(name, conf_name[i]);
+                Q_strlcpy(name, conf_name[i], sizeof(conf_name[i]));
             return true;
         }
     }

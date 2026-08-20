@@ -172,13 +172,6 @@ void GrapplePull(edict_t *self)
             VectorCopy(self->enemy->velocity, self->velocity);
 
         if (self->enemy->takedamage) {
-            // Dead in the original: written, overwritten and never read.
-            // Name invented.
-            float damagescale = 1.0f;
-
-            if (self->owner->client->silencer_shots)
-                damagescale = 0.2f;
-
             if (self->health < (int)hook_maxdamage->value) {
                 T_Damage(self->enemy, self, self->owner, self->velocity, self->s.origin, vec3_origin, (int)hook_incdamage->value, 1, 0, MOD_GRAPPLE);
                 self->health += (int)hook_incdamage->value;
@@ -248,10 +241,11 @@ void FireGrapple(edict_t *self, vec3_t start, vec3_t dir, int damage, int speed,
     grapple->s.frame = 4;
     grapple->s.modelindex = 1;
 
-    if (m_mode < 2)
+    if (m_mode < 2 || (unsigned)self->client->resp.team >= 2)
         grapple->s.skinnum = strtoul(hook_color->string, &tailp, 0);
     else
-        grapple->s.skinnum = strtoul(teams[self->client->resp.team].osp_m0c0, &tailp, 0);
+        grapple->s.skinnum = strtoul((char *)teams[self->client->resp.team].osp_m0c0,
+                                     &tailp, 0);
 
     gi.linkentity(grapple);
 
