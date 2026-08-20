@@ -2,6 +2,8 @@
 
 #include "g_local.h"
 #include "bl_main.h"
+#include "bl_redirgi.h"
+#include "bl_spawn.h"
 
 int endlvl_frame = 0;
 int end_timeout = -1;
@@ -78,30 +80,16 @@ static void ShutdownGame(void)
     sl_GameEnd(&gi, level);
 
     if (!level.intermission_framenum)
-        q2log_logAccuracy();
+        OSP_Stats_AccuracyAll();
 
-    if (gi.argc()) {
-        if (strcmp(gi.argv(0), "map") != 0) {
-            if ((int)nglog_ngstats_browser->value &&
-                (int)nglog_logstyle->value == 4)
-                q2log_gameEnd(gi.argv(0), 1);
-            else
-                q2log_gameEnd(gi.argv(0), 0);
+    if (gi.argc() && strcmp(gi.argv(0), "map") != 0)
+        Q_strlcpy(reason, gi.argv(0), sizeof(reason));
+    else if (gi.argc())
+        Q_strlcpy(reason, "manual_map", sizeof(reason));
+    else
+        Q_strlcpy(reason, "server", sizeof(reason));
 
-            strcpy(reason, gi.argv(0));
-        } else {
-            q2log_gameEnd("manual_map", 0);
-            strcpy(reason, "manual_map");
-        }
-    } else {
-        if ((int)nglog_ngstats_browser->value &&
-            (int)nglog_logstyle->value == 4)
-            q2log_gameEnd("server", 1);
-        else
-            q2log_gameEnd("server", 0);
-
-        strcpy(reason, "server");
-    }
+    OSP_Stats_MatchEnd(reason);
 
     if (server_log) {
         char        date[32];
@@ -110,9 +98,11 @@ static void ShutdownGame(void)
 
         time(&now);
         tm = localtime(&now);
-        sprintf(date, "%.19s", asctime(tm));
+        Q_snprintf(date, sizeof(date), "%.19s", tm ? asctime(tm) : "");
         OSP_logAdminLog("Shutdown: %s (%s)", reason, date);
     }
+
+    OSP_Stats_Shutdown(reason);
 
     memset(&game, 0, sizeof(game));
 
@@ -422,11 +412,11 @@ static void CheckDMRules(void)
                 ot_count = 0;
                 gi.bprintf(PRINT_HIGH, "Timelimit hit.\n");
                 sl_SoftGameEnd(&gi, level);
-                q2log_logAccuracy();
+                OSP_Stats_AccuracyAll();
                 if (!overtime_timer)
-                    q2log_gameEnd("timelimit", 0);
+                    OSP_Stats_MatchEnd("timelimit");
                 else
-                    q2log_gameEnd("overtime timelimit", 0);
+                    OSP_Stats_MatchEnd("overtime timelimit");
                 EndDMLevel();
                 return;
             }
@@ -439,7 +429,7 @@ static void CheckDMRules(void)
         ot_count = 0;
         gi.bprintf(PRINT_HIGH, "Inactive client timelimit hit.\n");
         sl_SoftGameEnd(&gi, level);
-        q2log_gameEnd("inactive client timelimit", 0);
+        OSP_Stats_MatchEnd("inactive client timelimit");
         EndDMLevel();
         return;
     }
@@ -457,8 +447,8 @@ fraglimit_check:
                 if (cl->resp.score >= fraglimit->value) {
                     gi.bprintf(PRINT_HIGH, "Fraglimit hit.\n");
                     sl_SoftGameEnd(&gi, level);
-                    q2log_logAccuracy();
-                    q2log_gameEnd("fraglimit", 0);
+                    OSP_Stats_AccuracyAll();
+                    OSP_Stats_MatchEnd("fraglimit");
                     EndDMLevel();
                     return;
                 }
@@ -468,8 +458,8 @@ fraglimit_check:
                 OSP_findTeamWinner();
                 gi.bprintf(PRINT_HIGH, "We have a sudden-death winner!\n");
                 sl_SoftGameEnd(&gi, level);
-                q2log_logAccuracy();
-                q2log_gameEnd("sudden death fraglimit", 0);
+                OSP_Stats_AccuracyAll();
+                OSP_Stats_MatchEnd("sudden death fraglimit");
                 EndDMLevel();
                 return;
             }
@@ -479,8 +469,8 @@ fraglimit_check:
                 OSP_findTeamWinner();
                 gi.bprintf(PRINT_HIGH, "Team fraglimit hit.\n");
                 sl_SoftGameEnd(&gi, level);
-                q2log_logAccuracy();
-                q2log_gameEnd("team fraglimit", 0);
+                OSP_Stats_AccuracyAll();
+                OSP_Stats_MatchEnd("team fraglimit");
                 EndDMLevel();
             }
         }
@@ -560,7 +550,7 @@ static void G_RunFrame(void)
         if (vote_inprogress && level.framenum > vote_frametime &&
             !level.intermission_framenum) {
             gi.bprintf(PRINT_HIGH, "Time up. Vote failed. No changes made.\n");
-            q2log_voteInfo("Fail", 0, 0);
+            OSP_Stats_Vote("Fail", 0, 0);
             OSP_clearVotes();
             OSP_closeMenus();
         }
@@ -598,10 +588,10 @@ static void G_RunFrame(void)
                 level.intermission_framenum = 0;
                 ClientEndServerFrames();
                 botglobals.numbots = 0;
-                q2log_gameInit(1);
+                OSP_Stats_GameInit();
                 sl_GameStart(&gi, level);
                 if (m_mode < 1)
-                    q2log_gameStart();
+                    OSP_Stats_MatchStart();
                 OSP_consoleStamp();
 
                 for (i = 0; i < game.maxclients; i++) {
@@ -725,7 +715,7 @@ static void G_RunFrame(void)
         if (match_paused == 1) {
             match_paused = 2;
 
-            if (who_paused == -1 || who_paused == -3)
+            if (who_paused == -1)
                 gi.configstring(0x621, "Pause");
             else if (who_paused == -2)
                 gi.configstring(0x621, " Wait");
@@ -766,7 +756,6 @@ static void G_RunFrame(void)
     if (match_paused == 3) {
         // message[64], and the per-iteration `command` is 32 bytes, not 48.
         char    message[64];
-        char    command[32];
         edict_t *ent;
 
         if (end_timeout == -1)
@@ -792,19 +781,20 @@ static void G_RunFrame(void)
 
         if (!(end_timeout % 10)) {
             if (end_timeout / 10 != 1)
-                sprintf(message, "Match restarting in %d seconds.\n",
-                        end_timeout / 10);
+                Q_snprintf(message, sizeof(message),
+                           "Match restarting in %d seconds.\n",
+                           end_timeout / 10);
             else
-                sprintf(message, "Match restarting in %d second!\n",
-                        end_timeout / 10);
+                Q_snprintf(message, sizeof(message),
+                           "Match restarting in %d second!\n",
+                           end_timeout / 10);
             for (i = 1; i <= game.maxclients; i++) {
                 ent = g_edicts + i;
                 if (!ent->inuse || !ent->client)
                     continue;
                 gi.centerprintf(ent, "%s", message);
-                sprintf(command, "play misc/secret.wav");
                 gi.WriteByte(svc_stufftext);
-                gi.WriteString(command);
+                gi.WriteString("play misc/secret.wav");
                 gi.unicast(ent, false);
             }
         }
@@ -818,34 +808,15 @@ static void G_RunFrame(void)
 
     // Each of the three pause countdowns truncates pause_time ONCE into its own
     // int local and reuses it.  (`secs` is an invented name.)
-    if (who_paused == -3) {
-        int     secs = (int)pause_time;
-
-        if (pause_time - secs < FRAMETIME && !(secs % 10)) {
-            edict_t *ent;
-
-            for (i = 1; i <= game.maxclients; i++) {
-                ent = g_edicts + i;
-                if (!ent->inuse || !ent->client)
-                    continue;
-
-                gi.centerprintf(ent,
-                                "Admin is viewing ngStats.  Please Wait.\n");
-            }
-        }
-        pause_time -= FRAMETIME;
-        ClientEndServerFrames();
-        return;
-    }
-
     if (who_paused == -2) {
         int     secs = (int)pause_time;
 
         if (pause_time - secs < FRAMETIME && !(secs % 10)) {
             char    message[128];
 
-            sprintf(message, "Waiting for %s to reconnect.\n(%d seconds)\n",
-                    reconn_player, secs);
+            Q_snprintf(message, sizeof(message),
+                       "Waiting for %s to reconnect.\n(%d seconds)\n",
+                       reconn_player, secs);
             for (i = 1; i <= game.maxclients; i++) {
                 ent = g_edicts + i;
                 if (!ent->inuse || !ent->client)
@@ -879,9 +850,9 @@ static void G_RunFrame(void)
         int     secs = (int)pause_time;
 
         if (pause_time - secs < FRAMETIME) {
-            char    message[8];
+            char    message[16];
 
-            sprintf(message, "TO %.2d", secs);
+            Q_snprintf(message, sizeof(message), "TO %.2d", secs);
             gi.configstring(0x621, message);
         }
     }

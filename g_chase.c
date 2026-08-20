@@ -124,15 +124,19 @@ void UpdateChaseCam(edict_t *ent)
         ent->client->update_chase = false;
 
         if (m_mode != 2) {
-            sprintf(string, "xv 44 yb -59 string \"Chasing `%s'\"",
-                    targ->client->pers.netname);
+            Q_snprintf(string, sizeof(string),
+                       "xv 44 yb -59 string \"Chasing `%s'\"",
+                       targ->client->pers.netname);
         } else if (sync_stat > 2) {
-            sprintf(string, "xv 44 yb -59 string \"Chasing `%s' [%d] (%s)\"",
-                    targ->client->pers.netname, targ->client->resp.score,
-                    teams[targ->client->resp.team].netname);
+            Q_snprintf(string, sizeof(string),
+                       "xv 44 yb -59 string \"Chasing `%s' [%d] (%s)\"",
+                       targ->client->pers.netname, targ->client->resp.score,
+                       OSP_teamNameFor(targ->client->resp.team));
         } else {
-            sprintf(string, "xv 44 yb -59 string \"Chasing `%s' (%s)\"",
-                    targ->client->pers.netname, teams[targ->client->resp.team].netname);
+            Q_snprintf(string, sizeof(string),
+                       "xv 44 yb -59 string \"Chasing `%s' (%s)\"",
+                       targ->client->pers.netname,
+                       OSP_teamNameFor(targ->client->resp.team));
         }
 
         gi.WriteByte(svc_layout);

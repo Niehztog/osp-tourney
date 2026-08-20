@@ -6,10 +6,27 @@
 
 #include "g_local.h"
 #include "bl_main.h"
+#include "bl_redirgi.h"
+#include "bl_spawn.h"
 
 int overtime_timer;
 team_t  teams[2];
 int frag_offset;
+
+/*
+==============
+OSP_teamNameFor
+
+resp.team is 2 for a client on no team, so every read of teams[] indexed by it
+needs a range test.  This is that test, once.
+==============
+*/
+const char *OSP_teamNameFor(int team)
+{
+    if (team == 0 || team == 1)
+        return teams[team].netname;
+    return "no team";
+}
 
 // gamex86.dll: 100373C0..10037447
 // gamei386.so: 00063780..000637EF
@@ -97,37 +114,38 @@ bool OSP_addTeamMember(edict_t *ent, int requested_team)
     }
 
     ent->client->resp.team = team;
-    q2log_teamJoin(ent);
+    OSP_Stats_TeamJoin(ent);
 
     if (!(ent->flags & FL_OSP_NOCMD)) {
-        sprintf(tmp, "skin %s\n", teams[team].skin);
+        Q_snprintf(tmp, sizeof(tmp), "skin %s\n", teams[team].skin);
         gi.WriteByte(svc_stufftext);
         gi.WriteString(tmp);
         gi.unicast(ent, true);
 
-        sprintf(tmp, "set default_teamname %s\n", teams[team].netname);
-        strcpy(ent->osp_e3a0, teams[team].netname);
+        Q_snprintf(tmp, sizeof(tmp), "set default_teamname %s\n",
+                   teams[team].netname);
+        Q_strlcpy(ent->osp_e3a0, teams[team].netname, sizeof(ent->osp_e3a0));
         gi.WriteByte(svc_stufftext);
         gi.WriteString(tmp);
         gi.unicast(ent, true);
 
-        sprintf(tmp, "set default_teamskin %s\n", teams[team].skin);
-        strcpy(ent->osp_e3b0, teams[team].skin);
+        Q_snprintf(tmp, sizeof(tmp), "set default_teamskin %s\n",
+                   teams[team].skin);
+        Q_strlcpy(ent->osp_e3b0, teams[team].skin, sizeof(ent->osp_e3b0));
         gi.WriteByte(svc_stufftext);
         gi.WriteString(tmp);
         gi.unicast(ent, true);
     } else {
-        char        userinfo[512];
+        char        userinfo[MAX_INFO_STRING];
 
-        strncpy(userinfo, ent->client->pers.userinfo, 511);
-        userinfo[511] = 0;
+        Q_strlcpy(userinfo, ent->client->pers.userinfo, sizeof(userinfo));
         Info_SetValueForKey(userinfo, "skin", teams[team].skin);
         ClientUserinfoChanged(ent, userinfo);
     }
 
-    sprintf(tmp, "%15s", teams[team].netname);
+    Q_snprintf(tmp, sizeof(tmp), "%15s", teams[team].netname);
     OSP_clientConfigString(ent, 0x625 + team * 2, tmp);
-    sprintf(tmp, "%15s", teams[1 - team].greenname);
+    Q_snprintf(tmp, sizeof(tmp), "%15s", teams[1 - team].greenname);
     OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, tmp);
 
     if (m_mode == 2)
@@ -155,7 +173,9 @@ bool OSP_addTeamMember(edict_t *ent, int requested_team)
                 gi.cprintf(ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
                            teams[team].greenname);
                 if (ent->client->resp.osp_r07d[0])
-                    strcpy(teams[team].joincode, ent->client->resp.osp_r07d);
+                    Q_strlcpy(teams[team].joincode,
+                              ent->client->resp.osp_r07d,
+                              sizeof(teams[team].joincode));
             }
         }
     } else if (m_mode == 2)
@@ -204,58 +224,58 @@ bool OSP_defaultTeam(edict_t *ent)
     if (!OSP_teamCount(team)) {
         if (Q_stricmp(teams[1 - team].netname, ent->osp_e3a0)) {
             if (Q_stricmp(teams[team].netname, ent->osp_e3a0))
-                q2log_teamRename(teams[team].netname, ent->osp_e3a0);
-            strncpy(teams[team].netname, ent->osp_e3a0, 15);
-            strncpy(teams[team].greenname, ent->osp_e3a0, 15);
+                OSP_Stats_TeamRename(teams[team].netname, ent->osp_e3a0);
+            Q_strlcpy(teams[team].netname, ent->osp_e3a0, 16);
+            Q_strlcpy(teams[team].greenname, ent->osp_e3a0, 16);
             {
 
                 for (i = 0; i < strlen(teams[team].greenname); i++)
                     teams[team].greenname[i] += 128;
             }
-            sprintf(msgbuf, "%15s", teams[team].greenname);
+            Q_snprintf(msgbuf, sizeof(msgbuf), "%15s", teams[team].greenname);
             gi.configstring(0x625 + team * 2, msgbuf);
         } else if (!OSP_teamCount(1 - team)) {
             // The name we want is the OTHER team's and that team is empty, so
             // hand it our name and take theirs.
-            strncpy(teams[1 - team].netname, teams[team].netname, 15);
-            strncpy(teams[team].netname, ent->osp_e3a0, 15);
-            strncpy(teams[team].greenname, ent->osp_e3a0, 15);
+            Q_strlcpy(teams[1 - team].netname, teams[team].netname, 16);
+            Q_strlcpy(teams[team].netname, ent->osp_e3a0, 16);
+            Q_strlcpy(teams[team].greenname, ent->osp_e3a0, 16);
             {
 
                 for (i = 0; i < strlen(teams[team].greenname); i++)
                     teams[team].greenname[i] += 128;
             }
-            sprintf(msgbuf, "%15s", teams[team].greenname);
+            Q_snprintf(msgbuf, sizeof(msgbuf), "%15s", teams[team].greenname);
             gi.configstring(0x625 + team * 2, msgbuf);
         }
 
         if (Q_stricmp(teams[1 - team].skin, ent->osp_e3b0))
-            strncpy(teams[team].skin, ent->osp_e3b0, 128);
+            Q_strlcpy(teams[team].skin, ent->osp_e3b0, sizeof(teams[team].skin));
         else if (!OSP_teamCount(1 - team)) {
-            strncpy(teams[1 - team].skin, teams[team].skin, 128);
-            strncpy(teams[team].skin, ent->osp_e3b0, 128);
+            Q_strlcpy(teams[1 - team].skin, teams[team].skin,
+                      sizeof(teams[1 - team].skin));
+            Q_strlcpy(teams[team].skin, ent->osp_e3b0, sizeof(teams[team].skin));
         }
     } else if (OSP_teamCount(team) >= (int)team_maxplayers->value)
         return false;
 
     ent->client->resp.team = team;
-    q2log_teamJoin(ent);
+    OSP_Stats_TeamJoin(ent);
 
     if (!(ent->flags & FL_OSP_NOCMD)) {
-        sprintf(msgbuf, "skin %s\n", teams[team].skin);
+        Q_snprintf(msgbuf, sizeof(msgbuf), "skin %s\n", teams[team].skin);
         gi.WriteByte(svc_stufftext);
         gi.WriteString(msgbuf);
         gi.unicast(ent, true);
 
-        sprintf(msgbuf, "%15s", teams[team].netname);
+        Q_snprintf(msgbuf, sizeof(msgbuf), "%15s", teams[team].netname);
         OSP_clientConfigString(ent, 0x625 + team * 2, msgbuf);
-        sprintf(msgbuf, "%15s", teams[1 - team].greenname);
+        Q_snprintf(msgbuf, sizeof(msgbuf), "%15s", teams[1 - team].greenname);
         OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, msgbuf);
     } else {
-        char        userinfo[512];
+        char        userinfo[MAX_INFO_STRING];
 
-        strncpy(userinfo, ent->client->pers.userinfo, 511);
-        userinfo[511] = 0;
+        Q_strlcpy(userinfo, ent->client->pers.userinfo, sizeof(userinfo));
         Info_SetValueForKey(userinfo, "skin", teams[team].skin);
         ClientUserinfoChanged(ent, userinfo);
     }
@@ -286,7 +306,8 @@ bool OSP_defaultTeam(edict_t *ent)
             gi.cprintf(ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
                        teams[team].greenname);
             if (ent->client->resp.osp_r07d[0])
-                strcpy(teams[team].joincode, ent->client->resp.osp_r07d);
+                Q_strlcpy(teams[team].joincode, ent->client->resp.osp_r07d,
+                          sizeof(teams[team].joincode));
         }
     } else
         ent->client->resp.osp_r2c4 = 0;
@@ -321,20 +342,20 @@ bool OSP_1v1Team(edict_t *ent)
 
     if (Q_stricmp(teams[1 - team].netname, ent->client->pers.netname)) {
         if (strcmp(teams[team].netname, ent->client->pers.netname))
-            q2log_teamRename(teams[team].netname, ent->client->pers.netname);
-        strncpy(teams[team].netname, ent->client->pers.netname, 15);
-        strncpy(teams[team].greenname, ent->client->pers.greenname, 15);
-        sprintf(tmp, "%15s", teams[team].greenname);
+            OSP_Stats_TeamRename(teams[team].netname, ent->client->pers.netname);
+        Q_strlcpy(teams[team].netname, ent->client->pers.netname, 16);
+        Q_strlcpy(teams[team].greenname, ent->client->pers.greenname, 16);
+        Q_snprintf(tmp, sizeof(tmp), "%15s", teams[team].greenname);
         gi.configstring(0x625 + team * 2, tmp);
     }
 
     ent->client->resp.team = team;
-    q2log_teamJoin(ent);
+    OSP_Stats_TeamJoin(ent);
 
     if (!(ent->flags & FL_OSP_NOCMD)) {
-        sprintf(tmp, "%15s", teams[team].netname);
+        Q_snprintf(tmp, sizeof(tmp), "%15s", teams[team].netname);
         OSP_clientConfigString(ent, 0x625 + team * 2, tmp);
-        sprintf(tmp, "%15s", teams[1 - team].greenname);
+        Q_snprintf(tmp, sizeof(tmp), "%15s", teams[1 - team].greenname);
         OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, tmp);
     }
     return true;
@@ -429,9 +450,10 @@ void OSP_1v1Remove(edict_t *ent, int mode)
         }
     }
 
-    if (mode == 1)
-        p_order[25]--;
-    else
+    if (mode == 1) {
+        if (p_order[25] > 0)
+            p_order[25]--;
+    } else if (p_order[25] > 0)
         p_order[p_order[25] - 1] = ent - g_edicts - 1;
 
     if (!mode)
@@ -457,13 +479,12 @@ void OSP_1v1QueueCheck(void)
 
     for (i = 0; i < p_order[25]; i++) {
         for (j = 0; j < i; j++) {
-            if (!(p_order[i] == p_order[j] ||
-                  (g_edicts[p_order[i] + 1].client->resp.entered !=
-                   ENTERED_ENTERED &&
-                   ((!g_edicts[p_order[i] + 1].inuse &&
-                     level.framenum - level_start >= 300) ||
-                    !g_edicts[p_order[i] + 1].client ||
-                    !g_edicts[p_order[i] + 1].client->pers.connected))))
+            edict_t *queued = &g_edicts[p_order[i] + 1];
+
+            if (!(p_order[i] == p_order[j] || !queued->client ||
+                  (queued->client->resp.entered != ENTERED_ENTERED &&
+                   ((!queued->inuse && level.framenum - level_start >= 300) ||
+                    !queued->client->pers.connected))))
                 continue;
 
             for (k = i; k < p_order[25] - 1; k++)
@@ -482,7 +503,7 @@ void OSP_1v1QueueCheck(void)
 // gamei386.so: 000651A8..000653ED
 void OSP_removeTeamMember(edict_t *ent, bool quiet)
 {
-    char        buf[20];
+    char        buf[32];
     edict_t     *other;
     int         i;
     int         tno;
@@ -500,11 +521,11 @@ void OSP_removeTeamMember(edict_t *ent, bool quiet)
                    ent->client->pers.greenname);
 
     if (!quiet && !(ent->flags & FL_OSP_BOT)) {
-        sprintf(buf, "%15s", teams[tno].greenname);
+        Q_snprintf(buf, sizeof(buf), "%15s", teams[tno].greenname);
         OSP_clientConfigString(ent, 0x625 + tno * 2, buf);
     }
 
-    q2log_teamLeave(ent);
+    OSP_Stats_TeamLeave(ent);
 
     if (ent->client->resp.osp_r2c4) {
         for (i = 1; i <= game.maxclients; i++) {
@@ -558,24 +579,23 @@ bool OSP_readdTeamMember(edict_t *ent)
         return false;
     }
 
-    q2log_teamJoin(ent);
+    OSP_Stats_TeamJoin(ent);
     ent->client->resp.team = ent->client->resp.osp_r2cc;
 
     if (!(ent->flags & FL_OSP_NOCMD)) {
-        sprintf(tmp, "skin %s\n", teams[team].skin);
+        Q_snprintf(tmp, sizeof(tmp), "skin %s\n", teams[team].skin);
         gi.WriteByte(svc_stufftext);
         gi.WriteString(tmp);
         gi.unicast(ent, true);
 
-        sprintf(tmp, "%15s", teams[team].netname);
+        Q_snprintf(tmp, sizeof(tmp), "%15s", teams[team].netname);
         OSP_clientConfigString(ent, 0x625 + team * 2, tmp);
-        sprintf(tmp, "%15s", teams[1 - team].greenname);
+        Q_snprintf(tmp, sizeof(tmp), "%15s", teams[1 - team].greenname);
         OSP_clientConfigString(ent, 0x625 + (1 - team) * 2, tmp);
     } else {
-        char    userinfo[512];
+        char    userinfo[MAX_INFO_STRING];
 
-        strncpy(userinfo, ent->client->pers.userinfo, 511);
-        userinfo[511] = 0;
+        Q_strlcpy(userinfo, ent->client->pers.userinfo, sizeof(userinfo));
         Info_SetValueForKey(userinfo, "skin", teams[team].skin);
         ClientUserinfoChanged(ent, userinfo);
     }
@@ -602,7 +622,8 @@ bool OSP_readdTeamMember(edict_t *ent)
             gi.cprintf(ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
                        teams[team].greenname);
             if (ent->client->resp.osp_r07d[0])
-                strcpy(teams[team].joincode, ent->client->resp.osp_r07d);
+                Q_strlcpy(teams[team].joincode, ent->client->resp.osp_r07d,
+                          sizeof(teams[team].joincode));
         }
     } else
         ent->client->resp.osp_r2c4 = 0;
@@ -617,28 +638,28 @@ bool OSP_readdTeamMember(edict_t *ent)
 // gamei386.so: 000657C0..000659B8
 void OSP_initTeamFrags(edict_t *ent)
 {
-    char        buf[16];
-    char        tmp[16];
+    char        buf[32];
+    char        tmp[32];
     int         teamidx;
 
     teamidx = ent->client->resp.team;
     if (!(ent->flags & FL_OSP_NOCMD)) {
         if (!(int)fraglimit->value) {
-            sprintf(tmp, "(%i) %i", ent->client->resp.score, teams[teamidx].osp_m0f8);
-            sprintf(buf, "%13s", tmp);
+            Q_snprintf(tmp, sizeof(tmp), "(%i) %i", ent->client->resp.score, teams[teamidx].osp_m0f8);
+            Q_snprintf(buf, sizeof(buf), "%13s", tmp);
         } else {
-            sprintf(tmp, "(%i) %i/%i", ent->client->resp.score, teams[teamidx].osp_m0f8,
+            Q_snprintf(tmp, sizeof(tmp), "(%i) %i/%i", ent->client->resp.score, teams[teamidx].osp_m0f8,
                     (int)fraglimit->value);
-            sprintf(buf, "%13s", tmp);
+            Q_snprintf(buf, sizeof(buf), "%13s", tmp);
         }
         OSP_clientConfigString(ent, 0x626 + teamidx * 2, buf);
 
         if (ent->client->resp.osp_r210) {
             if (!(int)fraglimit->value)
-                sprintf(buf, "%13i", teams[1 - teamidx].osp_m0f8);
+                Q_snprintf(buf, sizeof(buf), "%13i", teams[1 - teamidx].osp_m0f8);
             else {
-                sprintf(tmp, "%i/%i", teams[1 - teamidx].osp_m0f8, (int)fraglimit->value);
-                sprintf(buf, "%13s", tmp);
+                Q_snprintf(tmp, sizeof(tmp), "%i/%i", teams[1 - teamidx].osp_m0f8, (int)fraglimit->value);
+                Q_snprintf(buf, sizeof(buf), "%13s", tmp);
             }
             OSP_clientConfigString(ent, 0x626 + (1 - teamidx) * 2, buf);
         }
@@ -649,8 +670,8 @@ void OSP_initTeamFrags(edict_t *ent)
 // gamei386.so: 000659B8..00065B4C
 void OSP_playerTeamFrags(edict_t *ent)
 {
-    char        buf[16];
-    char        tmp[16];
+    char        buf[32];
+    char        tmp[32];
     edict_t     *other;
     int         i;
     int         teamidx;
@@ -663,13 +684,13 @@ void OSP_playerTeamFrags(edict_t *ent)
             continue;
 
         if (!(int)fraglimit->value) {
-            sprintf(tmp, "(%i) %i", other->client->resp.score,
+            Q_snprintf(tmp, sizeof(tmp), "(%i) %i", other->client->resp.score,
                     teams[teamidx].osp_m0f8);
-            sprintf(buf, "%13s", tmp);
+            Q_snprintf(buf, sizeof(buf), "%13s", tmp);
         } else {
-            sprintf(tmp, "(%i) %i/%i", other->client->resp.score,
+            Q_snprintf(tmp, sizeof(tmp), "(%i) %i/%i", other->client->resp.score,
                     teams[teamidx].osp_m0f8, (int)fraglimit->value);
-            sprintf(buf, "%13s", tmp);
+            Q_snprintf(buf, sizeof(buf), "%13s", tmp);
         }
         OSP_clientConfigString(other, 0x626 + teamidx * 2, buf);
     }
@@ -686,10 +707,10 @@ void OSP_observerTeamFrags(edict_t *ent)
     if (sync_stat > 2 && m_mode == 2) {
         for (n = 0; n < 2; n++) {
             if (!(int)fraglimit->value)
-                sprintf(num, "%13i", teams[n].osp_m0f8);
+                Q_snprintf(num, sizeof(num), "%13i", teams[n].osp_m0f8);
             else {
-                sprintf(msg, "%i/%i", teams[n].osp_m0f8, (int)fraglimit->value);
-                sprintf(num, "%13s", msg);
+                Q_snprintf(msg, sizeof(msg), "%i/%i", teams[n].osp_m0f8, (int)fraglimit->value);
+                Q_snprintf(num, sizeof(num), "%13s", msg);
             }
             if (!(ent->flags & FL_OSP_NOCMD))
                 OSP_clientConfigString(ent, 0x626 + n * 2, num);
@@ -706,7 +727,7 @@ void OSP_observerTeamFrags(edict_t *ent)
 // gamei386.so: 00065C68..00065F67
 void OSP_updateTeamFrags(void)
 {
-    char        buf[32];
+    char        buf[80];
     char        tmp[32];
     edict_t     *other;
     int         i;
@@ -717,10 +738,10 @@ void OSP_updateTeamFrags(void)
             if (teams[i].osp_m110 != teams[i].osp_m0f8 ||
                 teams[i].osp_m118 != (int)fraglimit->value) {
                 if (!(int)fraglimit->value)
-                    sprintf(buf, "%13i", teams[i].osp_m0f8);
+                    Q_snprintf(buf, sizeof(buf), "%13i", teams[i].osp_m0f8);
                 else {
-                    sprintf(tmp, "%i/%i", teams[i].osp_m0f8, (int)fraglimit->value);
-                    sprintf(buf, "%13s", tmp);
+                    Q_snprintf(tmp, sizeof(tmp), "%i/%i", teams[i].osp_m0f8, (int)fraglimit->value);
+                    Q_snprintf(buf, sizeof(buf), "%13s", tmp);
                 }
 
                 if (m_mode == 2) {
@@ -734,9 +755,9 @@ void OSP_updateTeamFrags(void)
                     }
 
                     if (!(int)fraglimit->value)
-                        sprintf(buf, "%i-%s", teams[i].osp_m0f8, teams[i].netname);
+                        Q_snprintf(buf, sizeof(buf), "%i-%s", teams[i].osp_m0f8, teams[i].netname);
                     else
-                        sprintf(buf, "%i/%i-%s", teams[i].osp_m0f8,
+                        Q_snprintf(buf, sizeof(buf), "%i/%i-%s", teams[i].osp_m0f8,
                                 (int)fraglimit->value, teams[i].netname);
 
                     if (!i)
@@ -770,7 +791,7 @@ void OSP_defaultjoincode_cmd(edict_t *ent)
 {
     if (gi.argc() != 2)
         return;
-    strncpy(ent->client->resp.osp_r07d, gi.argv(1), 15);
+    Q_strlcpy(ent->client->resp.osp_r07d, gi.argv(1), 16);
 }
 
 // `joincode` with no argument, or from a non-captain, prints the code; from a
@@ -798,8 +819,9 @@ void OSP_joincode_cmd(edict_t *ent)
             return;
         }
 
-        strncpy(teams[teamidx].joincode, gi.argv(1), 15);
-        for (t = 1; t < game.maxclients; t++) {
+        Q_strlcpy(teams[teamidx].joincode, gi.argv(1),
+                  sizeof(teams[teamidx].joincode));
+        for (t = 1; t <= game.maxclients; t++) {
             p = g_edicts + t;
             if (!p->inuse || !p->client ||
                 p->client->resp.team != teamidx)
@@ -857,8 +879,7 @@ void OSP_teamname_cmd(edict_t *ent)
         return;
     }
 
-    strncpy(buf, gi.args(), 30);
-    buf[30] = 0;
+    Q_strlcpy(buf, gi.args(), 31);
 
     for (i = 0, j = 0; i < strlen(buf) && j < 15; i++) {
         if (buf[i] == ' ')
@@ -874,22 +895,22 @@ void OSP_teamname_cmd(edict_t *ent)
 
     gi.bprintf(PRINT_HIGH, "Team \"%s\" renamed to \"%s\"\n",
                teams[tnum].netname, pname);
-    q2log_teamRename(teams[tnum].netname, pname);
-    strcpy(teams[tnum].netname, pname);
-    strcpy(teams[tnum].greenname, pname);
+    OSP_Stats_TeamRename(teams[tnum].netname, pname);
+    Q_strlcpy(teams[tnum].netname, pname, sizeof(teams[tnum].netname));
+    Q_strlcpy(teams[tnum].greenname, pname, sizeof(teams[tnum].greenname));
     for (i = 0; i < strlen(teams[tnum].greenname); i++)
         teams[tnum].greenname[i] += 128;
 
-    sprintf(buf, "%15s", teams[tnum].greenname);
+    Q_snprintf(buf, sizeof(buf), "%15s", teams[tnum].greenname);
     gi.configstring(0x625 + tnum * 2, buf);
-    sprintf(cmd, "set default_teamname \"%s\"\n", pname);
+    Q_snprintf(cmd, sizeof(cmd), "set default_teamname \"%s\"\n", pname);
 
     for (i = 1; i <= game.maxclients; i++) {
         player = g_edicts + i;
         if (!player->inuse || !player->client || (player->flags & FL_OSP_NOCMD))
             continue;
         if (player->client->resp.team == tnum) {
-            sprintf(buf, "%15s", teams[tnum].netname);
+            Q_snprintf(buf, sizeof(buf), "%15s", teams[tnum].netname);
             OSP_clientConfigString(player, 0x625 + tnum * 2, buf);
             gi.WriteByte(svc_stufftext);
             gi.WriteString(cmd);
@@ -914,7 +935,7 @@ void OSP_teamname_cmd(edict_t *ent)
 // gamei386.so: 00066710..00066A3F
 void OSP_teamskin_cmd(edict_t *ent)
 {
-    char        stuff[256];
+    char        stuff[320];
     edict_t     *p;
     int         t;
     int         teamidx;
@@ -947,8 +968,9 @@ void OSP_teamskin_cmd(edict_t *ent)
 
     gi.bprintf(PRINT_HIGH, "Team %s skin changed to \"%s\"\n",
                teams[teamidx].greenname, gi.argv(1));
-    strcpy(teams[teamidx].skin, gi.argv(1));
-    sprintf(stuff, "skin %s; set default_teamskin %s\n", gi.argv(1), gi.argv(1));
+    Q_strlcpy(teams[teamidx].skin, gi.argv(1), sizeof(teams[teamidx].skin));
+    Q_snprintf(stuff, sizeof(stuff), "skin %s; set default_teamskin %s\n",
+               teams[teamidx].skin, teams[teamidx].skin);
 
     for (t = 1; t <= game.maxclients; t++) {
         p = g_edicts + t;
@@ -958,12 +980,11 @@ void OSP_teamskin_cmd(edict_t *ent)
 
         {
             if (p->flags & FL_OSP_NOCMD) {
-                char    userinfo[512];
+                char    userinfo[MAX_INFO_STRING];
 
-                strncpy(userinfo, ent->client->pers.userinfo, 511);
-                userinfo[511] = 0;
-                Info_SetValueForKey(userinfo, "skin", teams[t].skin);
-                ClientUserinfoChanged(ent, userinfo);
+                Q_strlcpy(userinfo, p->client->pers.userinfo, sizeof(userinfo));
+                Info_SetValueForKey(userinfo, "skin", teams[teamidx].skin);
+                ClientUserinfoChanged(p, userinfo);
             } else {
                 gi.WriteByte(svc_stufftext);
                 gi.WriteString(stuff);
@@ -1003,9 +1024,9 @@ void OSP_teamjoin_cmd(edict_t *ent, char *name)
     }
 
     if (name)
-        strcpy(teamname, name);
+        Q_strlcpy(teamname, name, sizeof(teamname));
     else
-        strncpy(teamname, gi.args(), 15);
+        Q_strlcpy(teamname, gi.args(), 16);
 
     if (who_paused == -2) {
         gi.cprintf(ent, PRINT_HIGH, "Sorry, cannot join on a forced pause.\n");
@@ -1060,7 +1081,7 @@ void OSP_teamjoin_cmd(edict_t *ent, char *name)
                     ent->client->resp.osp_r0a0--;
                     ent->client->resp.osp_r09c--;
                     EntityListAdd(ent);
-                    q2log_playerEntered(ent);
+                    OSP_Stats_PlayerEnter(ent);
                 }
 
                 if (sync_stat > 2)
@@ -1099,8 +1120,14 @@ void OSP_switchteam_cmd(edict_t *ent)
     }
 
     if (OSP_teamCount(1 - team) < (int)team_maxplayers->value) {
+        // v2.75 refuses in warmup and says the other team is full, which it
+        // is not -- the head count above just proved otherwise.  Only the
+        // wording is corrected here: whether "switchteam" ought to work in
+        // warmup at all is the mod's own call, and "team <name>" does the
+        // same thing there.
         if (sync_stat < 4) {
-            gi.cprintf(ent, PRINT_HIGH, "Sorry, \"%s\" is full.\n",
+            gi.cprintf(ent, PRINT_HIGH,
+                       "Use \"team %s\" to change teams during warmup.\n",
                        teams[1 - team].netname);
             return;
         }
@@ -1572,7 +1599,7 @@ void OSP_kickplayer_cmd(edict_t *ent)
     }
 
     if (ent->client->resp.osp_r2c4)
-        strcpy(pname, gi.args());
+        Q_strlcpy(pname, gi.args(), sizeof(pname));
     else {
         if (!Q_stricmp(gi.argv(1), teams[0].netname))
             tnum = 0;
@@ -1583,7 +1610,7 @@ void OSP_kickplayer_cmd(edict_t *ent)
                        "Ref (kickplayer): unknown team \"%s\"\n", gi.argv(1));
             return;
         }
-        strcpy(pname, gi.argv(2));
+        Q_strlcpy(pname, gi.argv(2), sizeof(pname));
     }
 
     victim = OSP_findPlayer(pname);
@@ -1642,14 +1669,19 @@ void OSP_1v1queue_cmd(edict_t *ent)
     gi.cprintf(ent, PRINT_HIGH, "\nCurrent 1v1 queue:\n------------------\n");
 
     for (t = 0; t < p_order[25]; t++) {
+        edict_t *queued = &g_edicts[p_order[t] + 1];
+
+        if (!queued->client)
+            continue;
+
         if (p_order[t] == ent - g_edicts - 1)
-            strcpy(tmp, ent->client->pers.greenname);
+            Q_strlcpy(tmp, ent->client->pers.greenname, sizeof(tmp));
         else
-            strcpy(tmp, g_edicts[p_order[t] + 1].client->pers.netname);
+            Q_strlcpy(tmp, queued->client->pers.netname, sizeof(tmp));
 
         if (t < 2) {
-            if (g_edicts[p_order[t] + 1].client->resp.entered == ENTERED_ENTERED)
-                strcat(tmp, " [Playing]");
+            if (queued->client->resp.entered == ENTERED_ENTERED)
+                Q_strlcat(tmp, " [Playing]", sizeof(tmp));
             else {
                 if (!p_order[26 + t])
                     p_order[26 + t] =
@@ -1657,20 +1689,20 @@ void OSP_1v1queue_cmd(edict_t *ent)
 
                 if (p_order[26 + t] > 0) {
                     if (p_order[26 + t] < level.framenum)
-                        strcat(tmp, " [Not yet joined --> will give up slot]");
+                        Q_strlcat(tmp, " [Not yet joined --> will give up slot]", sizeof(tmp));
                     else {
-                        if (!g_edicts[p_order[t] + 1].inuse)
-                            sprintf(scratch,
+                        if (!queued->inuse)
+                            Q_snprintf(scratch, sizeof(scratch),
                                     " [Connecting --> must join in %d sec]",
                                     (p_order[26 + t] - level.framenum) / 10);
                         else
-                            sprintf(scratch,
-                                    " [Not yet joined --> must join in %d sec]",
-                                    (p_order[26 + t] - level.framenum) / 10);
-                        strcat(tmp, scratch);
+                            Q_snprintf(scratch, sizeof(scratch),
+                                       " [Not yet joined --> must join in %d sec]",
+                                       (p_order[26 + t] - level.framenum) / 10);
+                        Q_strlcat(tmp, scratch, sizeof(tmp));
                     }
                 } else
-                    strcat(tmp, " [Not yet joined]");
+                    Q_strlcat(tmp, " [Not yet joined]", sizeof(tmp));
             }
         }
 
@@ -1700,13 +1732,13 @@ void OSP_teamReset(void)
         teams[i].osp_m124 = 0;
     }
 
-    strcpy(teams[0].netname, team_a_name->string);
-    strcpy(teams[0].greenname, team_a_name->string);
+    Q_strlcpy(teams[0].netname, team_a_name->string, 16);
+    Q_strlcpy(teams[0].greenname, team_a_name->string, 16);
     for (i = 0; i < strlen(teams[0].greenname); i++)
         teams[0].greenname[i] += 128;
 
-    strcpy(teams[1].netname, team_b_name->string);
-    strcpy(teams[1].greenname, team_b_name->string);
+    Q_strlcpy(teams[1].netname, team_b_name->string, 16);
+    Q_strlcpy(teams[1].greenname, team_b_name->string, 16);
     for (i = 0; i < strlen(teams[1].greenname); i++)
         teams[1].greenname[i] += 128;
 

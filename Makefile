@@ -31,17 +31,16 @@ DEBUG_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -g -O0
 
 # Required to build 1999 C with a current gcc.
 #  -fno-strict-aliasing -fwrapv  the workspace standard for this era of code
-#  -w                            the tree still carries ~515 warnings, nearly
-#                                all pre-existing (the original produces 663);
-#                                doc/q2pro-port.md has the breakdown
-#  -fno-stack-protector,
-#  -D_FORTIFY_SOURCE=0           the two overruns the reconstruction reproduces
-#                                on purpose are fixed here (OSP_defaultteam_cmd
-#                                and OSP_startDemos), but the mod's own string
-#                                handling has not been audited end to end, so
-#                                the relaxation stays until it has been.
+#  -w                            the tree still carries pre-existing warnings,
+#                                nearly all in the donor layer and in vanilla
+#                                code; doc/q2pro-port.md has the breakdown
+#
+# The reconstruction's -fno-stack-protector / -D_FORTIFY_SOURCE=0 relaxation is
+# gone: tourney's own string handling has been audited end to end and every
+# unbounded copy into a fixed buffer is now a bounded one, so the hardening the
+# toolchain offers is switched on rather than switched off.
 MODERN_CFLAGS=-fno-strict-aliasing -fwrapv -w \
-	-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fno-stack-protector
+	-D_FORTIFY_SOURCE=2 -fstack-protector-strong
 
 LDFLAGS=-ldl -lm
 
@@ -110,11 +109,8 @@ GAME_OBJS = \
 	$(BUILDDIR)/osp_players.o \
 	$(BUILDDIR)/osp_plist.o \
 	$(BUILDDIR)/osp_maps.o \
-	$(BUILDDIR)/nglog.o \
-	$(BUILDDIR)/ngmark.o \
-	$(BUILDDIR)/md5c.o \
 	$(BUILDDIR)/osp_detect.o \
-	$(BUILDDIR)/q2log.o \
+	$(BUILDDIR)/osp_stats.o \
 	$(BUILDDIR)/stdlog.o \
 	$(BUILDDIR)/sl_write.o \
 	$(BUILDDIR)/p_menu.o \

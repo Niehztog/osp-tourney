@@ -80,8 +80,8 @@ bool OSP_Pickup_Rune(edict_t *ent, edict_t *other)
     other->client->resp.osp_r200 = ent - g_edicts;
 
     item = FindItemByClassname(ent->classname);
-    q2log_pickupItem(item->pickup_name, ent - g_edicts, other);
-    q2log_useItem(item->pickup_name, other);
+    OSP_Stats_ItemPickup(item->pickup_name, ent - g_edicts, other);
+    OSP_Stats_ItemUse(item->pickup_name, other);
 
     if (OSP_checkMaxRunes())
         OSP_checkMinRunes();
@@ -102,7 +102,6 @@ why it has to be defined here ahead of them.
 // gamei386.so: absent
 static edict_t *OSP_randomRuneSpot(void)
 {
-    edict_t *spot = NULL;
     int     n;
 
     if (!rune_spawncount)
@@ -169,7 +168,7 @@ void OSP_Drop_Rune(edict_t *ent, const gitem_t *item)
     OSP_checkMinRunes();
     ent->client->pers.inventory[ITEM_INDEX(item)] = 0;
     OSP_zeroRuneStats(ent);
-    q2log_dropItem(item->pickup_name, dropped - g_edicts, ent);
+    OSP_Stats_ItemDrop(item->pickup_name, dropped - g_edicts, ent);
 }
 
 /*
@@ -212,7 +211,7 @@ void OSP_deadDropRune(edict_t *ent)
             dropped->owner = NULL;
             ent->client->pers.inventory[ITEM_INDEX(item)] = 0;
             OSP_zeroRuneStats(ent);
-            q2log_dropItem(item->pickup_name, dropped - g_edicts, ent);
+            OSP_Stats_ItemDrop(item->pickup_name, dropped - g_edicts, ent);
             OSP_checkMinRunes();
         }
         i++;
@@ -360,7 +359,12 @@ int OSP_runesApplyResistance(edict_t *ent, int damage)
         gi.sound(ent, CHAN_VOICE, gi.soundindex("world/force2.wav"), volume, ATTN_NORM, 0);
         if ((int)runes_flash->value)
             ent->client->osp_t074 = level.time + 0.2f;
-        return damage / runes_resist->value;
+        // runes_resist is a cvar; a zero or negative one would make this
+        // division produce infinity or flip the damage's sign, and the
+        // implicit conversion back to int is undefined for both.
+        if (runes_resist->value > 0)
+            return damage / runes_resist->value;
+        return 0;
     }
     return damage;
 }
@@ -652,8 +656,6 @@ void OSP_checkMinRunes(void)
             return;
         items = FindItemByClassname(runenames[i]);
 
-        /* Preserve the target's post-call basic block. */
-rune_item_found:
         spot = OSP_randomRuneSpot();
         OSP_spawnRuneAt(items, spot);
     }

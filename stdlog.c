@@ -3,7 +3,7 @@
 #include "g_local.h"
 
 cvar_t  *sl_log_logbots;
-int     sl_ngloglog_status;
+int     sl_status;
 cvar_t  *sl_log_style;
 cvar_t  *sl_filename;
 cvar_t  *sl_log_flush;
@@ -67,22 +67,29 @@ void sl_WriteStdLogDeath(game_import_t *import, level_locals_t level,
                          edict_t *targ, edict_t *inflictor, edict_t *attacker)
 {
     int     mod;
-    char    *victim;
-    char    *killer;
+    // The first field of a StdLog score record is the player whose score
+    // changed and the second is the other party, so `scorer` is the attacker
+    // on a kill and the victim on a suicide.  v2.75 called them `victim` and
+    // `killer`, which is backwards for the kill case.
+    char    *scorer;
+    char    *other;
     char    *event;
     char    *weapon;
     int     score;
     int     ping;
     int     suicide;
 
-    if (!(int)sl_log_logbots->value &&
-        ((targ->flags & 0x2000) || (attacker->flags & 0x2000)))
+    if (!targ->client)
+        return;
+
+    if (sl_log_logbots && !(int)sl_log_logbots->value &&
+        ((targ->flags & FL_BOT) || (attacker && (attacker->flags & FL_BOT))))
         return;
 
     if (deathmatch->value != 0 && sl_Logging(import, sl_patch)) {
         mod = meansOfDeath & ~MOD_FRIENDLY_FIRE;
-        victim = NULL;
-        killer = NULL;
+        scorer = NULL;
+        other = NULL;
         event = NULL;
         // Real initialises `weapon` here too, between event and score.
         weapon = NULL;
@@ -90,7 +97,7 @@ void sl_WriteStdLogDeath(game_import_t *import, level_locals_t level,
         ping = -1;
 
         if (attacker == targ) {
-            victim = attacker->client->pers.netname;
+            scorer = attacker->client->pers.netname;
             ping = attacker->client->ping;
             event = "Suicide";
             score = -1;
@@ -146,14 +153,14 @@ void sl_WriteStdLogDeath(game_import_t *import, level_locals_t level,
             }
 
             if (suicide) {
-                victim = targ->client->pers.netname;
+                scorer = targ->client->pers.netname;
                 ping = targ->client->ping;
                 event = "Suicide";
                 score = -1;
             }
         }
 
-        if (!victim || !event) {
+        if (!scorer || !event) {
             if (attacker && attacker->client) {
                 weapon = "UNKNOWN";
                 switch (mod) {
@@ -204,8 +211,8 @@ void sl_WriteStdLogDeath(game_import_t *import, level_locals_t level,
                     break;
                 }
 
-                killer = targ->client->pers.netname;
-                victim = attacker->client->pers.netname;
+                other = targ->client->pers.netname;
+                scorer = attacker->client->pers.netname;
                 ping = attacker->client->ping;
                 event = "Kill";
                 score = 1;
@@ -216,7 +223,7 @@ void sl_WriteStdLogDeath(game_import_t *import, level_locals_t level,
             }
         }
 
-        sl_LogScore(import, victim, killer, event, weapon, score, level.time,
+        sl_LogScore(import, scorer, other, event, weapon, score, level.time,
                     ping);
         return;
     }
@@ -230,7 +237,7 @@ void sl_WriteStdLogPlayerEntered(game_import_t *import, level_locals_t level,
                                  edict_t *ent)
 {
     if (sl_Logging(import, sl_patch)) {
-        if ((int)sl_log_logbots->value || !(ent->flags & 0x2000))
+        if ((int)sl_log_logbots->value || !(ent->flags & FL_BOT))
             sl_LogPlayerConnect(import, ent->client->pers.netname, 0,
                                 level.time);
     }
@@ -242,7 +249,7 @@ void sl_LogPlayerDisconnect(game_import_t *import, level_locals_t level,
                             edict_t *ent)
 {
     if (sl_Logging(import, sl_patch)) {
-        if ((int)sl_log_logbots->value || !(ent->flags & 0x10000))
+        if ((int)sl_log_logbots->value || !(ent->flags & FL_BOT))
             sl_LogPlayerLeft(import, ent->client->pers.netname, level.time);
     }
 }

@@ -2,7 +2,6 @@
 // the ban commands' backing store.
 
 #include "g_local.h"
-#include <sys/timeb.h>
 
 int num_names = 0;
 char    pl_bname[200][16];
@@ -16,7 +15,7 @@ char    pl_addr[200][16];
 // gamei386.so: 0006CA24..0006CD07
 void OSP_loadPlayers(char *filename)
 {
-    char    pathbuf[64];
+    char    pathbuf[MAX_OSPATH];
     FILE    *f = NULL;
     cvar_t  *gamedir;
     cvar_t  *basedir;
@@ -29,7 +28,11 @@ void OSP_loadPlayers(char *filename)
     num_names = 0;
 
     if (gamedir && basedir) {
-        sprintf(pathbuf, "%s/%s/%s", basedir->string, gamedir->string, filename);
+        if (Q_snprintf(pathbuf, sizeof(pathbuf), "%s/%s/%s", basedir->string,
+                       gamedir->string, filename) >= sizeof(pathbuf)) {
+            gi.dprintf("\nPlayer list path too long, no players loaded.\n\n");
+            return;
+        }
         f = fopen(pathbuf, "r");
         if (f) {
             if (!(int)pbmode->value)
@@ -98,7 +101,7 @@ int read_player_entry(FILE *f, char *name, char *pass, char *addr)
         return 0;
 
     token = line;
-    strncpy(name, token, 15);
+    Q_strlcpy(name, token, 16);
     if (strstr(line, "################"))
         return 0;
 
@@ -108,8 +111,8 @@ int read_player_entry(FILE *f, char *name, char *pass, char *addr)
     scanp++;
     s = scanp;
 
-    strncpy(name, token, 15);
-    strncpy(pass, s, 31);
+    Q_strlcpy(name, token, 16);
+    Q_strlcpy(pass, s, 32);
 
     if ((scanp = strchr(s, '\t')) == NULL)
         return 1;
@@ -117,8 +120,8 @@ int read_player_entry(FILE *f, char *name, char *pass, char *addr)
     scanp++;
     u = scanp;
 
-    strncpy(pass, s, 31);
-    strncpy(addr, u, 15);
+    Q_strlcpy(pass, s, 32);
+    Q_strlcpy(addr, u, 16);
     return 2;
 }
 
@@ -128,6 +131,20 @@ int read_player_entry(FILE *f, char *name, char *pass, char *addr)
 // player is player_ban's business, not this function's.
 // gamex86.dll: 100356F8..100359A1
 // gamei386.so: 0006CE44..0006D122
+// An entry is a whole address or a leading part of one, but a partial match
+// has to stop on a dot: v2.75 used a plain prefix test, so banning "1.2.3.4"
+// also banned 1.2.3.40 through 1.2.3.49.
+bool OSP_addrMatch(const char *addr, const char *entry)
+{
+    size_t  len = strlen(entry);
+
+    if (!len || strncmp(addr, entry, len))
+        return false;
+
+    return addr[len] == 0 || addr[len] == '.' || addr[len] == ':' ||
+           entry[len - 1] == '.';
+}
+
 int OSP_playerAllow(char *name, char *userinfo)
 {
     int     i;
@@ -138,11 +155,10 @@ int OSP_playerAllow(char *name, char *userinfo)
     int     retval;
 
     bancv = gi.cvar("player_ban", "0", 0);
-    strncpy(plname, name, 15);
-    plname[15] = 0;
+    Q_strlcpy(plname, name, sizeof(plname));
 
     if ((int)bancv->value) {
-        for (i = 1; i < game.maxclients; i++) {
+        for (i = 1; i <= game.maxclients; i++) {
             ent = g_edicts + i;
             if (!ent->inuse || !ent->client || !ent->client->pers.connected)
                 continue;
@@ -168,14 +184,14 @@ int OSP_playerAllow(char *name, char *userinfo)
             }
 
             value = Info_ValueForKey(userinfo, "ip");
-            if (pl_addr[i][0] && strstr(value, pl_addr[i]) == value)
+            if (pl_addr[i][0] && OSP_addrMatch(value, pl_addr[i]))
                 return 0;
 
             retval = 2;
         } else if (!pl_names[i][0]) {
             value = Info_ValueForKey(userinfo, "ip");
             if (!pl_pass[i][0] && pl_addr[i][0] &&
-                strstr(value, pl_addr[i]) == value) {
+                OSP_addrMatch(value, pl_addr[i])) {
                 if (!(int)bancv->value)
                     return 3;
                 return 0;
@@ -214,7 +230,7 @@ int OSP_addBan(char *name, char *addr)
                 return -1;
             if (i == num_names)
                 num_names++;
-            strcpy(pl_names[i], name);
+            Q_strlcpy(pl_names[i], name, sizeof(pl_names[i]));
             pl_pass[i][0] = 0;
             pl_addr[i][0] = 0;
             pl_bname[i][0] = 0;
@@ -241,9 +257,9 @@ int OSP_addBan(char *name, char *addr)
             }
             if (i == num_names)
                 num_names++;
-            strcpy(pl_addr[i], addr);
+            Q_strlcpy(pl_addr[i], addr, sizeof(pl_addr[i]));
             if (name)
-                strcpy(pl_bname[i], name);
+                Q_strlcpy(pl_bname[i], name, sizeof(pl_bname[i]));
             else
                 pl_bname[i][0] = 0;
             pl_names[i][0] = 0;
@@ -313,27 +329,27 @@ void OSP_listbans(edict_t *ent)
     count = 0;
     for (i = 0; i < num_names; i++) {
         if (pl_names[i][0]) {
-            sprintf(text, "Player: %s", pl_names[i]);
+            Q_snprintf(text, sizeof(text), "Player: %s", pl_names[i]);
             if (pl_pass[i][0]) {
-                strcat(text, ", [");
-                strcat(text, pl_pass[i]);
-                strcat(text, "]");
+                Q_strlcat(text, ", [", sizeof(text));
+                Q_strlcat(text, pl_pass[i], sizeof(text));
+                Q_strlcat(text, "]", sizeof(text));
             }
             if (pl_addr[i][0]) {
-                strcat(text, ", [");
-                strcat(text, pl_addr[i]);
-                strcat(text, "]");
+                Q_strlcat(text, ", [", sizeof(text));
+                Q_strlcat(text, pl_addr[i], sizeof(text));
+                Q_strlcat(text, "]", sizeof(text));
             }
             count++;
             gi.cprintf(ent, PRINT_HIGH, "%s\n", text);
         }
         // Each arm prints for itself; there is no `else continue;`.
         else if (pl_addr[i][0]) {
-            sprintf(text, "Address: %s", pl_addr[i]);
+            Q_snprintf(text, sizeof(text), "Address: %s", pl_addr[i]);
             if (pl_bname[i][0]) {
-                strcat(text, ", [");
-                strcat(text, pl_bname[i]);
-                strcat(text, "]");
+                Q_strlcat(text, ", [", sizeof(text));
+                Q_strlcat(text, pl_bname[i], sizeof(text));
+                Q_strlcat(text, "]", sizeof(text));
             }
             count++;
             gi.cprintf(ent, PRINT_HIGH, "%s\n", text);

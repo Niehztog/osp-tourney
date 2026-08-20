@@ -139,9 +139,6 @@ void OSP_showTeamScores(edict_t *ent)
 
     buf[0] = 0;
 
-    if ((int)gi.cvar("nglog_worldstats", "0", 0)->value)
-        ent->client->ps.stats[28] = 0x62b;
-
     if (level.intermission_framenum != 0)
         ent->client->ps.stats[27] = 0x62a;
     else
@@ -186,12 +183,12 @@ void OSP_showTeamScores(edict_t *ent)
 
             // The team card is emitted once, above the first rowline.
             if (!i) {
-                sprintf(rowline, "%i", teams[tarr[sideno]].osp_m0f8);
+                Q_snprintf(rowline, sizeof(rowline), "%i", teams[tarr[sideno]].osp_m0f8);
                 for (m = 0; m < strlen(rowline); m++)
                     rowline[m] += 128;
 
                 if (level.intermission_framenum == 0 || sideno) {
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
                                "yv %i string2 \"Score: %s\"yv %i string2 \"Blunders: %i\""
                                "yv %i string2 \"# Players: %i\"",
@@ -206,22 +203,22 @@ void OSP_showTeamScores(edict_t *ent)
                     OSP_getDateInfo(time);
 
                     if (manual_map == 1)
-                        sprintf(str, "[ Voted map change ]");
+                        Q_snprintf(str, sizeof(str), "[ Voted map change ]");
                     else if (manual_map == 2)
-                        sprintf(str, "[ Voted server config change ]");
+                        Q_snprintf(str, sizeof(str), "[ Voted server config change ]");
                     else if (teams[0].osp_m124 == 1)
-                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                        Q_snprintf(str, sizeof(str), "[ %s defeats %s: %d to %d ]",
                                 teams[0].greenname, teams[1].greenname,
                                 teams[0].osp_m0f8, teams[1].osp_m0f8);
                     else if (teams[1].osp_m124 == 1)
-                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                        Q_snprintf(str, sizeof(str), "[ %s defeats %s: %d to %d ]",
                                 teams[1].greenname, teams[0].greenname,
                                 teams[1].osp_m0f8, teams[0].osp_m0f8);
                     else
-                        sprintf(str, "[ Tied match! (%d to %d) ]",
+                        Q_snprintf(str, sizeof(str), "[ Tied match! (%d to %d) ]",
                                 teams[1].osp_m0f8, teams[0].osp_m0f8);
 
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
                                "yv %i string2 \"Score: %s\"yv %i string2 \"Blunders: %i\""
                                "yv %i string2 \"# Players: %i\""
@@ -236,59 +233,63 @@ void OSP_showTeamScores(edict_t *ent)
                 }
 
                 kk = strlen(temp);
-                strcpy(buf + size, temp);
+                if (size + kk >= sizeof(buf))
+                    break;
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
 
                 if (level.intermission_framenum != 0 && sync_stat > 2)
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 120 yv %i string \"Frg Dth Frt Su Eff%% Ping\"xv -16 ",
                                y);
                 else if (sync_stat == 4)
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 24 yv %i string \"Player          Frags Deaths Ping\"xv 8 ",
                                y);
                 else
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 8 yv %i string \"Player          MATCH_STATUS Time Ping\"xv 8 ",
                                y);
 
                 y += 8;
                 basey += 8;
                 kk = strlen(temp);
-                strcpy(buf + size, temp);
+                if (size + kk >= sizeof(buf))
+                    break;
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
             }
 
             if (sync_stat > 2) {
                 if (level.intermission_framenum != 0)
-                    sprintf(rowline, "%-16s%4i%4i%4i%3i%4i%%%5i",
+                    Q_snprintf(rowline, sizeof(rowline), "%-16s%4i%4i%4i%3i%4i%%%5i",
                             cl->pers.netname, cl->resp.score,
                             cl->resp.osp_r014, cl->resp.osp_r028,
                             cl->resp.osp_r2c0, eff, cl->ping);
                 else
-                    sprintf(rowline, "%i %-16s%4i   %3i   %4i", i + 1,
+                    Q_snprintf(rowline, sizeof(rowline), "%i %-16s%4i   %3i   %4i", i + 1,
                             cl->pers.netname, cl->resp.score,
                             cl->resp.osp_r014, cl->ping);
 
                 if (player != ent)
-                    Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+                    Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s\"", y, rowline);
                 else
-                    Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+                    Q_snprintf(temp, sizeof(temp), "yv %i string \"%s\"", y, rowline);
             } else if (cl->resp.osp_r20c) {
-                sprintf(rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
+                Q_snprintf(rowline, sizeof(rowline), "%-16s*** READY ***%3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
-                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+                Q_snprintf(temp, sizeof(temp), "yv %i string \"%s\"", y, rowline);
             } else {
-                sprintf(rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
+                Q_snprintf(rowline, sizeof(rowline), "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
-                Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+                Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s\"", y, rowline);
             }
 
             kk = strlen(temp);
-            if (size + kk > sizeof(buf))
+            if (size + kk >= sizeof(buf))
                 break;
 
-            strcpy(buf + size, temp);
+            memcpy(buf + size, temp, kk + 1);
             size += kk;
         }
 
@@ -306,16 +307,16 @@ void OSP_showTeamScores(edict_t *ent)
                     eff = teams[tarr[sideno]].osp_m0f8 * 100 /
                           (teams[tarr[sideno]].osp_m0f8 + teams[tarr[sideno]].osp_m0fc);
 
-                sprintf(rowline, " *** TOTALS:    %4i %3i  %2i %2i %3i%%",
+                Q_snprintf(rowline, sizeof(rowline), " *** TOTALS:    %4i %3i  %2i %2i %3i%%",
                         teams[tarr[sideno]].osp_m0f8, teams[tarr[sideno]].osp_m0fc,
                         teams[tarr[sideno]].osp_m104, teams[tarr[sideno]].osp_m108, eff);
-                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+                Q_snprintf(temp, sizeof(temp), "yv %i string \"%s\"", y, rowline);
 
                 kk = strlen(temp);
-                if (size + kk > sizeof(buf))
+                if (size + kk >= sizeof(buf))
                     break;
 
-                strcpy(buf + size, temp);
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
             }
         }
@@ -330,30 +331,30 @@ void OSP_showTeamScores(edict_t *ent)
             player = g_edicts + 1 + viewers[i];
 
             if (!i) {
-                Q_snprintf(temp, 1024,
+                Q_snprintf(temp, sizeof(temp),
                            "xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
 
                 kk = strlen(temp);
-                if (size + kk > sizeof(buf))
+                if (size + kk >= sizeof(buf))
                     break;
 
-                strcpy(buf + size, temp);
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
                 y += 12;
             }
 
             if (player->osp_e39c)
-                Q_snprintf(temp, 1024, "yv %i string2 \"[Ref]%s (p:%d)\"", y,
+                Q_snprintf(temp, sizeof(temp), "yv %i string2 \"[Ref]%s (p:%d)\"", y,
                            player->client->pers.netname, player->client->ping);
             else
-                Q_snprintf(temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
+                Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s (p:%d)\"", y,
                            player->client->pers.netname, player->client->ping);
 
             kk = strlen(temp);
-            if (size + kk > sizeof(buf))
+            if (size + kk >= sizeof(buf))
                 break;
 
-            strcpy(buf + size, temp);
+            memcpy(buf + size, temp, kk + 1);
             size += kk;
             y += 8;
         }
@@ -364,7 +365,7 @@ void OSP_showTeamScores(edict_t *ent)
 
     if (level.intermission_framenum != 0 &&
         ent->client->resp.entered == ENTERED_ENTERED)
-        strcpy(old_scores, buf);
+        Q_strlcpy(old_scores, buf, sizeof(old_scores));
 }
 
 // The team scoreboard, large-roster variant -- reached ONLY from
@@ -459,9 +460,6 @@ void OSP_showBIGTeamScores(edict_t *ent)
 
     buf[0] = 0;
 
-    if ((int)gi.cvar("nglog_worldstats", "0", 0)->value)
-        ent->client->ps.stats[28] = 0x62b;
-
     if (level.intermission_framenum != 0)
         ent->client->ps.stats[27] = 0x62a;
     else
@@ -497,14 +495,14 @@ void OSP_showBIGTeamScores(edict_t *ent)
 
             // The team card is emitted once, above the first rowline.
             if (!i) {
-                sprintf(rowline, "%i", teams[tarr[sideno]].osp_m0f8);
+                Q_snprintf(rowline, sizeof(rowline), "%i", teams[tarr[sideno]].osp_m0f8);
                 for (m = 0; m < strlen(rowline); m++)
                     rowline[m] += 128;
 
                 // The target passes the three y positions as basey-16, basey-8,
                 // and basey, respectively.
                 if (level.intermission_framenum == 0 || sideno) {
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 78 yv %i string \"%s\"yv %i string2 \"Score: %s\""
                                "yv %i string2 \"Skin: %s\"",
                                basey - 16, teams[tarr[sideno]].netname, basey - 8, rowline,
@@ -516,22 +514,22 @@ void OSP_showBIGTeamScores(edict_t *ent)
                     OSP_getDateInfo(time);
 
                     if (manual_map == 1)
-                        sprintf(str, "[ Voted map change ]");
+                        Q_snprintf(str, sizeof(str), "[ Voted map change ]");
                     else if (manual_map == 2)
-                        sprintf(str, "[ Voted server config change ]");
+                        Q_snprintf(str, sizeof(str), "[ Voted server config change ]");
                     else if (teams[0].osp_m124 == 1)
-                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                        Q_snprintf(str, sizeof(str), "[ %s defeats %s: %d to %d ]",
                                 teams[0].greenname, teams[1].greenname,
                                 teams[0].osp_m0f8, teams[1].osp_m0f8);
                     else if (teams[1].osp_m124 == 1)
-                        sprintf(str, "[ %s defeats %s: %d to %d ]",
+                        Q_snprintf(str, sizeof(str), "[ %s defeats %s: %d to %d ]",
                                 teams[1].greenname, teams[0].greenname,
                                 teams[1].osp_m0f8, teams[0].osp_m0f8);
                     else
-                        sprintf(str, "[ Tied match! (%d to %d) ]",
+                        Q_snprintf(str, sizeof(str), "[ Tied match! (%d to %d) ]",
                                 teams[1].osp_m0f8, teams[0].osp_m0f8);
 
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 78 yv %i string \"%s\"yv %i string2 \"Score: %s\""
                                "yv %i string2 \"Skin: %s\""
                                "xv 0 yv -43 cstring2 \"%s\"yv -33 cstring2 \"%s\"",
@@ -543,19 +541,21 @@ void OSP_showBIGTeamScores(edict_t *ent)
                 }
 
                 kk = strlen(temp);
-                strcpy(buf + size, temp);
+                if (size + kk >= sizeof(buf))
+                    break;
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
 
                 if (level.intermission_framenum != 0 && sync_stat > 2)
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 140 yv %i string \"Frg Dth Frt Su Ping\"xv 4 ",
                                y);
                 else if (sync_stat == 4)
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 24 yv %i string \"Player          Frags Deaths Ping\"xv 8 ",
                                y);
                 else
-                    Q_snprintf(temp, 1024,
+                    Q_snprintf(temp, sizeof(temp),
                                "xv 8 yv %i string \"Player          MATCH_STATUS Time Ping\"xv 8 ",
                                y);
 
@@ -563,40 +563,42 @@ void OSP_showBIGTeamScores(edict_t *ent)
                 basey += 8;
 
                 kk = strlen(temp);
-                strcpy(buf + size, temp);
+                if (size + kk >= sizeof(buf))
+                    break;
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
             }
 
             if (sync_stat > 2) {
                 if (level.intermission_framenum != 0)
-                    sprintf(rowline, "%-16s%4i%4i%4i%3i%5i",
+                    Q_snprintf(rowline, sizeof(rowline), "%-16s%4i%4i%4i%3i%5i",
                             cl->pers.netname, cl->resp.score,
                             cl->resp.osp_r014, cl->resp.osp_r028,
                             cl->resp.osp_r2c0, cl->ping);
                 else
-                    sprintf(rowline, "%i %-16s%4i   %3i   %4i", i + 1,
+                    Q_snprintf(rowline, sizeof(rowline), "%i %-16s%4i   %3i   %4i", i + 1,
                             cl->pers.netname, cl->resp.score,
                             cl->resp.osp_r014, cl->ping);
 
                 if (player != ent)
-                    Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+                    Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s\"", y, rowline);
                 else
-                    Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+                    Q_snprintf(temp, sizeof(temp), "yv %i string \"%s\"", y, rowline);
             } else if (cl->resp.osp_r20c) {
-                sprintf(rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
+                Q_snprintf(rowline, sizeof(rowline), "%-16s*** READY ***%3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
-                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+                Q_snprintf(temp, sizeof(temp), "yv %i string \"%s\"", y, rowline);
             } else {
-                sprintf(rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
+                Q_snprintf(rowline, sizeof(rowline), "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
-                Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+                Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s\"", y, rowline);
             }
 
             kk = strlen(temp);
-            if (size + kk > sizeof(buf))
+            if (size + kk >= sizeof(buf))
                 break;
 
-            strcpy(buf + size, temp);
+            memcpy(buf + size, temp, kk + 1);
             size += kk;
         }
 
@@ -605,16 +607,16 @@ void OSP_showBIGTeamScores(edict_t *ent)
                 sync_stat > 2) {
                 y += 11;
 
-                sprintf(rowline, " *** TOTALS:    %4i %3i  %2i %2i",
+                Q_snprintf(rowline, sizeof(rowline), " *** TOTALS:    %4i %3i  %2i %2i",
                         teams[tarr[sideno]].osp_m0f8, teams[tarr[sideno]].osp_m0fc,
                         teams[tarr[sideno]].osp_m104, teams[tarr[sideno]].osp_m108);
-                Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+                Q_snprintf(temp, sizeof(temp), "yv %i string \"%s\"", y, rowline);
 
                 kk = strlen(temp);
-                if (size + kk > sizeof(buf))
+                if (size + kk >= sizeof(buf))
                     break;
 
-                strcpy(buf + size, temp);
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
             }
         }
@@ -629,30 +631,30 @@ void OSP_showBIGTeamScores(edict_t *ent)
             player = g_edicts + 1 + viewers[i];
 
             if (!i) {
-                Q_snprintf(temp, 1024,
+                Q_snprintf(temp, sizeof(temp),
                            "xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
 
                 kk = strlen(temp);
-                if (size + kk > sizeof(buf))
+                if (size + kk >= sizeof(buf))
                     break;
 
-                strcpy(buf + size, temp);
+                memcpy(buf + size, temp, kk + 1);
                 size += kk;
                 y += 12;
             }
 
             if (player->osp_e39c)
-                Q_snprintf(temp, 1024, "yv %i string2 \"[Ref]%s (p:%d)\"", y,
+                Q_snprintf(temp, sizeof(temp), "yv %i string2 \"[Ref]%s (p:%d)\"", y,
                            player->client->pers.netname, player->client->ping);
             else
-                Q_snprintf(temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
+                Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s (p:%d)\"", y,
                            player->client->pers.netname, player->client->ping);
 
             kk = strlen(temp);
-            if (size + kk > sizeof(buf))
+            if (size + kk >= sizeof(buf))
                 break;
 
-            strcpy(buf + size, temp);
+            memcpy(buf + size, temp, kk + 1);
             size += kk;
             y += 8;
         }
@@ -663,7 +665,7 @@ void OSP_showBIGTeamScores(edict_t *ent)
 
     if (level.intermission_framenum != 0 &&
         ent->client->resp.entered == ENTERED_ENTERED)
-        strcpy(old_scores, buf);
+        Q_strlcpy(old_scores, buf, sizeof(old_scores));
 }
 
 // The 1v1 scoreboard.  Unlike the deathmatch board this one is two player
@@ -724,9 +726,6 @@ void OSP_show1v1Scores(edict_t *ent)
 
     buf[0] = 0;
 
-    if ((int)gi.cvar("nglog_worldstats", "0", 0)->value)
-        ent->client->ps.stats[28] = 0x62b;
-
     if (level.intermission_framenum != 0)
         ent->client->ps.stats[27] = 0x62a;
     else
@@ -763,14 +762,14 @@ void OSP_show1v1Scores(edict_t *ent)
                   (cl->resp.score + cl->resp.osp_r014);
 
         // the team's frag total, in green
-        sprintf(rowline, "%i", teams[tarr[sideno]].osp_m0f8);
+        Q_snprintf(rowline, sizeof(rowline), "%i", teams[tarr[sideno]].osp_m0f8);
         for (kk = 0; kk < strlen(rowline); kk++)
             rowline[kk] += 128;
 
         // Only the first card at intermission carries the result line and
         // the time; everything else uses the short banner.
         if (level.intermission_framenum == 0 || sideno)
-            Q_snprintf(temp, 1024,
+            Q_snprintf(temp, sizeof(temp),
                        "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
                        "yv %i string2 \"Frags: %s\"yv %i string2 \"Suicides: %i\"",
                        basey - 16, cids[sideno], 0, 0, 0, teams[tarr[sideno]].netname,
@@ -779,22 +778,22 @@ void OSP_show1v1Scores(edict_t *ent)
             OSP_getDateInfo(time);
 
             if (manual_map == 1)
-                sprintf(str, "[ Voted map change ]");
+                Q_snprintf(str, sizeof(str), "[ Voted map change ]");
             else if (manual_map == 2)
-                sprintf(str, "[ Voted server config change ]");
+                Q_snprintf(str, sizeof(str), "[ Voted server config change ]");
             else if (teams[0].osp_m124 == 1)
-                sprintf(str, "[ %s defeats %s: %d to %d ]",
+                Q_snprintf(str, sizeof(str), "[ %s defeats %s: %d to %d ]",
                         teams[0].greenname, teams[1].greenname,
                         teams[0].osp_m0f8, teams[1].osp_m0f8);
             else if (teams[1].osp_m124 == 1)
-                sprintf(str, "[ %s defeats %s: %d to %d ]",
+                Q_snprintf(str, sizeof(str), "[ %s defeats %s: %d to %d ]",
                         teams[1].greenname, teams[0].greenname,
                         teams[1].osp_m0f8, teams[0].osp_m0f8);
             else
-                sprintf(str, "[ Tied match! (%d to %d) ]",
+                Q_snprintf(str, sizeof(str), "[ Tied match! (%d to %d) ]",
                         teams[1].osp_m0f8, teams[0].osp_m0f8);
 
-            Q_snprintf(temp, 1024,
+            Q_snprintf(temp, sizeof(temp),
                        "client 80 %i %i %i %i %i xv 112 picn tag1 xv 114 string \"%s\""
                        "yv %i string2 \"Frags: %s\"yv %i string2 \"Suicides: %i\""
                        "xv 0 yv -43 cstring2 \"%s\"yv -25 cstring2 \"%s\"",
@@ -807,53 +806,57 @@ void OSP_show1v1Scores(edict_t *ent)
         y += 26;
         basey += 26;
         kk = strlen(temp);
-        strcpy(buf + size, temp);
+        if (size + kk >= sizeof(buf))
+            break;
+        memcpy(buf + size, temp, kk + 1);
         size += kk;
 
         if (level.intermission_framenum != 0 && sync_stat > 2)
-            Q_snprintf(temp, 1024,
+            Q_snprintf(temp, sizeof(temp),
                        "xv -8 yv %i string \"Player          Frags Deaths Eff%% FPH Ping\"xv -8 ",
                        y);
         else if (sync_stat == 4)
-            Q_snprintf(temp, 1024,
+            Q_snprintf(temp, sizeof(temp),
                        "xv 0 yv %i string \"Player          Frags Deaths Ping\"xv 0 ",
                        y);
         else
-            Q_snprintf(temp, 1024,
+            Q_snprintf(temp, sizeof(temp),
                        "xv 8 yv %i string \"Player          Frags Deaths Time Ping\"xv 8 ",
                        y);
 
         y += 8;
         basey += 8;
         kk = strlen(temp);
-        strcpy(buf + size, temp);
+        if (size + kk >= sizeof(buf))
+            break;
+        memcpy(buf + size, temp, kk + 1);
         size += kk;
 
         if (sync_stat > 2) {
             if (level.intermission_framenum != 0)
-                sprintf(rowline, "%-16s%4i%6i%6i%%%4i%5i", cl->pers.netname,
+                Q_snprintf(rowline, sizeof(rowline), "%-16s%4i%6i%6i%%%4i%5i", cl->pers.netname,
                         cl->resp.score, cl->resp.osp_r014, eff,
                         cl->resp.score * 36000 / nframes, cl->ping);
             else
-                sprintf(rowline, "%-16s%4i   %3i   %4i", cl->pers.netname,
+                Q_snprintf(rowline, sizeof(rowline), "%-16s%4i   %3i   %4i", cl->pers.netname,
                         cl->resp.score, cl->resp.osp_r014, cl->ping);
 
-            Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+            Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s\"", y, rowline);
         } else if (cl->resp.osp_r20c) {
-            sprintf(rowline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
+            Q_snprintf(rowline, sizeof(rowline), "%-16s*** READY ***%3i  %4i", cl->pers.netname,
                     nframes / 600, cl->ping);
-            Q_snprintf(temp, 1024, "yv %i string \"%s\"", y, rowline);
+            Q_snprintf(temp, sizeof(temp), "yv %i string \"%s\"", y, rowline);
         } else {
-            sprintf(rowline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
+            Q_snprintf(rowline, sizeof(rowline), "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
                     nframes / 600, cl->ping);
-            Q_snprintf(temp, 1024, "yv %i string2 \"%s\"", y, rowline);
+            Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s\"", y, rowline);
         }
 
         kk = strlen(temp);
-        if (size + kk > sizeof(buf))
+        if (size + kk >= sizeof(buf))
             break;
 
-        strcpy(buf + size, temp);
+        memcpy(buf + size, temp, kk + 1);
         size += kk;
         basey = y + 48;
     }
@@ -864,26 +867,26 @@ void OSP_show1v1Scores(edict_t *ent)
         player = g_edicts + 1 + viewers[i];
 
         if (!i) {
-            Q_snprintf(temp, 1024,
+            Q_snprintf(temp, sizeof(temp),
                        "xv 32 yv %i string2 \"Observers:\"xv 40 ", y);
 
             kk = strlen(temp);
-            if (size + kk > sizeof(buf))
+            if (size + kk >= sizeof(buf))
                 break;
 
-            strcpy(buf + size, temp);
+            memcpy(buf + size, temp, kk + 1);
             size += kk;
             y += 12;
         }
 
-        Q_snprintf(temp, 1024, "yv %i string2 \"%s (p:%d)\"", y,
+        Q_snprintf(temp, sizeof(temp), "yv %i string2 \"%s (p:%d)\"", y,
                    player->client->pers.netname, player->client->ping);
 
         kk = strlen(temp);
-        if (size + kk > sizeof(buf))
+        if (size + kk >= sizeof(buf))
             break;
 
-        strcpy(buf + size, temp);
+        memcpy(buf + size, temp, kk + 1);
         size += kk;
         y += 8;
     }
@@ -893,7 +896,7 @@ void OSP_show1v1Scores(edict_t *ent)
 
     if (level.intermission_framenum != 0 &&
         ent->client->resp.entered == ENTERED_ENTERED)
-        strcpy(old_scores, buf);
+        Q_strlcpy(old_scores, buf, sizeof(old_scores));
 }
 
 // id CTF's 23-entry table, a NAMED global here rather than CTF's file-static.
@@ -929,6 +932,9 @@ loc_t   loc_names[23] = {
 // capture-the-flag half removed, so there is no "the red " / "the blue ".
 // gamex86.dll: 1003F349..1003F6B9
 // gamei386.so: 0006BDC1..0006C0C7
+// Every sayteam_* helper writes into OSP_sayteam_cmd's `scratch`.
+#define OSP_SAYTEAM_BUF 1024
+
 static void sayteam_location(edict_t *who, char *buf)
 {
     edict_t     *what = NULL;
@@ -936,7 +942,6 @@ static void sayteam_location(edict_t *who, char *buf)
     float       hotdist = 999999, newdist;
     vec3_t      v;
     int         hotindex = 999;
-    int         lastprio = -1;  // invented, dead -- never read again
     int         i;
     const gitem_t   *item;
     bool    hotsee = false;
@@ -978,7 +983,7 @@ static void sayteam_location(edict_t *who, char *buf)
     }
 
     if (!hot) {
-        strcpy(buf, "nowhere");
+        Q_strlcpy(buf, "nowhere", OSP_SAYTEAM_BUF);
         return;
     }
 
@@ -990,26 +995,26 @@ static void sayteam_location(edict_t *who, char *buf)
     }
 
     if ((item = FindItemByClassname(hot->classname)) == NULL) {
-        strcpy(buf, "nowhere");
+        Q_strlcpy(buf, "nowhere", OSP_SAYTEAM_BUF);
         return;
     }
 
     if (who->waterlevel)
-        strcpy(buf, "in the water ");
+        Q_strlcpy(buf, "in the water ", OSP_SAYTEAM_BUF);
     else
         *buf = 0;
 
     VectorSubtract(who->s.origin, hot->s.origin, v);
     if (fabs(v[2]) > fabs(v[0]) && fabs(v[2]) > fabs(v[1]))
         if (v[2] > 0)
-            strcat(buf, "above ");
+            Q_strlcat(buf, "above ", OSP_SAYTEAM_BUF);
         else
-            strcat(buf, "below ");
+            Q_strlcat(buf, "below ", OSP_SAYTEAM_BUF);
     else
-        strcat(buf, "near ");
+        Q_strlcat(buf, "near ", OSP_SAYTEAM_BUF);
 
-    strcat(buf, "the ");
-    strcat(buf, item->pickup_name);
+    Q_strlcat(buf, "the ", OSP_SAYTEAM_BUF);
+    Q_strlcat(buf, item->pickup_name, OSP_SAYTEAM_BUF);
 }
 
 // %a -- CTF's CTFSay_Team_Armor, unchanged; its whole string set is present.
@@ -1027,7 +1032,8 @@ static void sayteam_armor(edict_t *who, char *buf)
     if (power_armor_type) {
         cells = who->client->pers.inventory[ITEM_INDEX(FindItem("cells"))];
         if (cells)
-            sprintf(buf + strlen(buf), "%s with %i cells ",
+            Q_snprintf(buf + strlen(buf), OSP_SAYTEAM_BUF - strlen(buf),
+                       "%s with %i cells ",
                     (power_armor_type == POWER_ARMOR_SCREEN) ?
                     "Power Screen" : "Power Shield", cells);
     }
@@ -1037,14 +1043,15 @@ static void sayteam_armor(edict_t *who, char *buf)
         item = GetItemByIndex(index);
         if (item) {
             if (*buf)
-                strcat(buf, "and ");
-            sprintf(buf + strlen(buf), "%i units of %s",
+                Q_strlcat(buf, "and ", OSP_SAYTEAM_BUF);
+            Q_snprintf(buf + strlen(buf), OSP_SAYTEAM_BUF - strlen(buf),
+                    "%i units of %s",
                     who->client->pers.inventory[index], item->pickup_name);
         }
     }
 
     if (!*buf)
-        strcpy(buf, "no armor");
+        Q_strlcpy(buf, "no armor", OSP_SAYTEAM_BUF);
 }
 
 // <INVENTED NAMES> for three file-statics the ELF cannot see: gcc -O3
@@ -1057,9 +1064,9 @@ static void sayteam_armor(edict_t *who, char *buf)
 static void sayteam_health(edict_t *who, char *buf)
 {
     if (who->health <= 0)
-        strcpy(buf, "dead");
+        Q_strlcpy(buf, "dead", OSP_SAYTEAM_BUF);
     else
-        sprintf(buf, "%i health", who->health);
+        Q_snprintf(buf, OSP_SAYTEAM_BUF, "%i health", who->health);
 }
 
 // %w -- the weapon in hand, or "none".
@@ -1068,9 +1075,9 @@ static void sayteam_health(edict_t *who, char *buf)
 static void sayteam_weapon(edict_t *who, char *buf)
 {
     if (who->client->pers.weapon)
-        strcpy(buf, who->client->pers.weapon->pickup_name);
+        Q_strlcpy(buf, who->client->pers.weapon->pickup_name, OSP_SAYTEAM_BUF);
     else
-        strcpy(buf, "none");
+        Q_strlcpy(buf, "none", OSP_SAYTEAM_BUF);
 }
 
 // %r and %t -- whichever rune is held. Both escapes share this one body; the
@@ -1080,17 +1087,17 @@ static void sayteam_weapon(edict_t *who, char *buf)
 static void sayteam_runes(edict_t *who, char *buf)
 {
     if (who->client->ps.stats[STAT_RUNE_RESIST])
-        strcpy(buf, "the RESIST rune");
+        Q_strlcpy(buf, "the RESIST rune", OSP_SAYTEAM_BUF);
     else if (who->client->ps.stats[STAT_RUNE_STRENGTH])
-        strcpy(buf, "the STRENGTH rune");
+        Q_strlcpy(buf, "the STRENGTH rune", OSP_SAYTEAM_BUF);
     else if (who->client->ps.stats[STAT_RUNE_HASTE])
-        strcpy(buf, "the HASTE rune");
+        Q_strlcpy(buf, "the HASTE rune", OSP_SAYTEAM_BUF);
     else if (who->client->ps.stats[STAT_RUNE_REGEN])
-        strcpy(buf, "the REGEN rune");
+        Q_strlcpy(buf, "the REGEN rune", OSP_SAYTEAM_BUF);
     else if (who->client->ps.stats[STAT_RUNE_VAMPIRE])
-        strcpy(buf, "the VAMPIRE rune");
+        Q_strlcpy(buf, "the VAMPIRE rune", OSP_SAYTEAM_BUF);
     else
-        strcpy(buf, "no runes");
+        Q_strlcpy(buf, "no runes", OSP_SAYTEAM_BUF);
 }
 
 // %n -- the mod's own: name every teammate the caller can actually see, as
@@ -1123,26 +1130,26 @@ static void sayteam_sight(edict_t *who, char *buf)
         if (names[0]) {
             if (strlen(list) + strlen(names) + 3 < 1024) {
                 if (counts)
-                    strcat(list, ", ");
-                strcat(list, names);
+                    Q_strlcat(list, ", ", sizeof(list));
+                Q_strlcat(list, names, sizeof(list));
                 names[0] = 0;
             }
             counts++;
         }
 
-        strcpy(names, e->client->pers.netname);
+        Q_strlcpy(names, e->client->pers.netname, sizeof(names));
     }
 
     if (names[0]) {
         if (strlen(list) + strlen(names) + 6 < 1024) {
             if (counts)
-                strcat(list, " and ");
-            strcat(list, names);
+                Q_strlcat(list, " and ", sizeof(list));
+            Q_strlcat(list, names, sizeof(list));
         }
 
-        strcpy(buf, list);
+        Q_strlcpy(buf, list, OSP_SAYTEAM_BUF);
     } else
-        strcpy(buf, "no one");
+        Q_strlcpy(buf, "no one", OSP_SAYTEAM_BUF);
 }
 
 // "say_team".  id CTF's CTFSay_Team: expand the % escapes into outmsg, then
@@ -1171,50 +1178,57 @@ void OSP_sayteam_cmd(edict_t *ent, char *msg)
             case 'l':
             case 'L':
                 sayteam_location(ent, scratch);
-                strcpy(p, scratch);
-                p += strlen(scratch);
+                p += Q_strlcpy(p, scratch, outmsg + sizeof(outmsg) - p);
+                if (p > outmsg + sizeof(outmsg) - 1)
+                    p = outmsg + sizeof(outmsg) - 1;
                 break;
 
             case 'a':
             case 'A':
                 sayteam_armor(ent, scratch);
-                strcpy(p, scratch);
-                p += strlen(scratch);
+                p += Q_strlcpy(p, scratch, outmsg + sizeof(outmsg) - p);
+                if (p > outmsg + sizeof(outmsg) - 1)
+                    p = outmsg + sizeof(outmsg) - 1;
                 break;
 
             case 'h':
             case 'H':
                 sayteam_health(ent, scratch);
-                strcpy(p, scratch);
-                p += strlen(scratch);
+                p += Q_strlcpy(p, scratch, outmsg + sizeof(outmsg) - p);
+                if (p > outmsg + sizeof(outmsg) - 1)
+                    p = outmsg + sizeof(outmsg) - 1;
                 break;
 
             case 'w':
             case 'W':
                 sayteam_weapon(ent, scratch);
-                strcpy(p, scratch);
-                p += strlen(scratch);
+                p += Q_strlcpy(p, scratch, outmsg + sizeof(outmsg) - p);
+                if (p > outmsg + sizeof(outmsg) - 1)
+                    p = outmsg + sizeof(outmsg) - 1;
                 break;
 
             case 'n':
             case 'N':
                 sayteam_sight(ent, scratch);
-                strcpy(p, scratch);
-                p += strlen(scratch);
+                p += Q_strlcpy(p, scratch, outmsg + sizeof(outmsg) - p);
+                if (p > outmsg + sizeof(outmsg) - 1)
+                    p = outmsg + sizeof(outmsg) - 1;
                 break;
 
             case 'r':
             case 'R':
                 sayteam_runes(ent, scratch);
-                strcpy(p, scratch);
-                p += strlen(scratch);
+                p += Q_strlcpy(p, scratch, outmsg + sizeof(outmsg) - p);
+                if (p > outmsg + sizeof(outmsg) - 1)
+                    p = outmsg + sizeof(outmsg) - 1;
                 break;
 
             case 't':
             case 'T':
                 sayteam_runes(ent, scratch);
-                strcpy(p, scratch);
-                p += strlen(scratch);
+                p += Q_strlcpy(p, scratch, outmsg + sizeof(outmsg) - p);
+                if (p > outmsg + sizeof(outmsg) - 1)
+                    p = outmsg + sizeof(outmsg) - 1;
                 break;
 
             default:
@@ -1225,12 +1239,13 @@ void OSP_sayteam_cmd(edict_t *ent, char *msg)
     }
     *p = 0;
 
-    sprintf(tmp, "(%s): %s\n", ent->client->pers.netname, outmsg);
+    Q_snprintf(tmp, sizeof(tmp), "(%s): %s\n", ent->client->pers.netname,
+               outmsg);
 
     for (t = 1; t <= game.maxclients; t++) {
         cp = g_edicts + t;
 
-        if (!cp->inuse)
+        if (!cp->inuse || !cp->client)
             continue;
         if (cp->client->resp.team == ent->client->resp.team)
             gi.cprintf(cp, PRINT_CHAT, "%s", tmp);

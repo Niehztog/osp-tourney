@@ -74,10 +74,7 @@ bool OSP_botDetect(edict_t *ent, usercmd_t *ucmd)
                     zb_client->osp_t020 = 0;
                     zb_client->osp_t024 = level.framenum;
                     if (zb_client->osp_t034[0] >= 2) {
-                        if (zb_dist <= 0)
-                            sprintf(why, "r (%f)", zb_dist);
-                        else
-                            sprintf(why, "p (%f)", zb_dist);
+                        Q_snprintf(why, sizeof(why), "r (%f)", zb_dist);
                         OnBotDetection(ent, why);
                         return true;
                     }
@@ -97,13 +94,9 @@ bool OSP_botDetect(edict_t *ent, usercmd_t *ucmd)
 // gamei386.so: 000701B4..00070316
 void OnBotDetection(edict_t *ent, char *why)
 {
-    int     tents[9] = { 1, 2, 3, 9, 12, 14, 17, 18, 20 };
-    int     nrand;
-    int     i;
-
     ent->client->resp.osp_r07c[0] = 1;
     ent->client->resp.score = -99;
-    q2log_playerZBOT(ent, why);
+    OSP_Stats_BotDetect(ent, why);
     gi.bprintf(PRINT_HIGH, "%s was kicked for using a BOT!\n",
                ent->client->pers.netname);
 
@@ -114,14 +107,8 @@ void OnBotDetection(edict_t *ent, char *why)
     }
 
     ent->movetype = MOVETYPE_NOCLIP;
-    i = Q_rand() % 9;
-    gi.WriteByte(tents[i]);
-    nrand = Q_rand() % 3;
-    for (i = 0; i < nrand; i++)
-        gi.WriteByte(Q_rand() % 256);
-    gi.unicast(ent, true);
     ent->client->osp_t034[0] = 0;
-    gi.WriteByte(7);
+    gi.WriteByte(svc_disconnect);
     gi.unicast(ent, true);
     ClientDisconnect(ent);
 }
@@ -140,31 +127,19 @@ void OSP_speedDetect(edict_t *ent)
     gi.unicast(ent, true);
 
     if (ent->client->pers.spectator >= 3) {
-        // The temp-entity types the punishment picks from.  Declared here, not
-        // at the top of the function.
-        int     tents[9] = { 1, 2, 3, 9, 12, 14, 17, 18, 20 };
-        int     num;
-        int     i;
-
         gi.centerprintf(ent, "Speed cheating not allowed!\n");
         gi.bprintf(PRINT_HIGH, "%s was kicked for SPEED CHEATING!\n",
                    ent->client->pers.netname);
 
         if (server_log) {
             OSP_getPlayerAddr(ent);
-            OSP_logAdminLog("SpeedDetect: %s [%f]", ent->client->pers.netname,
-                            ent->client->pers.spectator);
+            OSP_logAdminLog("SpeedDetect: %s [%d]", ent->client->pers.netname,
+                            (int)ent->client->pers.spectator);
         }
 
         ent->movetype = MOVETYPE_NOCLIP;
-        i = Q_rand() % 9;
-        gi.WriteByte(tents[i]);
-        num = Q_rand() % 3;
-        for (i = 0; i < num; i++)
-            gi.WriteByte(Q_rand() % 256);
-        gi.unicast(ent, true);
         ent->client->osp_t034[0] = 0;
-        gi.WriteByte(7);
+        gi.WriteByte(svc_disconnect);
         gi.unicast(ent, true);
         ClientDisconnect(ent);
     } else {

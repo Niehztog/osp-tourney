@@ -72,7 +72,7 @@ void OSP_ChaseCam(edict_t *ent)
                    clp->pers.netname, active_clients);
         EntityListAdd(ent);
         OSP_DoRankSort();
-        q2log_playerEntered(ent);
+        OSP_Stats_PlayerEnter(ent);
         return;
     }
 
@@ -160,7 +160,7 @@ void OSP_ChaseCam(edict_t *ent)
     }
 
     OSP_observerTeamFrags(ent);
-    q2log_playerMode(ent, "Chasecam");
+    OSP_Stats_PlayerMode(ent, "Chasecam");
 }
 
 // gamex86.dll: 1001C72D..1001CA58
@@ -231,7 +231,7 @@ void OSP_startObserve(edict_t *ent)
                    cl->pers.netname, active_clients);
         EntityListAdd(ent);
         OSP_DoRankSort();
-        q2log_playerEntered(ent);
+        OSP_Stats_PlayerEnter(ent);
     } else {
         if (sync_stat < 4) {
             OSP_notready_cmd(ent, true);
@@ -331,5 +331,5 @@ void OSP_removeChaseCam(edict_t *ent)
             OSP_checkHalt(2);
     }
 
-    q2log_playerMode(ent, "Observe");
+    OSP_Stats_PlayerMode(ent, "Observe");
 }

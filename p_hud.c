@@ -291,7 +291,6 @@ void Cmd_Score_f(edict_t *ent)
         ent->client->showscores = false;
         ent->client->update_chase = true;
         ent->client->ps.stats[STAT_OSP_LAYOUT1] = 0;
-        ent->client->ps.stats[STAT_OSP_LAYOUT2] = 0;
         ent->client->resp.osp_r2ac = -1;
         return;
     }

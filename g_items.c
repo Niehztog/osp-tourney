@@ -179,17 +179,17 @@ static bool Pickup_Powerup(edict_t *ent, edict_t *other)
     other->client->pers.inventory[ITEM_INDEX(ent->item)]++;
 
     if (ent->item->use == Use_Quad) {
-        q2log_pickupItem("Quad", ent - g_edicts, other);
+        OSP_Stats_ItemPickup("Quad", ent - g_edicts, other);
         other->client->resp.osp_r200 = ent - g_edicts;
     }
     if (ent->item->use == Use_Invulnerability) {
-        q2log_pickupItem("Invulnerability", ent - g_edicts, other);
+        OSP_Stats_ItemPickup("Invulnerability", ent - g_edicts, other);
         other->client->resp.osp_r200 = ent - g_edicts;
     }
-    if ((int)nglog_logallpickups->value) {
+    if ((int)stats_logallpickups->value) {
         if (Use_Silencer == ent->item->use || Use_Breather == ent->item->use
             || Use_Envirosuit == ent->item->use)
-            q2log_pickupItem(ent->item->pickup_name, 0, other);
+            OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
     }
 
     if (!(ent->spawnflags & DROPPED_ITEM))
@@ -229,8 +229,8 @@ static bool Pickup_Adrenaline(edict_t *ent, edict_t *other)
     if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
         SetRespawn(ent, ent->item->quantity);
 
-    if ((int)nglog_logallpickups->value)
-        q2log_pickupItem(ent->item->pickup_name, 0, other);
+    if ((int)stats_logallpickups->value)
+        OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
 
     return true;
 }
@@ -244,8 +244,8 @@ static bool Pickup_AncientHead(edict_t *ent, edict_t *other)
     if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
         SetRespawn(ent, ent->item->quantity);
 
-    if ((int)nglog_logallpickups->value)
-        q2log_pickupItem(ent->item->pickup_name, 0, other);
+    if ((int)stats_logallpickups->value)
+        OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
 
     return true;
 }
@@ -287,8 +287,8 @@ static bool Pickup_Bandolier(edict_t *ent, edict_t *other)
     if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
         SetRespawn(ent, ent->item->quantity);
 
-    if ((int)nglog_logallpickups->value)
-        q2log_pickupItem(ent->item->pickup_name, 0, other);
+    if ((int)stats_logallpickups->value)
+        OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
 
     return true;
 }
@@ -355,8 +355,8 @@ static bool Pickup_Pack(edict_t *ent, edict_t *other)
     if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
         SetRespawn(ent, ent->item->quantity);
 
-    if ((int)nglog_logallpickups->value)
-        q2log_pickupItem(ent->item->pickup_name, 0, other);
+    if ((int)stats_logallpickups->value)
+        OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
 
     return true;
 }
@@ -385,7 +385,7 @@ void Use_Quad(edict_t *ent, const gitem_t *item)
         ent->client->quad_framenum = level.framenum + timeout;
 
     gi.sound(ent, CHAN_ITEM, gi.soundindex("items/damage.wav"), 1, ATTN_NORM, 0);
-    q2log_useItem("Quad", ent);
+    OSP_Stats_ItemUse("Quad", ent);
 }
 
 //======================================================================
@@ -437,7 +437,7 @@ void Use_Invulnerability(edict_t *ent, const gitem_t *item)
         ent->client->invincible_framenum = level.framenum + 300;
 
     gi.sound(ent, CHAN_ITEM, gi.soundindex("items/protect.wav"), 1, ATTN_NORM, 0);
-    q2log_useItem("Invulnerability", ent);
+    OSP_Stats_ItemUse("Invulnerability", ent);
 }
 
 //======================================================================
@@ -545,8 +545,8 @@ static bool Pickup_Ammo(edict_t *ent, edict_t *other)
 
     if (!(ent->spawnflags & (DROPPED_ITEM | DROPPED_PLAYER_ITEM)) && (deathmatch->value))
         SetRespawn(ent, 30);
-    if ((int)nglog_logallpickups->value)
-        q2log_pickupItem(ent->item->pickup_name, 0, other);
+    if ((int)stats_logallpickups->value)
+        OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
 
     return true;
 }
@@ -622,13 +622,13 @@ static bool Pickup_Health(edict_t *ent, edict_t *other)
             other->health = other->max_health;
     }
 
-    if ((int)nglog_logallpickups->value) {
+    if ((int)stats_logallpickups->value) {
         if (ent->count == 2)
-            q2log_pickupItem("Stimpack_Health", 0, other);
+            OSP_Stats_ItemPickup("Stimpack_Health", 0, other);
         else if (ent->count == 10)
-            q2log_pickupItem("Normal_Health", 0, other);
+            OSP_Stats_ItemPickup("Normal_Health", 0, other);
         else if (ent->count == 25)
-            q2log_pickupItem("Large_Health", 0, other);
+            OSP_Stats_ItemPickup("Large_Health", 0, other);
     }
 
     if (ent->style & HEALTH_TIMED) {
@@ -652,7 +652,7 @@ static bool Pickup_Health(edict_t *ent, edict_t *other)
             ent->dmg = other->health - other->max_health;
         if (ent->dmg > 100)
             ent->dmg = 100;
-        q2log_pickupItem("Mega_Health", 0, other);
+        OSP_Stats_ItemPickup("Mega_Health", 0, other);
     } else {
         if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
             SetRespawn(ent, 30);
@@ -770,9 +770,9 @@ static bool Pickup_Armor(edict_t *ent, edict_t *other)
     }
 
     // Every armor pickup is logged EXCEPT a shard, which needs
-    // nglog_logallpickups.
-    if (ent->item->tag != ARMOR_SHARD || (int)nglog_logallpickups->value)
-        q2log_pickupItem(ent->item->pickup_name, 0, other);
+    // stats_logallpickups.
+    if (ent->item->tag != ARMOR_SHARD || (int)stats_logallpickups->value)
+        OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
 
     // The shell-timer clear is OUTSIDE the respawn guard, as in Pickup_Weapon.
     if (!(ent->spawnflags & DROPPED_ITEM))
@@ -842,7 +842,7 @@ static bool Pickup_PowerArmor(edict_t *ent, edict_t *other)
             ent->item->use(other, ent->item);
     }
 
-    q2log_pickupItem(ent->item->pickup_name, 0, other);
+    OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
     other->client->resp.osp_r23c = 0;
 
     return true;

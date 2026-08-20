@@ -4,6 +4,7 @@
 
 #include "g_local.h"
 #include "bl_main.h"
+#include "bl_spawn.h"
 
 int conf_size = 0;
 int blink_on_count = 9;
@@ -329,11 +330,9 @@ void OSP_gameInit(void)
     hook_sky = gi.cvar("hook_sky", "0", 0);
     hook_wait = gi.cvar("hook_wait", "0.5", 0);
 
-    nglog_logstyle = gi.cvar("nglog_logstyle", "0", 0);
-    nglog_logstyle_working = gi.cvar("nglog_logstyle_working", "0", 0);
-    gi.cvar_set("nglog_logstyle_working", nglog_logstyle->string);
-    if ((int)nglog_logstyle->value)
-        gi.cvar_set("sl_log_method", "0");
+    // registers statsfile/statsname/stats_logchat/stats_logallpickups and
+    // opens the log, so nothing may log before this point
+    OSP_Stats_Init();
 
     qualifier_forceskins = gi.cvar("qualifier_forceskins", "0", 0);
     qualifier_skinname = gi.cvar("qualifier_skinname", "male/grunt", 0);
@@ -453,23 +452,26 @@ void OSP_gameInit(void)
         game_init = 1;
 
         team_a_hookcolor = gi.cvar("team_a_hookcolor", "0xf2f2f2f2", 0);
-        strncpy(teams[0].osp_m0c0, team_a_hookcolor->string, 30);
+        Q_strlcpy((char *)teams[0].osp_m0c0, team_a_hookcolor->string,
+                  sizeof(teams[0].osp_m0c0));
         team_a_skin = gi.cvar("team_a_skin", "female/athena", 0);
-        strcpy(teams[0].skin, team_a_skin->string);
+        Q_strlcpy(teams[0].skin, team_a_skin->string, sizeof(teams[0].skin));
         team_a_name = gi.cvar("team_a_name", "Hometeam", 0);
-        strcpy(teams[0].netname, team_a_name->string);
-        strcpy(teams[0].greenname, team_a_name->string);
-        for (i = 0; i < strlen(team_a_name->string); i++)
+        // 16, not sizeof: a team name is drawn in a 15-column status bar cell
+        Q_strlcpy(teams[0].netname, team_a_name->string, 16);
+        Q_strlcpy(teams[0].greenname, team_a_name->string, 16);
+        for (i = 0; i < strlen(teams[0].greenname); i++)
             teams[0].greenname[i] += 128;
 
         team_b_hookcolor = gi.cvar("team_b_hookcolor", "0xd1d1d1d1", 0);
-        strncpy(teams[1].osp_m0c0, team_b_hookcolor->string, 30);
+        Q_strlcpy((char *)teams[1].osp_m0c0, team_b_hookcolor->string,
+                  sizeof(teams[1].osp_m0c0));
         team_b_skin = gi.cvar("team_b_skin", "male/sniper", 0);
-        strcpy(teams[1].skin, team_b_skin->string);
+        Q_strlcpy(teams[1].skin, team_b_skin->string, sizeof(teams[1].skin));
         team_b_name = gi.cvar("team_b_name", "Visitors", 0);
-        strcpy(teams[1].netname, team_b_name->string);
-        strcpy(teams[1].greenname, team_b_name->string);
-        for (i = 0; i < strlen(team_b_name->string); i++)
+        Q_strlcpy(teams[1].netname, team_b_name->string, 16);
+        Q_strlcpy(teams[1].greenname, team_b_name->string, 16);
+        for (i = 0; i < strlen(teams[1].greenname); i++)
             teams[1].greenname[i] += 128;
     }
 
@@ -482,7 +484,7 @@ void OSP_gameInit(void)
         }
 
         if ((int)team_maxplayers->value * 2 > (int)game.maxclients) {
-            sprintf(buf, "%d", (int)game.maxclients / 2);
+            Q_snprintf(buf, sizeof(buf), "%d", (int)game.maxclients / 2);
             gi.cvar_set("team_maxplayers", buf);
             gi.dprintf("team_maxplayers too high!\nSetting maxplayers to: %s\n",
                        buf);
@@ -618,9 +620,9 @@ void OSP_gameInit(void)
     } else
         gi.dprintf("\nClient voting DISABLED!\n\n");
 
-    strncpy(default_timelimit, timelimit->string, 8);
-    strncpy(default_fraglimit, fraglimit->string, 8);
-    strncpy(default_hook, hook_enable->string, 8);
+    Q_strlcpy(default_timelimit, timelimit->string, sizeof(default_timelimit));
+    Q_strlcpy(default_fraglimit, fraglimit->string, sizeof(default_fraglimit));
+    Q_strlcpy(default_hook, hook_enable->string, sizeof(default_hook));
 
     item_settings = OSP_checkItems();
 
@@ -713,6 +715,8 @@ void OSP_endClean(void)
                 continue;
 
             clientid = ent->client->resp.clientid;
+            if (clientid < 0 || clientid >= q_countof(p_acc))
+                continue;
 
             memcpy(&o_acc[clientid], &p_acc[clientid], sizeof(p_acc_t));
         }
@@ -944,6 +948,11 @@ void OSP_packPlayer(edict_t *ent)
 // compared after, so " NONE" goes on only when nothing was appended.
 // gamex86.dll: 100265E5..10026930
 // gamei386.so: 0004BA48..0004BEB5
+// Appends to whatever the caller has already built.  All three callers pass a
+// 1024-byte layout scratch buffer, which is what OSP_DISABLED_ITEMS_MAX below
+// is measured against: the whole run is under 60 characters.
+#define OSP_DISABLED_ITEMS_MAX  1024
+
 void OSP_listDisabledItems(char *buf)
 {
     int     len;
@@ -980,36 +989,36 @@ void OSP_listDisabledItems(char *buf)
     len = strlen(buf);
 
     if (!(int)shotgun->value)
-        strcat(buf, " S");
+        Q_strlcat(buf, " S", OSP_DISABLED_ITEMS_MAX);
     if (!(int)supershotgun->value)
-        strcat(buf, " SS");
+        Q_strlcat(buf, " SS", OSP_DISABLED_ITEMS_MAX);
     if (!(int)machinegun->value)
-        strcat(buf, " MG");
+        Q_strlcat(buf, " MG", OSP_DISABLED_ITEMS_MAX);
     if (!(int)chaingun->value)
-        strcat(buf, " CG");
+        Q_strlcat(buf, " CG", OSP_DISABLED_ITEMS_MAX);
     if (!(int)grenadelauncher->value)
-        strcat(buf, " GL");
+        Q_strlcat(buf, " GL", OSP_DISABLED_ITEMS_MAX);
     if (!(int)rocketlauncher->value)
-        strcat(buf, " RL");
+        Q_strlcat(buf, " RL", OSP_DISABLED_ITEMS_MAX);
     if (!(int)hyperblaster->value)
-        strcat(buf, " HB");
+        Q_strlcat(buf, " HB", OSP_DISABLED_ITEMS_MAX);
     if (!(int)railgun->value)
-        strcat(buf, " RG");
+        Q_strlcat(buf, " RG", OSP_DISABLED_ITEMS_MAX);
     if (!(int)bfg->value)
-        strcat(buf, " BFG");
+        Q_strlcat(buf, " BFG", OSP_DISABLED_ITEMS_MAX);
     if (!(int)grenades->value)
-        strcat(buf, " G");
+        Q_strlcat(buf, " G", OSP_DISABLED_ITEMS_MAX);
     if (!(int)powerscreen->value)
-        strcat(buf, " P.Screen");
+        Q_strlcat(buf, " P.Screen", OSP_DISABLED_ITEMS_MAX);
     if (!(int)powershield->value)
-        strcat(buf, " P.Shield");
+        Q_strlcat(buf, " P.Shield", OSP_DISABLED_ITEMS_MAX);
     if (!(int)quad->value)
-        strcat(buf, " Quad");
+        Q_strlcat(buf, " Quad", OSP_DISABLED_ITEMS_MAX);
     if (!(int)invul->value)
-        strcat(buf, " Invul");
+        Q_strlcat(buf, " Invul", OSP_DISABLED_ITEMS_MAX);
 
     if (len == strlen(buf))
-        strcat(buf, " NONE");
+        Q_strlcat(buf, " NONE", OSP_DISABLED_ITEMS_MAX);
 }
 
 // gamex86.dll: 10026930..1002697D
@@ -1074,8 +1083,8 @@ void OSP_restartStats(edict_t *ent)
 // gamei386.so: 0004C074..0004C378
 void OSP_setStats(edict_t *ent)
 {
-    char        num[8];
-    char        buf[8];
+    char        num[16];
+    char        buf[16];
     gclient_t   *cl;
 
     cl = ent->client;
@@ -1117,8 +1126,9 @@ void OSP_setStats(edict_t *ent)
         if (cl->resp.entered == ENTERED_ENTERED) {
             if (cl->resp.osp_r208 != cl->resp.osp_r09c ||
                 cl->resp.osp_r090 != active_clients) {
-                sprintf(num, "%i/%i", cl->resp.osp_r208, active_clients);
-                sprintf(buf, "%5s", num);
+                Q_snprintf(num, sizeof(num), "%i/%i", cl->resp.osp_r208,
+                        active_clients);
+                Q_snprintf(buf, sizeof(buf), "%5s", num);
                 OSP_clientConfigString(ent, 0x624, buf);
                 cl->resp.osp_r09c = cl->resp.osp_r208;
                 cl->resp.osp_r090 = active_clients;
@@ -1128,9 +1138,10 @@ void OSP_setStats(edict_t *ent)
                 if (cl->chase_target->client->resp.osp_r208 !=
                     cl->resp.osp_r09c ||
                     cl->resp.osp_r090 != active_clients) {
-                    sprintf(num, "%i/%i",
-                            cl->chase_target->client->resp.osp_r208, active_clients);
-                    sprintf(buf, "%5s", num);
+                    Q_snprintf(num, sizeof(num), "%i/%i",
+                               cl->chase_target->client->resp.osp_r208,
+                               active_clients);
+                    Q_snprintf(buf, sizeof(buf), "%5s", num);
                     OSP_clientConfigString(ent, 0x624, buf);
                     cl->resp.osp_r09c =
                         cl->chase_target->client->resp.osp_r208;
@@ -1160,7 +1171,7 @@ void OSP_DoRankSort(void)
         return;
     }
 
-    for (i = 0; i <= game.maxclients; i++) {
+    for (i = 0; i < game.maxclients; i++) {
         p = g_edicts + i + 1;
         if (!p->inuse || !p->client ||
             p->client->resp.entered != ENTERED_ENTERED)
@@ -1201,7 +1212,7 @@ void OSP_DoRankSort(void)
             // Qualifier mode: everyone chases the score of the last player still
             // inside the qualifying places.
             if ((int)qualifier_numspots->value >= 1 &&
-                active_clients > (int)qualifier_numspots->value) {
+                count > (int)qualifier_numspots->value) {
                 if ((int)qualifier_numspots->value >= i + 1)
                     p->client->resp.osp_r0a8 =
                         score[(int)qualifier_numspots->value];
@@ -1233,8 +1244,8 @@ void OSP_DoRankSort(void)
 // gamei386.so: 0004C798..0004CB48
 void OSP_showFrags(edict_t *ent)
 {
-    char                scratch[16];
-    char                line[16];
+    char                scratch[32];
+    char                line[32];
     client_respawn_t    *show;
     client_respawn_t    *mine;
     int                 i;
@@ -1253,14 +1264,15 @@ void OSP_showFrags(edict_t *ent)
     if (mine->osp_r0a0 != show->score ||
         mine->osp_r098 != (int)fraglimit->value) {
         if (mine->entered == 2)
-            sprintf(scratch, "%8s", "OBSERVE");
+            Q_snprintf(scratch, sizeof(scratch), "%8s", "OBSERVE");
         else if (mine->entered == 16)
-            sprintf(scratch, "%8s", "AUTOCAM");
+            Q_snprintf(scratch, sizeof(scratch), "%8s", "AUTOCAM");
         else if (!(int)fraglimit->value)
-            sprintf(scratch, "%8i", show->score);
+            Q_snprintf(scratch, sizeof(scratch), "%8i", show->score);
         else {
-            sprintf(line, "%i/%i", show->score, (int)fraglimit->value);
-            sprintf(scratch, "%8s", line);
+            Q_snprintf(line, sizeof(line), "%i/%i", show->score,
+                       (int)fraglimit->value);
+            Q_snprintf(scratch, sizeof(scratch), "%8s", line);
         }
 
         OSP_clientConfigString(ent, 0x623, scratch);
@@ -1270,18 +1282,18 @@ void OSP_showFrags(edict_t *ent)
     if (mine->osp_r0a0 != show->score || mine->osp_r094 != show->osp_r0a8 ||
         mine->osp_r090 != active_clients) {
         if (mine->entered == 2 || mine->entered == 16) {
-            sprintf(scratch, " ");
+            Q_strlcpy(scratch, " ", sizeof(scratch));
             mine->osp_r090 = active_clients;
         } else {
             if (show->osp_r208 == 1 ||
                 (m_mode == 1 &&
                  show->osp_r208 <= (int)qualifier_numspots->value)) {
-                sprintf(line, "+ %i", show->score - show->osp_r0a8);
-                sprintf(scratch, "%8s", line);
+                Q_snprintf(line, sizeof(line), "+ %i", show->score - show->osp_r0a8);
+                Q_snprintf(scratch, sizeof(scratch), "%8s", line);
             } else {
                 // Behind: the whole cell goes green.
-                sprintf(line, "- %i", show->osp_r0a8 - show->score);
-                sprintf(scratch, "%8s", line);
+                Q_snprintf(line, sizeof(line), "- %i", show->osp_r0a8 - show->score);
+                Q_snprintf(scratch, sizeof(scratch), "%8s", line);
                 for (i = 0; i < strlen(scratch); i++)
                     scratch[i] += 128;
             }
@@ -1304,7 +1316,7 @@ void OSP_showFrags(edict_t *ent)
 // gamei386.so: 0004CB48..0004D05C
 void OSP_updateClock(void)
 {
-    char    buf[12];
+    char    buf[32];
     int     mins;
     int     seconds;
     int     i;
@@ -1360,7 +1372,7 @@ void OSP_updateClock(void)
                     start_count |= 0xf;
             }
 
-            sprintf(buf, "%2i:%.2i", mins, seconds);
+            Q_snprintf(buf, sizeof(buf), "%2i:%.2i", mins, seconds);
             gi.cvar_set("time_remaining", buf);
             time_update = level.framenum + 9;
 
@@ -1379,7 +1391,7 @@ void OSP_updateClock(void)
                     blink_on_count = 0;
             }
         } else {
-            sprintf(buf, "  OFF");
+            Q_strlcpy(buf, "  OFF", sizeof(buf));
             gi.cvar_set("time_remaining", "NoTimelimit");
             gi.configstring(0x621, buf);
             time_blink = 0;
@@ -1402,7 +1414,7 @@ void OSP_updateClock(void)
             mins = 0;
         }
 
-        sprintf(buf, "%2i:%.2i", mins, seconds);
+        Q_snprintf(buf, sizeof(buf), "%2i:%.2i", mins, seconds);
         gi.cvar_set("time_remaining", buf);
         time_update = level.framenum + 9;
         gi.configstring(0x621, buf);
@@ -1420,7 +1432,10 @@ void OSP_getDateInfo(char *out)
 
     time(&t);
     tm = localtime(&t);
-    sprintf(out, "(%.19s)", asctime(tm));
+    if (tm)
+        Q_snprintf(out, 32, "(%.19s)", asctime(tm));
+    else
+        Q_strlcpy(out, "()", 32);
 }
 
 // The match countdown beep.  resp.osp_r01c remembers the value of start_count
@@ -1435,22 +1450,22 @@ void OSP_checkAnnounce(edict_t *ent)
     if (start_count && start_count != ent->client->resp.osp_r01c &&
         !level.intermission_framenum) {
         if (!(ent->client->resp.osp_r01c & 1)) {
-            sprintf(buf, "play misc/secret.wav");
+            Q_strlcpy(buf, "play misc/secret.wav", sizeof(buf));
             gi.WriteByte(svc_stufftext);
             gi.WriteString(buf);
             gi.unicast(ent, false);
         } else if (!(ent->client->resp.osp_r01c & 2)) {
-            sprintf(buf, "play misc/secret.wav");
+            Q_strlcpy(buf, "play misc/secret.wav", sizeof(buf));
             gi.WriteByte(svc_stufftext);
             gi.WriteString(buf);
             gi.unicast(ent, false);
         } else if (!(ent->client->resp.osp_r01c & 4)) {
-            sprintf(buf, "play misc/secret.wav");
+            Q_strlcpy(buf, "play misc/secret.wav", sizeof(buf));
             gi.WriteByte(svc_stufftext);
             gi.WriteString(buf);
             gi.unicast(ent, false);
         } else if (ent->client->resp.osp_r01c < start_count) {
-            sprintf(buf, "play world/10_0.wav");
+            Q_strlcpy(buf, "play world/10_0.wav", sizeof(buf));
             gi.WriteByte(svc_stufftext);
             gi.WriteString(buf);
             gi.unicast(ent, false);
@@ -1496,7 +1511,7 @@ bool PlayerIdCanSee(edict_t *targ, edict_t *other)
 // gamei386.so: 0004D200..0004D5F5
 int OSP_setID(edict_t *ent)
 {
-    char        str[80];
+    char        str[64];
     vec3_t      forward;
     vec3_t      dir;
     int         i;
@@ -1532,23 +1547,26 @@ int OSP_setID(edict_t *ent)
     if (best > 0.9f) {
         if (m_mode == 2 && (ent->client->resp.team == 2 ||
                             bestent->client->resp.team == ent->client->resp.team)) {
-            sprintf(str, "Teammate \"%s\"\n",
-                    bestent->client->pers.greenname);
+            Q_snprintf(str, sizeof(str), "Teammate \"%s\"\n",
+                       bestent->client->pers.greenname);
 
             if (strcmp(ent->client->resp.osp_r038, str)) {
-                strcpy(ent->client->resp.osp_r038, str);
+                Q_strlcpy(ent->client->resp.osp_r038, str,
+                          sizeof(ent->client->resp.osp_r038));
                 OSP_clientConfigString(ent, 0x620, str);
             }
 
             return 0x620;
         } else {
             if (ent->client->resp.osp_r204) {
-                sprintf(str, "Viewing \"%s\"", bestent->client->pers.netname);
+                Q_snprintf(str, sizeof(str), "Viewing \"%s\"",
+                           bestent->client->pers.netname);
                 for (i = 0; i < strlen(str); i++)
                     str[i] += 128;
 
                 if (strcmp(ent->client->resp.osp_r038, str)) {
-                    strcpy(ent->client->resp.osp_r038, str);
+                    Q_strlcpy(ent->client->resp.osp_r038, str,
+                              sizeof(ent->client->resp.osp_r038));
                     OSP_clientConfigString(ent, 0x620, str);
                 }
 
@@ -1918,7 +1936,7 @@ void OSP_changeItems(void)
     else
         dmf &= ~DF_WEAPONS_STAY;
 
-    sprintf(buf, "%d", dmf);
+    Q_snprintf(buf, sizeof(buf), "%d", dmf);
     gi.cvar_set("dmflags", buf);
 }
 
@@ -2038,8 +2056,7 @@ void OSP_checkSync(void)
             if (ent->client->resp.entered != ENTERED_ENTERED)
                 continue;
 
-            memcpy(userinfo, ent->client->pers.userinfo, 511);
-            userinfo[511] = 0;
+            Q_strlcpy(userinfo, ent->client->pers.userinfo, sizeof(userinfo));
             InitClientPersistant(ent->client, false);
             ent->client->pers.health = 150;
             ent->client->latched_buttons = 0;
@@ -2095,7 +2112,7 @@ void OSP_checkSync(void)
                 continue;
 
             if (ent->client->resp.entered != ENTERED_ENTERED) {
-                sprintf(sndcmd, "play misc/bigtele.wav\n");
+                Q_strlcpy(sndcmd, "play misc/bigtele.wav\n", sizeof(sndcmd));
                 gi.WriteByte(svc_stufftext);
                 gi.WriteString(sndcmd);
                 gi.unicast(ent, true);
@@ -2135,14 +2152,16 @@ void OSP_checkSync(void)
                 if (m_mode == 1) {
                     if ((int)qualifier_forceskins->value) {
                         if ((int)match_startsound->value)
-                            sprintf(sndcmd, "play misc/bigtele.wav; skin %s\n",
-                                    qualifier_skinname->string);
+                            Q_snprintf(sndcmd, sizeof(sndcmd),
+                                       "play misc/bigtele.wav; skin %s\n",
+                                       qualifier_skinname->string);
                         else
-                            sprintf(sndcmd, "skin %s\n", qualifier_skinname->string);
+                            Q_snprintf(sndcmd, sizeof(sndcmd), "skin %s\n",
+                                       qualifier_skinname->string);
                     } else if ((int)match_startsound->value)
-                        sprintf(sndcmd, "play misc/bigtele.wav\n");
+                        Q_strlcpy(sndcmd, "play misc/bigtele.wav\n", sizeof(sndcmd));
                 } else if ((int)match_startsound->value)
-                    sprintf(sndcmd, "play misc/bigtele.wav\n");
+                    Q_strlcpy(sndcmd, "play misc/bigtele.wav\n", sizeof(sndcmd));
 
                 if (sndcmd[0]) {
                     gi.WriteByte(svc_stufftext);
@@ -2150,8 +2169,7 @@ void OSP_checkSync(void)
                     gi.unicast(ent, true);
                 }
             } else if (m_mode == 1) {
-                strncpy(clinfo, ent->client->pers.userinfo, 511);
-                clinfo[511] = 0;
+                Q_strlcpy(clinfo, ent->client->pers.userinfo, sizeof(clinfo));
                 Info_SetValueForKey(clinfo, "skin", qualifier_skinname->string);
                 ClientUserinfoChanged(ent, clinfo);
             }
@@ -2188,7 +2206,7 @@ void OSP_checkSync(void)
 
         gi.bprintf(PRINT_HIGH, "Match has started!\n");
         sync_stat = 4;
-        q2log_gameStart();
+        OSP_Stats_MatchStart();
 
         if (rune_stat) {
             runespawn = 0;
@@ -2245,8 +2263,7 @@ int OSP_CheckReady(void)
                                "Warmup mode over. Waiting for others to ready up.\n");
             }
 
-            memcpy(userinfo, ent->client->pers.userinfo, 511);
-            userinfo[511] = 0;
+            Q_strlcpy(userinfo, ent->client->pers.userinfo, sizeof(userinfo));
             InitClientPersistant(ent->client, false);
             ent->client->pers.health = 150;
             ent->client->latched_buttons = 0;
@@ -2279,8 +2296,7 @@ int OSP_CheckReady(void)
             ent->client->ps.stats[17] = 0x621;
             ent->client->resp.osp_r0ac = level.framenum;
 
-            memcpy(userinfo, ent->client->pers.userinfo, 511);
-            userinfo[511] = 0;
+            Q_strlcpy(userinfo, ent->client->pers.userinfo, sizeof(userinfo));
             InitClientPersistant(ent->client, false);
             ent->client->pers.health = 150;
             ent->client->latched_buttons = 0;
@@ -2372,18 +2388,13 @@ void OSP_checkHalt(int team)
     if (level.intermission_framenum == 0) {
         if (sync_stat == 4) {
             if (m_mode == 1 && active_clients <= 1) {
-                char    stop[32];
-
                 gi.bprintf(PRINT_HIGH,
                            "Not enough players for match!  Match terminated.\n");
-                OSP_allnotready_svcmd(0);
+                OSP_allnotready_svcmd(false);
                 OSP_clearClients();
-                q2log_logAccuracy();
-                q2log_gameEnd("qualifier not enough players", 0);
-                q2log_logStartHeader();
-                q2log_customStart();
-                q2log_logTime();
-                q2log_gameInit(0);
+                OSP_Stats_AccuracyAll();
+                OSP_Stats_MatchEnd("qualifier not enough players");
+                OSP_Stats_GameInit();
 
                 for (t = 1; t <= game.maxclients; t++) {
                     targ = g_edicts + t;
@@ -2393,28 +2404,25 @@ void OSP_checkHalt(int team)
 
                     if (targ->client->resp.osp_r234) {
                         gi.WriteByte(svc_stufftext);
-                        strcpy(stop, "stop\n");
-                        gi.WriteString(stop);
+                        gi.WriteString("stop\n");
                         gi.unicast(targ, true);
                     }
 
-                    q2log_playerConnect(targ);
+                    OSP_Stats_PlayerConnect(targ);
                     OSP_setSingleAccuracy(targ);
                     targ->client->resp.osp_r248 = 0;
 
                     if (targ->client->resp.entered == 1) {
-                        q2log_playerRespawn(targ);
-                        q2log_playerEntered(targ);
+                        OSP_Stats_PlayerRespawn(targ);
+                        OSP_Stats_PlayerEnter(targ);
                     } else if (targ->client->resp.entered == 2)
-                        q2log_playerMode(targ, "Observe");
+                        OSP_Stats_PlayerMode(targ, "Observe");
                     else if (targ->client->resp.entered == 16)
-                        q2log_playerMode(targ, "Autocam");
+                        OSP_Stats_PlayerMode(targ, "Autocam");
                     else
-                        q2log_playerMode(targ, "Chasecam");
+                        OSP_Stats_PlayerMode(targ, "Chasecam");
                 }
             } else if (team != 2 && !OSP_teamCount(team)) {
-                char    stop[32];
-
                 for (t = 0; t < 2; t++) {
                     teams[t].osp_m0f8 = 0;
                     teams[t].osp_m0f4 = 0;
@@ -2434,7 +2442,8 @@ void OSP_checkHalt(int team)
                         gi.bprintf(PRINT_HIGH,
                                    "No team to play! Match terminated.\n");
 
-                    sprintf(scratch, "teamplay not enough players (%s)",
+                    Q_snprintf(scratch, sizeof(scratch),
+                               "teamplay not enough players (%s)",
                             teams[team].netname);
                 } else {
                     if (sync_stat > 2)
@@ -2445,17 +2454,15 @@ void OSP_checkHalt(int team)
                         gi.bprintf(PRINT_HIGH,
                                    "No opponent to play! Match terminated.\n");
 
-                    sprintf(scratch, "1v1 (%s) left", teams[team].netname);
+                    Q_snprintf(scratch, sizeof(scratch), "1v1 (%s) left",
+                               teams[team].netname);
                 }
 
-                q2log_logAccuracy();
-                q2log_gameEnd(scratch, 0);
-                OSP_allnotready_svcmd(0);
+                OSP_Stats_AccuracyAll();
+                OSP_Stats_MatchEnd(scratch);
+                OSP_allnotready_svcmd(false);
                 OSP_clearClients();
-                q2log_logStartHeader();
-                q2log_customStart();
-                q2log_logTime();
-                q2log_gameInit(0);
+                OSP_Stats_GameInit();
 
                 for (t = 1; t <= game.maxclients; t++) {
                     targ = g_edicts + t;
@@ -2465,25 +2472,24 @@ void OSP_checkHalt(int team)
 
                     if (targ->client->resp.osp_r234) {
                         gi.WriteByte(svc_stufftext);
-                        strcpy(stop, "stop\n");
-                        gi.WriteString(stop);
+                        gi.WriteString("stop\n");
                         gi.unicast(targ, true);
                     }
 
-                    q2log_playerConnect(targ);
+                    OSP_Stats_PlayerConnect(targ);
                     OSP_setSingleAccuracy(targ);
                     targ->client->resp.osp_r248 = 0;
 
                     if (targ->client->resp.entered == 1) {
-                        q2log_playerRespawn(targ);
-                        q2log_teamJoin(targ);
-                        q2log_playerEntered(targ);
+                        OSP_Stats_PlayerRespawn(targ);
+                        OSP_Stats_TeamJoin(targ);
+                        OSP_Stats_PlayerEnter(targ);
                     } else if (targ->client->resp.entered == 2)
-                        q2log_playerMode(targ, "Observe");
+                        OSP_Stats_PlayerMode(targ, "Observe");
                     else if (targ->client->resp.entered == 16)
-                        q2log_playerMode(targ, "Autocam");
+                        OSP_Stats_PlayerMode(targ, "Autocam");
                     else
-                        q2log_playerMode(targ, "Chasecam");
+                        OSP_Stats_PlayerMode(targ, "Chasecam");
                 }
             }
         } else if (sync_stat < 4 && active_clients > 1)
@@ -2530,7 +2536,10 @@ void OSP_setAllAccuracy(void)
                 continue;
 
             cid = ent->client->resp.clientid;
-            strncpy(p_acc[cid].netname, ent->client->pers.netname, 15);
+            if (cid < 0 || cid >= q_countof(p_acc))
+                continue;
+            Q_strlcpy(p_acc[cid].netname, ent->client->pers.netname,
+                      sizeof(p_acc[cid].netname));
             p_acc[cid].dgiven = 0;
             p_acc[cid].dtaken = 0;
             for (j = 0; j < 11; j++) {
@@ -2551,7 +2560,10 @@ void OSP_setSingleAccuracy(edict_t *ent)
     int         i;
 
     pid = ent->client->resp.clientid;
-    strncpy(p_acc[pid].netname, ent->client->pers.netname, 15);
+    if (pid < 0 || pid >= q_countof(p_acc))
+        return;
+    Q_strlcpy(p_acc[pid].netname, ent->client->pers.netname,
+              sizeof(p_acc[pid].netname));
     p_acc[pid].dgiven = 0;
     p_acc[pid].dtaken = 0;
     for (i = 0; i < 11; i++) {
@@ -2576,8 +2588,8 @@ void OSP_setSingleAccuracy(edict_t *ent)
 void OSP_startDemos(void)
 {
     char        name[2][16];
-    char        wbuf[100];
-    char        clean[100];
+    char        wbuf[MAX_STRING_CHARS];
+    char        clean[MAX_STRING_CHARS];
     char        tstr[128];
     int         cids[2];
     int         i;
@@ -2607,7 +2619,7 @@ void OSP_startDemos(void)
         }
     }
 
-    ngLog_getDateInfo(tstr, 0);
+    OSP_Stats_DateString(tstr, sizeof(tstr));
 
     for (i = 0; i < game.maxclients; i++) {
         ent = g_edicts + i + 1;
@@ -2619,70 +2631,74 @@ void OSP_startDemos(void)
 
         if (ent->osp_e39c == 1 && (int)demo_referee->value) {
             if (m_mode == 2)
-                sprintf(wbuf, "REF%s-%s-%s-%s-%s-%s",
+                Q_snprintf(wbuf, sizeof(wbuf), "REF%s-%s-%s-%s-%s-%s",
                         cl->pers.netname, teams[0].netname,
                         teams[1].netname, demo_tag->string, level.mapname,
                         tstr);
             else if (m_mode == 3)
-                sprintf(wbuf, "REF%s-%s-%s-%s-%s-%s",
+                Q_snprintf(wbuf, sizeof(wbuf), "REF%s-%s-%s-%s-%s-%s",
                         cl->pers.netname, name[0], name[1],
                         demo_tag->string, level.mapname, tstr);
             else
-                sprintf(wbuf, "REF%s-%s-%s-%s", cl->pers.netname,
+                Q_snprintf(wbuf, sizeof(wbuf), "REF%s-%s-%s-%s", cl->pers.netname,
                         demo_tag->string, level.mapname, tstr);
 
             for (index = 0; index < sizeof(clean); index++)
                 clean[index] = 0;
 
-            for (index = 0, chars = 0; index < strlen(wbuf); index++) {
+            for (index = 0, chars = 0;
+                 wbuf[index] && chars < sizeof(clean) - 1; index++) {
                 c = wbuf[index];
                 if (c == '<' || c == '>' || c == '\\' || c == '/' ||
                     c == '*' || c == '&' || c == '?' || c == '|' ||
-                    c == ' ' || c == ':' || c == ';')
+                    c == ' ' || c == ':' || c == ';' || c == '"' ||
+                    c == '$' || (byte)c < 0x20)
                     continue;
 
                 clean[chars] = wbuf[index];
                 chars++;
             }
 
-            sprintf(wbuf, "record %s\n", clean);
+            Q_snprintf(wbuf, sizeof(wbuf), "record %s\n", clean);
             cl->resp.osp_r234 = 1;
             gi.WriteByte(svc_stufftext);
             gi.WriteString(wbuf);
             gi.unicast(ent, true);
         } else if (cl->resp.entered == 1 && (int)demo_player->value) {
             if (m_mode == 2)
-                sprintf(wbuf, "%s-%s-%s-%s-%s-%s", cl->pers.netname,
+                Q_snprintf(wbuf, sizeof(wbuf), "%s-%s-%s-%s-%s-%s", cl->pers.netname,
                         teams[0].netname, teams[1].netname, demo_tag->string,
                         level.mapname, tstr);
             else if (m_mode == 3) {
                 if (i == cids[0])
-                    sprintf(wbuf, "%s-%s-%s-%s-%s",
+                    Q_snprintf(wbuf, sizeof(wbuf), "%s-%s-%s-%s-%s",
                             cl->pers.netname, name[1],
                             demo_tag->string, level.mapname, tstr);
                 else
-                    sprintf(wbuf, "%s-%s-%s-%s-%s",
+                    Q_snprintf(wbuf, sizeof(wbuf), "%s-%s-%s-%s-%s",
                             cl->pers.netname, name[0],
                             demo_tag->string, level.mapname, tstr);
             } else
-                sprintf(wbuf, "%s-%s-%s-%s", cl->pers.netname,
+                Q_snprintf(wbuf, sizeof(wbuf), "%s-%s-%s-%s", cl->pers.netname,
                         demo_tag->string, level.mapname, tstr);
 
             for (index = 0; index < sizeof(clean); index++)
                 clean[index] = 0;
 
-            for (index = 0, chars = 0; index < strlen(wbuf); index++) {
+            for (index = 0, chars = 0;
+                 wbuf[index] && chars < sizeof(clean) - 1; index++) {
                 c = wbuf[index];
                 if (c == '<' || c == '>' || c == '\\' || c == '/' ||
                     c == '*' || c == '&' || c == '?' || c == '|' ||
-                    c == ' ' || c == ':' || c == ';')
+                    c == ' ' || c == ':' || c == ';' || c == '"' ||
+                    c == '$' || (byte)c < 0x20)
                     continue;
 
                 clean[chars] = wbuf[index];
                 chars++;
             }
 
-            sprintf(wbuf, "record %s\n", clean);
+            Q_snprintf(wbuf, sizeof(wbuf), "record %s\n", clean);
             cl->resp.osp_r234 = 1;
             gi.WriteByte(svc_stufftext);
             gi.WriteString(wbuf);
@@ -2695,7 +2711,6 @@ void OSP_startDemos(void)
 // gamei386.so: 000508B0..00050AD6
 void OSP_warmupItems(edict_t *ent)
 {
-    void        *info;
     const gitem_t   *curitem;
     int         j;
 
@@ -2727,7 +2742,6 @@ void OSP_warmupItems(edict_t *ent)
     curitem = FindItem("Combat Armor");
     ent->client->pers.inventory[ITEM_INDEX(curitem)] = 0;
     curitem = FindItem("Body Armor");
-    info = (void *)curitem->info;
     ent->client->pers.inventory[ITEM_INDEX(curitem)] = (int)warmup_armor->value;
     curitem = FindItem("Railgun");
     ent->client->pers.selected_item = ITEM_INDEX(curitem);
@@ -2767,12 +2781,14 @@ void OSP_serverbotsRemove(void)
     }
 }
 
-// The client-id allocator: hands out `maxconn_clients` and bumps it, but never
-// past 128 -- which is exactly saved_clients[]'s extent.
 // gamex86.dll: 1002B0FE..1002B14C
 // gamei386.so: 00050BB8..00050C48
 void OSP_saveClient(edict_t *ent)
 {
+    if (ent->client->resp.clientid < 0 ||
+        ent->client->resp.clientid >= q_countof(saved_clients))
+        return;
+
     memcpy(&saved_clients[ent->client->resp.clientid],
            &game.clients[ent - g_edicts - 1], sizeof(gclient_t));
 }
@@ -2811,18 +2827,29 @@ void OSP_recoverClient(edict_t *ent, char *userinfo)
         }
     }
 
+    // v2.75 passed the search loop's index here, which is a client number,
+    // not a team.  The intent is "the slot this player would come back to is
+    // still occupied", so ask about their own team.
     if (sync_stat < 4 ||
-        (ent->client->resp.osp_r210 && m_mode == 3 && OSP_teamCount(n)))
+        (ent->client->resp.osp_r210 && m_mode == 3 &&
+         OSP_teamCount(ent->client->resp.team)))
         ent->client->resp.osp_r210 = 0;
 }
 
+// The client-id allocator: hands out `maxconn_clients` and bumps it, but never
+// past the end of saved_clients[].
 // gamex86.dll: 1002B2BE..1002B2FD
 // gamei386.so: 00050DE8..00050E25
 void OSP_giveClientID(edict_t *ent)
 {
+    // v2.75 let the counter reach 128 and then handed that out for every
+    // further client, one past saved_clients[]'s last element -- and
+    // OSP_saveClient memcpy's a whole gclient_t through it.  The last slot is
+    // shared instead.
+    if (maxconn_clients >= q_countof(saved_clients))
+        maxconn_clients = q_countof(saved_clients) - 1;
+
     ent->client->resp.clientid = maxconn_clients++;
-    if (maxconn_clients > 128)
-        maxconn_clients--;
 }
 
 // gamex86.dll: 1002B2FD..1002B345
@@ -2849,7 +2876,7 @@ void OSP_consoleStamp(void)
     port = gi.cvar("port", "27910", CVAR_SERVERINFO | CVAR_NOSET);
     time(&t);
     tm = localtime(&t);
-    sprintf(tmp, "%.19s", asctime(tm));
+    Q_snprintf(tmp, sizeof(tmp), "%.19s", tm ? asctime(tm) : "");
     gi.dprintf("[ SERVERTIME (port %d) : %s ]\n", (int)port->value, tmp);
     if (server_log)
         OSP_logAdminLog("Date: %s", tmp);
@@ -2899,24 +2926,16 @@ void OSP_setFeatures(void)
 
     buf[0] = 0;
     if (rune_stat)
-        strcat(buf, "Runes");
+        Q_strlcat(buf, "Runes", sizeof(buf));
 
-    if ((int)hook_enable->value) {
-        if (buf[0])
-            strcat(buf, ", Hook");
-        else
-            strcat(buf, "Hook");
-    }
+    if ((int)hook_enable->value)
+        Q_strlcat(buf, buf[0] ? ", Hook" : "Hook", sizeof(buf));
 
-    if ((int)client_protect->value) {
-        if (buf[0])
-            strcat(buf, ", Protection");
-        else
-            strcat(buf, "Protection");
-    }
+    if ((int)client_protect->value)
+        Q_strlcat(buf, buf[0] ? ", Protection" : "Protection", sizeof(buf));
 
     if (!buf[0])
-        strcpy(buf, "None");
+        Q_strlcpy(buf, "None", sizeof(buf));
 
     gi.cvar_set("match_info", buf);
 }
@@ -2957,7 +2976,7 @@ void OSP_setupAdminLog(void)
             (int)port->value);
     time(&now);
     tm = localtime(&now);
-    sprintf(date, "%.19s", asctime(tm));
+    Q_snprintf(date, sizeof(date), "%.19s", tm ? asctime(tm) : "");
     fprintf(server_log, "Date: %s\n", date);
     fflush(server_log);
 }
@@ -2973,7 +2992,7 @@ void OSP_logAdminLog(char *fmt, ...)
         return;
 
     va_start(argptr, fmt);
-    vsprintf(text, fmt, argptr);
+    vsnprintf(text, sizeof(text), fmt, argptr);
     va_end(argptr);
 
     fprintf(server_log, "%s\n", text);
@@ -2993,14 +3012,14 @@ void OSP_getPlayerAddr(edict_t *ent)
         return;
 
     p = Info_ValueForKey(ent->client->pers.userinfo, "ip");
-    sprintf(buf, "%s", p);
+    Q_strlcpy(buf, p, sizeof(buf));
     p = strchr(buf, ':');
     if (p)
         *p = 0;
-    if (buf) {
-        ent->osp_e37c[0] = 0;
-        strcpy(ent->osp_e37c, buf);
-    }
+    // osp_e37c is 32 bytes and osp_e39c -- the referee flag -- is the field
+    // right behind it, so an address that did not fit used to hand out
+    // referee status.  An IPv6 literal is long enough to do it.
+    Q_strlcpy(ent->osp_e37c, buf, sizeof(ent->osp_e37c));
 }
 
 // A muzzle-flash-channel sound played on the player themselves.  In 1v1 with a
@@ -3042,7 +3061,7 @@ void OSP_parseString(const char *str, gitem_armor_t *info)
 
     s = str;
     for (n = 0; n < 4; n++) {
-        strcpy(tok[n], s);
+        Q_strlcpy(tok[n], s, sizeof(tok[n]));
         p = strchr(tok[n], ' ');
         if (!p) {
             n++;

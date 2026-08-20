@@ -7,7 +7,7 @@ typedef struct entity_list_s {
     struct entity_list_s    *next;
 } entity_list_t;
 
-void CameraStaticThink(edict_t *ent, edict_t *target);
+void CameraStaticThink(edict_t *ent);
 entity_list_t *EntityListHead(void);
 entity_list_t *EntityListNext(entity_list_t *entry);
 unsigned long EntityListNumber(void);
@@ -96,7 +96,7 @@ bool CameraCmd(edict_t *ent, bool force)
                        cl->pers.netname, active_clients);
             EntityListAdd(ent);
             OSP_DoRankSort();
-            q2log_playerEntered(ent);
+            OSP_Stats_PlayerEnter(ent);
             return true;
         }
 
@@ -204,7 +204,7 @@ bool CameraCmd(edict_t *ent, bool force)
         }
 
         OSP_observerTeamFrags(ent);
-        q2log_playerMode(ent, "Autocam");
+        OSP_Stats_PlayerMode(ent, "Autocam");
         return true;
     }
     // `return false;` is written inline at every site rather than jumping to
@@ -355,7 +355,7 @@ edict_t *ClosestVisible(edict_t *ent)
 
 // gamex86.dll: 10007CD8..10007DA0
 // gamei386.so: 00036E2C..00036EC2
-edict_t *PlayerToFollow()
+edict_t *PlayerToFollow(void)
 {
     entity_list_t   *entry;
     entity_list_t   *closeent = NULL;
@@ -385,9 +385,9 @@ edict_t *PlayerToFollow()
 
 // gamex86.dll: 10007DA0..10007DB5
 // gamei386.so: 00036EC4..00036EE4
-void CameraAloneThink(edict_t *ent, edict_t *target)
+void CameraAloneThink(edict_t *ent)
 {
-    CameraStaticThink(ent, target);
+    CameraStaticThink(ent);
 }
 
 // gamex86.dll: 10007DB5..10007E67
@@ -422,14 +422,14 @@ void PointCamAtTarget(edict_t *ent)
     ent->s.angles[2] = 0;
     angdiff = aimang[1] - ent->s.angles[1];
 
-    while (abs(angdiff) > 180) {
+    while (fabsf(angdiff) > 180) {
         if (angdiff > 0)
             angdiff -= 360;
         else
             angdiff += 360;
     }
 
-    if (abs(angdiff) > ent->client->osp_t064) {
+    if (fabsf(angdiff) > ent->client->osp_t064) {
         if (angdiff > 0)
             ent->s.angles[1] += ent->client->osp_t064;
         else
@@ -473,7 +473,7 @@ void RepositionAtTarget(edict_t *ent, vec3_t offset)
             tr.endpos[2] += 4;
     }
 
-    if (abs(tr.endpos[0] - ent->s.origin[0]) > ent->client->osp_t054) {
+    if (fabsf(tr.endpos[0] - ent->s.origin[0]) > ent->client->osp_t054) {
         if (tr.endpos[0] > ent->s.origin[0])
             ent->s.origin[0] += ent->client->osp_t054;
         else
@@ -481,7 +481,7 @@ void RepositionAtTarget(edict_t *ent, vec3_t offset)
     } else
         ent->s.origin[0] = tr.endpos[0];
 
-    if (abs(tr.endpos[1] - ent->s.origin[1]) > ent->client->osp_t054) {
+    if (fabsf(tr.endpos[1] - ent->s.origin[1]) > ent->client->osp_t054) {
         if (tr.endpos[1] > ent->s.origin[1])
             ent->s.origin[1] += ent->client->osp_t054;
         else
@@ -489,7 +489,7 @@ void RepositionAtTarget(edict_t *ent, vec3_t offset)
     } else
         ent->s.origin[1] = tr.endpos[1];
 
-    if (abs(tr.endpos[2] - ent->s.origin[2]) > ent->client->osp_t05c) {
+    if (fabsf(tr.endpos[2] - ent->s.origin[2]) > ent->client->osp_t05c) {
         if (tr.endpos[2] > ent->s.origin[2])
             ent->s.origin[2] += ent->client->osp_t05c;
         else
@@ -538,7 +538,7 @@ void RepositionAtOrigin(edict_t *ent, vec3_t offset)
             tr.endpos[2] += 4;
     }
 
-    if (abs(tr.endpos[0] - ent->s.origin[0]) > ent->client->osp_t054) {
+    if (fabsf(tr.endpos[0] - ent->s.origin[0]) > ent->client->osp_t054) {
         if (tr.endpos[0] > ent->s.origin[0])
             ent->s.origin[0] += ent->client->osp_t054;
         else
@@ -546,7 +546,7 @@ void RepositionAtOrigin(edict_t *ent, vec3_t offset)
     } else
         ent->s.origin[0] = tr.endpos[0];
 
-    if (abs(tr.endpos[1] - ent->s.origin[1]) > ent->client->osp_t054) {
+    if (fabsf(tr.endpos[1] - ent->s.origin[1]) > ent->client->osp_t054) {
         if (tr.endpos[1] > ent->s.origin[1])
             ent->s.origin[1] += ent->client->osp_t054;
         else
@@ -554,7 +554,7 @@ void RepositionAtOrigin(edict_t *ent, vec3_t offset)
     } else
         ent->s.origin[1] = tr.endpos[1];
 
-    if (abs(tr.endpos[2] - ent->s.origin[2]) > ent->client->osp_t05c) {
+    if (fabsf(tr.endpos[2] - ent->s.origin[2]) > ent->client->osp_t05c) {
         if (tr.endpos[2] > ent->s.origin[2])
             ent->s.origin[2] += ent->client->osp_t05c;
         else
@@ -592,18 +592,25 @@ void UpdateValues(edict_t *ent)
     if (target) {
         if (!(ent->client->showscores || ent->client->showinventory ||
               ent->client->showhelp || (level.framenum & 31))) {
+            int     tnum = target->client->resp.team;
+            // resp.team is 2 for a client on no team, and teams[] has two
+            // entries
+            const char *tname = (tnum == 0 || tnum == 1) ?
+                                teams[tnum].netname : "no team";
+
             if (m_mode != 2)
-                sprintf(layout, "xv 44 yb -59 string \"Tracking `%s'\"",
-                        target->client->pers.netname);
+                Q_snprintf(layout, sizeof(layout),
+                           "xv 44 yb -59 string \"Tracking `%s'\"",
+                           target->client->pers.netname);
             else if (sync_stat > 2)
-                sprintf(layout,
-                        "xv 44 yb -59 string \"Tracking `%s' [%d] (%s)\"",
-                        target->client->pers.netname, target->client->resp.score,
-                        teams[target->client->resp.team].netname);
+                Q_snprintf(layout, sizeof(layout),
+                           "xv 44 yb -59 string \"Tracking `%s' [%d] (%s)\"",
+                           target->client->pers.netname,
+                           target->client->resp.score, tname);
             else
-                sprintf(layout, "xv 44 yb -59 string \"Tracking `%s' (%s)\"",
-                        target->client->pers.netname,
-                        teams[target->client->resp.team].netname);
+                Q_snprintf(layout, sizeof(layout),
+                           "xv 44 yb -59 string \"Tracking `%s' (%s)\"",
+                           target->client->pers.netname, tname);
 
             gi.WriteByte(svc_layout);
             gi.WriteString(layout);
@@ -615,7 +622,7 @@ void UpdateValues(edict_t *ent)
 
         if (!(ent->client->showscores || ent->client->showinventory ||
               ent->client->showhelp || (level.framenum & 31))) {
-            sprintf(layout, "xv 44 yb -59 string \" \"");
+            Q_strlcpy(layout, "xv 44 yb -59 string \" \"", sizeof(layout));
             gi.WriteByte(svc_layout);
             gi.WriteString(layout);
             gi.unicast(ent, false);
@@ -625,11 +632,11 @@ void UpdateValues(edict_t *ent)
 
 // gamex86.dll: 1000894B..100089C8
 // gamei386.so: 000378A4..0003798E
-void CameraFollowThink(edict_t *ent, edict_t *target)
+void CameraFollowThink(edict_t *ent)
 {
     vec3_t  offset;
 
-    if (ent->client->osp_t03c || (ent->client->osp_t03c = PlayerToFollow(ent))) {
+    if (ent->client->osp_t03c || (ent->client->osp_t03c = PlayerToFollow())) {
         offset[0] = -60;
         offset[1] = -60;
         offset[2] = 40;
@@ -642,7 +649,7 @@ void CameraFollowThink(edict_t *ent, edict_t *target)
 
 // gamex86.dll: 100089C8..10008E5B
 // gamei386.so: 00037990..00037EBB
-void CameraNormalThink(edict_t *ent, edict_t *target)
+void CameraNormalThink(edict_t *ent)
 {
     int     viscnt;
     vec3_t  offset;
@@ -689,7 +696,7 @@ void CameraNormalThink(edict_t *ent, edict_t *target)
                 ent->last_move_framenum = 0;
                 ent->client->osp_t03c->client->resp.osp_r000++;
             }
-        } else if ((ent->client->osp_t03c = PlayerToFollow(ent)) != NULL) {
+        } else if ((ent->client->osp_t03c = PlayerToFollow()) != NULL) {
             offset[0] = -60;
             offset[1] = -60;
             offset[2] = 47;
@@ -733,11 +740,10 @@ done:
 
 // gamex86.dll: 10008FE1..1000918A
 // gamei386.so: 00037FF4..0003821B
-void CameraThink(edict_t *ent, edict_t *target)
+void CameraThink(edict_t *ent)
 {
     entity_list_t   *curp;
     int             count;
-    entity_list_t   *prev;  // invented name; assigned, never read
     int             fmode;  // invented name
 
     if (ent->client->osp_t03c && !ent->client->osp_t03c->inuse) {
@@ -749,7 +755,6 @@ void CameraThink(edict_t *ent, edict_t *target)
                curp->ent != ent->client->osp_t03c)
             curp = EntityListNext(curp);
 
-        prev = curp;
         curp = EntityListNext(curp);
         if (!curp)
             curp = EntityListHead();
@@ -776,7 +781,7 @@ camera_mode:
 
     // CameraAloneThink is a one-line forwarder to CameraStaticThink.
     if (!EntityListNumber())
-        CameraAloneThink(ent, target);
+        CameraAloneThink(ent);
     else {
         // An explicit forward `goto`, not an if/else.  The Follow arm then
         // needs its own `return`.
@@ -784,17 +789,17 @@ camera_mode:
         if (fmode)
             goto camera_normal;
 
-        CameraFollowThink(ent, target);
+        CameraFollowThink(ent);
         return;
 
 camera_normal:
-        CameraNormalThink(ent, target);
+        CameraNormalThink(ent);
     }
 }
 
 // gamex86.dll: 10008E5B..10008FE1
 // gamei386.so: 00037EBC..00037FF2
-void CameraStaticThink(edict_t *ent, edict_t *target)
+void CameraStaticThink(edict_t *ent)
 {
     trace_t tr;
     vec3_t  epos;

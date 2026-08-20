@@ -42,9 +42,9 @@ void OSP_initHighScores(void)
     }
 
     for (i = 0; i < 10; i++) {
-        strcpy(p_table[i].name, "<empty>");
-        strcpy(p_table[i].score, "0");
-        strcpy(p_table[i].date, "01_Jan_70");
+        Q_strlcpy(p_table[i].name, "<empty>", sizeof(p_table[i].name));
+        Q_strlcpy(p_table[i].score, "0", sizeof(p_table[i].score));
+        Q_strlcpy(p_table[i].date, "01_Jan_70", sizeof(p_table[i].date));
         p_table[i].isnew = 0;
     }
 
@@ -61,38 +61,40 @@ void OSP_formatHighScores(void)
     int     yvpos;
     char    tag;
 
-    sprintf(hs_table, "xv 0 yv 0 cstring \"High scores (%s)\"", level.mapname);
+    Q_snprintf(hs_table, sizeof(hs_table),
+               "xv 0 yv 0 cstring \"High scores (%s)\"", level.mapname);
 
     if (hs_mode == 1)
-        sprintf(line, "yv 8 cstring2 \"Fraglimit: %d\"", hs_limit);
+        Q_snprintf(line, sizeof(line), "yv 8 cstring2 \"Fraglimit: %d\"",
+                   hs_limit);
     else
-        sprintf(line, "yv 8 cstring2 \"Timelimit: %d\"", hs_limit);
-    strcat(hs_table, line);
+        Q_snprintf(line, sizeof(line), "yv 8 cstring2 \"Timelimit: %d\"",
+                   hs_limit);
+    Q_strlcat(hs_table, line, sizeof(hs_table));
 
     if (hs_mode == 1)
-        sprintf(line, "yv 24 cstring2 \"  # Name              FPH  Date     \"");
+        Q_strlcpy(line, "yv 24 cstring2 \"  # Name              FPH  Date     \"",
+                  sizeof(line));
     else
-        sprintf(line, "yv 24 cstring2 \"  # Name            Score  Date     \"");
-    strcat(hs_table, line);
+        Q_strlcpy(line, "yv 24 cstring2 \"  # Name            Score  Date     \"",
+                  sizeof(line));
+    Q_strlcat(hs_table, line, sizeof(hs_table));
 
     yvpos = 34;
     i = 0;
 
-    // Keep the post-header call cleanup in its own target basic block.
-format_high_scores_rows: {
+    {
         for (; i < 10; i++) {
             if (p_table[i].isnew)
                 tag = '*';
             else
                 tag = ' ';
 
-            if (hs_mode == 1)
-                sprintf(line, "yv %d cstring \"%c%2d %-16s%5s  %s\"", yvpos, tag,
-                        i + 1, p_table[i].name, p_table[i].score, p_table[i].date);
-            else
-                sprintf(line, "yv %d cstring \"%c%2d %-16s%5s  %s\"", yvpos, tag,
-                        i + 1, p_table[i].name, p_table[i].score, p_table[i].date);
-            strcat(hs_table, line);
+            Q_snprintf(line, sizeof(line),
+                       "yv %d cstring \"%c%2d %-16s%5s  %s\"", yvpos, tag,
+                       i + 1, p_table[i].name, p_table[i].score,
+                       p_table[i].date);
+            Q_strlcat(hs_table, line, sizeof(hs_table));
             yvpos += 8;
         }
     }
@@ -110,7 +112,7 @@ void OSP_showHighScores(void)
 // gamei386.so: 0005CEC4..0005D243
 void OSP_updateHighScores(void)
 {
-    char    stamp[256];
+    char    stamp[OSP_HS_FIELD];
     int     i;
     int     j;
     int     rowi;
@@ -120,6 +122,7 @@ void OSP_updateHighScores(void)
     edict_t *ent;
 
     allowed = 1;
+    rowi = 10;
 
     if (!active_clients)
         return;
@@ -150,7 +153,8 @@ void OSP_updateHighScores(void)
             if (value > 1250 && framecnt < 600)
                 value = 1250;
 
-            if (ent->client->resp.score * 100 / (int)fraglimit->value < 90)
+            if (!(int)fraglimit->value ||
+                ent->client->resp.score * 100 / (int)fraglimit->value < 90)
                 allowed = 0;
         }
 
@@ -159,16 +163,18 @@ void OSP_updateHighScores(void)
                 if (value >= Q_atoi(p_table[rowi].score) ||
                     !strcmp(p_table[rowi].name, "<empty>")) {
                     for (j = 9; j > rowi; j--) {
-                        strcpy(p_table[j].name, p_table[j - 1].name);
-                        strcpy(p_table[j].score, p_table[j - 1].score);
-                        strcpy(p_table[j].date, p_table[j - 1].date);
+                        memcpy(&p_table[j], &p_table[j - 1],
+                               sizeof(p_table[j]));
                     }
 
-                    strcpy(p_table[rowi].name, ent->client->pers.netname);
-                    sprintf(stamp, "%d", value);
-                    strcpy(p_table[rowi].score, stamp);
+                    Q_strlcpy(p_table[rowi].name, ent->client->pers.netname,
+                              sizeof(p_table[rowi].name));
+                    Q_snprintf(stamp, sizeof(stamp), "%d", value);
+                    Q_strlcpy(p_table[rowi].score, stamp,
+                              sizeof(p_table[rowi].score));
                     OSP_highscoreDate(stamp);
-                    strcpy(p_table[rowi].date, stamp);
+                    Q_strlcpy(p_table[rowi].date, stamp,
+                              sizeof(p_table[rowi].date));
                     p_table[rowi].isnew = 1;
                     break;
                 }
@@ -189,11 +195,11 @@ void OSP_updateHighScores(void)
 // gamei386.so: 0005D244..0005D568
 void OSP_loadHighScores(void)
 {
-    char    name[64];
-    char    score[64];
-    char    date[64];
-    char    file[64];
-    char    dir[64];
+    char    name[OSP_HS_FIELD];
+    char    score[OSP_HS_FIELD];
+    char    date[OSP_HS_FIELD];
+    char    file[MAX_OSPATH];
+    char    dir[MAX_OSPATH];
     int     i;
     FILE    *f = NULL;
     cvar_t  *gamedir;
@@ -207,9 +213,13 @@ void OSP_loadHighScores(void)
     hsdir = gi.cvar("client_highscoredir", "highscores", 0);
 
     if (gamedir && basedir) {
-        sprintf(dir, "%s/%s", basedir->string, gamedir->string);
-        sprintf(file, "%s/%s/%d/%s", dir, hsdir->string, (int)port->value,
-                level.mapname);
+        Q_snprintf(dir, sizeof(dir), "%s/%s", basedir->string,
+                   gamedir->string);
+        if (Q_snprintf(file, sizeof(file), "%s/%s/%d/%s", dir, hsdir->string,
+                       (int)port->value, level.mapname) >= sizeof(file)) {
+            gi.dprintf("High score path too long.\n");
+            return;
+        }
 
         f = fopen(file, "r");
 
@@ -234,9 +244,9 @@ void OSP_loadHighScores(void)
                     return;
                 }
 
-                strcpy(p_table[i].name, name);
-                strcpy(p_table[i].score, score);
-                strcpy(p_table[i].date, date);
+                Q_strlcpy(p_table[i].name, name, sizeof(p_table[i].name));
+                Q_strlcpy(p_table[i].score, score, sizeof(p_table[i].score));
+                Q_strlcpy(p_table[i].date, date, sizeof(p_table[i].date));
             }
 
             fclose(f);
@@ -255,9 +265,9 @@ void OSP_loadHighScores(void)
 // gamei386.so: 0005D568..0005D777
 void OSP_writeHighScores(void)
 {
-    char    line[120];
-    char    file[64];
-    char    dir[64];
+    char    line[256];
+    char    file[MAX_OSPATH];
+    char    dir[MAX_OSPATH];
     int     i;
     FILE    *f = NULL;
     cvar_t  *gamedir;
@@ -271,9 +281,13 @@ void OSP_writeHighScores(void)
     hsdir = gi.cvar("client_highscoredir", "highscores", 0);
 
     if (gamedir && basedir) {
-        sprintf(dir, "%s/%s", basedir->string, gamedir->string);
-        sprintf(file, "%s/%s/%d/%s", dir, hsdir->string, (int)port->value,
-                level.mapname);
+        Q_snprintf(dir, sizeof(dir), "%s/%s", basedir->string,
+                   gamedir->string);
+        if (Q_snprintf(file, sizeof(file), "%s/%s/%d/%s", dir, hsdir->string,
+                       (int)port->value, level.mapname) >= sizeof(file)) {
+            gi.dprintf("High score path too long.\n");
+            return;
+        }
 
         f = fopen(file, "w+");
 
@@ -283,14 +297,14 @@ void OSP_writeHighScores(void)
         }
 
         if (hs_mode == 2)
-            sprintf(line, "TL\t%d\n", hs_limit);
+            Q_snprintf(line, sizeof(line), "TL\t%d\n", hs_limit);
         else
-            sprintf(line, "FL\t%d\n", hs_limit);
+            Q_snprintf(line, sizeof(line), "FL\t%d\n", hs_limit);
         fputs(line, f);
 
         for (i = 0; i < 10; i++) {
-            sprintf(line, "%s\t%s\t%s\n", p_table[i].name, p_table[i].score,
-                    p_table[i].date);
+            Q_snprintf(line, sizeof(line), "%s\t%s\t%s\n", p_table[i].name,
+                       p_table[i].score, p_table[i].date);
             fputs(line, f);
         }
 
@@ -302,15 +316,15 @@ void OSP_writeHighScores(void)
 // gamei386.so: 0005D778..0005D8D4
 bool OSP_makeHSDir(char *base)
 {
-    char    num[128];
-    char    dir[1024];
+    char    num[32];
+    char    dir[MAX_OSPATH];
     cvar_t  *port;
     cvar_t  *hsdir;
 
     port = gi.cvar("port", ".", 0);
     hsdir = gi.cvar("client_highscoredir", "highscores", 0);
 
-    sprintf(dir, "%s/%s", base, hsdir->string);
+    Q_snprintf(dir, sizeof(dir), "%s/%s", base, hsdir->string);
 
     // mkdir() is called unprototyped, and the original really did write two
     // different call shapes per platform.
@@ -321,14 +335,12 @@ bool OSP_makeHSDir(char *base)
 #endif
     {
         gi.dprintf("Couldn't make %s, aborting.\n", dir);
-        // The two cvar names really do differ -- this one is the target's own
-        // typo.
-        gi.cvar_set("client_hiscores", "0");
+        gi.cvar_set("client_highscores", "0");
         return false;
     }
 
-    sprintf(num, "/%d", (int)port->value);
-    strcat(dir, num);
+    Q_snprintf(num, sizeof(num), "/%d", (int)port->value);
+    Q_strlcat(dir, num, sizeof(dir));
 
 #ifdef _WIN32
     if (mkdir(dir) && errno == ENOENT)
@@ -346,6 +358,7 @@ bool OSP_makeHSDir(char *base)
 
 // gamex86.dll: 1002C71C..1002C8B5
 // gamei386.so: 0005D8D4..0005D9E4
+// `a`, `b` and `c` are OSP_HS_FIELD bytes each.
 int OSP_readLine(FILE *f, char *a, char *b, char *c)
 {
     char    line[1024];
@@ -368,7 +381,7 @@ int OSP_readLine(FILE *f, char *a, char *b, char *c)
         *linep = 0;
 
     t = line;
-    strcpy(a, t);
+    Q_strlcpy(a, t, OSP_HS_FIELD);
 
     linep = strchr(t, '\t');
     if (!linep)
@@ -376,8 +389,8 @@ int OSP_readLine(FILE *f, char *a, char *b, char *c)
 
     *linep++ = 0;
     pstr = linep;
-    strcpy(a, t);
-    strcpy(b, pstr);
+    Q_strlcpy(a, t, OSP_HS_FIELD);
+    Q_strlcpy(b, pstr, OSP_HS_FIELD);
 
     linep = strchr(pstr, '\t');
     if (!linep)
@@ -385,13 +398,14 @@ int OSP_readLine(FILE *f, char *a, char *b, char *c)
 
     *linep++ = 0;
     val2 = linep;
-    strcpy(b, pstr);
-    strcpy(c, val2);
+    Q_strlcpy(b, pstr, OSP_HS_FIELD);
+    Q_strlcpy(c, val2, OSP_HS_FIELD);
     return 3;
 }
 
 // gamex86.dll: 1002C8B5..1002C9C0
 // gamei386.so: 0005D9E4..0005DAFC
+// `out` is OSP_HS_FIELD bytes.
 void OSP_highscoreDate(char *out)
 {
     time_t      tval;
@@ -428,5 +442,6 @@ void OSP_highscoreDate(char *out)
     else
         month = "Dec";
 
-    sprintf(out, "%.2d_%s_%.2d", tm->tm_mday, month, tm->tm_year % 100);
+    Q_snprintf(out, OSP_HS_FIELD, "%.2d_%s_%.2d", tm->tm_mday, month,
+               tm->tm_year % 100);
 }

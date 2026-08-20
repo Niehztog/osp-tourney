@@ -2,7 +2,6 @@
 // the next-map picker.
 
 #include "g_local.h"
-#include <sys/timeb.h>
 
 map_t * map = NULL;
 unsigned    map_size = 0;
@@ -20,7 +19,6 @@ int next_map;
 // gamei386.so: 0006D688..0006DE2E
 edict_t *NextMap(void)
 {
-    struct timeb    tb;
     edict_t         *ent = NULL;
     int             players = 0;
     int             found = 0;
@@ -33,8 +31,6 @@ edict_t *NextMap(void)
     int             i;
     int             n;
     edict_t         *cl_ent;
-
-    ftime(&tb);
 
     if (!(int)map_queue->value)
         return NULL;
@@ -58,10 +54,11 @@ edict_t *NextMap(void)
 
         do {
             if (map_random && (int)map_random->value) {
-                // srand (tb.time), not tb.millitm -- the original reads the
-                // whole seconds field here, not the milliseconds.
-                srand(tb.time);
-                cur_map = Q_rand() % map_size;
+                // v2.75 seeded here with ftime()'s whole-seconds field.  The
+                // draw below is Q_rand(), which srand() does not feed, so the
+                // reseed did nothing; Q_srand() is the one that does.
+                Q_srand(time(NULL));
+                cur_map = Q_rand_uniform(map_size);
                 if (map_debug && (int)map_debug->value)
                     gi.dprintf("Random Map %d %s\n", cur_map, map[cur_map].name);
             }
@@ -186,14 +183,11 @@ void OSP_loadMaps(void)
 
         if (gamedir && basedir) {
             {
-                char    path[64] = {0};
+                char    path[MAX_OSPATH];
                 char    *pathptr = path;
 
-                sprintf(path, "%s/%s/", basedir->string, gamedir->string);
-                if (mfile)
-                    strcat(path, mfile->string);
-                else
-                    strcat(path, "maps.txt");
+                Q_snprintf(path, sizeof(path), "%s/%s/%s", basedir->string,
+                           gamedir->string, mfile ? mfile->string : "maps.txt");
 
                 f = fopen(pathptr, "r");
                 if (f) {
@@ -250,7 +244,8 @@ int read_map_entry(FILE *f, char *name, int *lo, int *hi)
             tok[len] = 0;
             switch (field) {
             case 0:
-                strncpy(name, p, 64);
+                // `name` is map_t::name
+                Q_strlcpy(name, p, MAX_QPATH);
                 break;
             case 1:
                 *lo = Q_atoi(p);

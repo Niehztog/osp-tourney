@@ -9,6 +9,7 @@
 #include "g_local.h"
 #include "bl_main.h"
 #include "bl_botcfg.h"
+#include "bl_redirgi.h"
 
 pmenu_t Team_Menu[18] = {
     { "*OSP Tourney DeathMatch",                 PMENU_ALIGN_CENTER,  NULL, NULL },
@@ -23,7 +24,7 @@ pmenu_t Team_Menu[18] = {
     { "*Enter Observer Mode",                    PMENU_ALIGN_LEFT,    NULL, OSP_changeObserve },
     { "*Enter Chasecam Mode",                    PMENU_ALIGN_LEFT,    NULL, OSP_changeChase },
     { "*Player ID",                              PMENU_ALIGN_LEFT,    NULL, NULL },
-    { "*View ngStats (browser)",                 PMENU_ALIGN_LEFT,    NULL, OSP_ngStatsView },
+    { "*Change HUD Layout",                      PMENU_ALIGN_LEFT,    NULL, OSP_changeHUD },
     { "*Help",                                   PMENU_ALIGN_LEFT,    NULL, OSP_helpMenu },
     { NULL,                                      PMENU_ALIGN_LEFT,    NULL, NULL },
     { "Use [ and ] to move cursor",              PMENU_ALIGN_LEFT,    NULL, NULL },
@@ -40,7 +41,7 @@ pmenu_t RegDM_Menu[18] = {
     { "*Admin Menu",                             PMENU_ALIGN_LEFT,    NULL, OSP_returnMainAdmin_menu },
     { "*Enter Observer Mode",                    PMENU_ALIGN_LEFT,    NULL, OSP_changeObserve },
     { "*Enter Chasecam Mode",                    PMENU_ALIGN_LEFT,    NULL, OSP_changeChase },
-    { "*View ngStats (browser)",                 PMENU_ALIGN_LEFT,    NULL, OSP_ngStatsView },
+    { "*Change HUD Layout",                      PMENU_ALIGN_LEFT,    NULL, OSP_changeHUD },
     { "*Player ID",                              PMENU_ALIGN_LEFT,    NULL, NULL },
     { NULL,                                      PMENU_ALIGN_LEFT,    NULL, NULL },
     { "*Help",                                   PMENU_ALIGN_LEFT,    NULL, OSP_helpMenu },
@@ -562,15 +563,15 @@ int OSP_updateTeamMenu(edict_t *ent)
     int     pick;
 
     pick = -1;
-    sprintf(tm_join[0], "*Join %s", teams[0].netname);
-    sprintf(tm_join[1], "*Join %s", teams[1].netname);
-    sprintf(tm_count0, "*(%d players)", OSP_teamCount(0));
-    sprintf(tm_count1, "*(%d players)", OSP_teamCount(1));
+    Q_snprintf(tm_join[0], sizeof(tm_join[0]), "*Join %s", teams[0].netname);
+    Q_snprintf(tm_join[1], sizeof(tm_join[1]), "*Join %s", teams[1].netname);
+    Q_snprintf(tm_count0, sizeof(tm_count0), "*(%d players)", OSP_teamCount(0));
+    Q_snprintf(tm_count1, sizeof(tm_count1), "*(%d players)", OSP_teamCount(1));
 
     if (m_mode == 2)
-        sprintf(tm_title, "[ Teamplay Mode ]");
+        Q_snprintf(tm_title, sizeof(tm_title), "[ Teamplay Mode ]");
     else
-        sprintf(tm_title, "[ 1v1 Mode ]");
+        Q_snprintf(tm_title, sizeof(tm_title), "[ 1v1 Mode ]");
 
     for (i = 1; i >= 0; i--) {
         if (!OSP_teamCount(i))
@@ -589,9 +590,9 @@ int OSP_updateTeamMenu(edict_t *ent)
     }
 
     if (pick >= 0 && m_mode == 2 && ent->osp_e3a0[0])
-        sprintf(tm_join[pick], "*Join %s", ent->osp_e3a0);
+        Q_snprintf(tm_join[pick], sizeof(tm_join[pick]), "*Join %s", ent->osp_e3a0);
     else if (pick >= 0 && m_mode == 3)
-        sprintf(tm_join[pick], "*Join %s", ent->client->pers.netname);
+        Q_snprintf(tm_join[pick], sizeof(tm_join[pick]), "*Join %s", ent->client->pers.netname);
 
     Team_Menu[1].text = tm_title;
     Team_Menu[3].text = tm_join[0];
@@ -605,63 +606,51 @@ int OSP_updateTeamMenu(edict_t *ent)
     Team_Menu[5].arg = &tm_teamnum1;
 
     if (ent->osp_e39c) {
-        sprintf(tm_admin, "*Admin Menu");
+        Q_snprintf(tm_admin, sizeof(tm_admin), "*Admin Menu");
         Team_Menu[7].SelectFunc = OSP_returnMainAdmin_menu;
     } else {
-        sprintf(tm_admin, " ");
+        Q_snprintf(tm_admin, sizeof(tm_admin), " ");
         Team_Menu[7].SelectFunc = NULL;
     }
     Team_Menu[7].text = tm_admin;
 
     if (ent->client->resp.entered != 2)
-        sprintf(tm_obs, "*Enter OBSERVER Mode");
+        Q_snprintf(tm_obs, sizeof(tm_obs), "*Enter OBSERVER Mode");
     else
-        sprintf(tm_obs, "*Leave OBSERVER Mode");
+        Q_snprintf(tm_obs, sizeof(tm_obs), "*Leave OBSERVER Mode");
     Team_Menu[9].text = tm_obs;
 
     if (ent->client->resp.entered != 4 && ent->client->resp.entered != 8)
-        sprintf(tm_chase, "*Enter CHASECAM Mode");
+        Q_snprintf(tm_chase, sizeof(tm_chase), "*Enter CHASECAM Mode");
     else
-        sprintf(tm_chase, "*Leave CHASECAM Mode");
+        Q_snprintf(tm_chase, sizeof(tm_chase), "*Leave CHASECAM Mode");
     Team_Menu[10].text = tm_chase;
 
     if ((int)allow_id->value == 2) {
-        sprintf(tm_id, "*Player ID: OFF [LOCKED]");
+        Q_snprintf(tm_id, sizeof(tm_id), "*Player ID: OFF [LOCKED]");
         Team_Menu[11].SelectFunc = NULL;
     } else if ((int)allow_id->value == 3) {
-        sprintf(tm_id, "*Player ID: ON [LOCKED]");
+        Q_snprintf(tm_id, sizeof(tm_id), "*Player ID: ON [LOCKED]");
         Team_Menu[11].SelectFunc = NULL;
     } else {
         Team_Menu[11].SelectFunc = OSP_toggleID_menu;
         if (ent->client->resp.osp_r204)
-            sprintf(tm_id, "*Player ID: ON");
+            Q_snprintf(tm_id, sizeof(tm_id), "*Player ID: ON");
         else
-            sprintf(tm_id, "*Player ID: OFF");
+            Q_snprintf(tm_id, sizeof(tm_id), "*Player ID: OFF");
     }
     Team_Menu[11].text = tm_id;
 
-    // Windows-only: on a listen server the host player (address "loopback")
-    // gets the ngWorldStats browser launcher in the HUD row's place instead.
-#ifdef _WIN32
-    if (!dedicated->value && !Q_stricmp(ent->osp_e37c, "loopback") &&
-        (int)nglog_logstyle->value == 4) {
-        sprintf(tm_hud, "*View ngStats (browser)");
-        Team_Menu[12].text = tm_hud;
-        Team_Menu[12].SelectFunc = OSP_ngStatsView;
-    } else
-#endif
-    {
-        sprintf(tm_hud, "*Change HUD Layout");
-        Team_Menu[12].text = tm_hud;
-        Team_Menu[12].SelectFunc = OSP_changeHUD;
-    }
+    Q_strlcpy(tm_hud, "*Change HUD Layout", sizeof(tm_hud));
+    Team_Menu[12].text = tm_hud;
+    Team_Menu[12].SelectFunc = OSP_changeHUD;
 
     if (!(int)vote_enable->value) {
-        sprintf(tm_vote, "*Voting Menu [DISABLED]");
+        Q_snprintf(tm_vote, sizeof(tm_vote), "*Voting Menu [DISABLED]");
         Team_Menu[8].text = tm_vote;
         Team_Menu[8].SelectFunc = NULL;
     } else {
-        sprintf(tm_vote, "*Voting Menu");
+        Q_snprintf(tm_vote, sizeof(tm_vote), "*Voting Menu");
         Team_Menu[8].text = tm_vote;
         Team_Menu[8].SelectFunc = OSP_voteMenu;
     }
@@ -714,18 +703,6 @@ void OSP_toggleID_menu(edict_t *ent, pmenu_t *p)
 void OSP_changeHUD(edict_t *ent, pmenu_t *p)
 {
     OSP_hud_cmd(ent);
-}
-
-// gamex86.dll: 1003152F..10031578
-// gamei386.so: 0005E6D0..0005E72F
-void OSP_ngStatsView(edict_t *ent, pmenu_t *p)
-{
-    ngLog_ngStatsCall(1);
-    who_paused = -3;
-    match_paused = 1;
-    pause_time = 100000;
-    gi.bprintf(PRINT_CHAT, "Admin is viewing ngStats.  Please Wait!\n");
-    PMenu_Close(ent);
 }
 
 // gamex86.dll: 10031578..100315A5
@@ -838,7 +815,6 @@ void OSP_joinTeam_menu(edict_t *ent, pmenu_t *p)
             return;
         goto joined;
     } else {
-full:
         if (teams[tnum].osp_m0f4 && !invited)
             gi.cprintf(ent, PRINT_HIGH, "\"%s\" is locked.\n", teams[tnum].netname);
         else
@@ -866,7 +842,7 @@ joined:
         gi.bprintf(PRINT_HIGH, "%s entered the game (clients = %i)\n",
                    ent->client->pers.netname, active_clients);
         EntityListAdd(ent);
-        q2log_playerEntered(ent);
+        OSP_Stats_PlayerEnter(ent);
     }
 
     ent->client->resp.score = ent->client->resp.osp_r248;
@@ -885,9 +861,9 @@ joined:
 int OSP_updateDMMenu(edict_t *ent)
 {
     if (ent->client->resp.entered == ENTERED_ENTERED)
-        sprintf(dm_play_line, "*Return to Play");
+        Q_snprintf(dm_play_line, sizeof(dm_play_line), "*Return to Play");
     else
-        sprintf(dm_play_line, "*Enter the Game");
+        Q_snprintf(dm_play_line, sizeof(dm_play_line), "*Enter the Game");
     RegDM_Menu[4].text = dm_play_line;
 
     if (ent->osp_e39c == 1 ||
@@ -895,68 +871,57 @@ int OSP_updateDMMenu(edict_t *ent)
         RegDM_Menu[4].SelectFunc = NULL;
 
     if (ent->osp_e39c) {
-        sprintf(dm_admin_line, "*Admin Menu");
+        Q_snprintf(dm_admin_line, sizeof(dm_admin_line), "*Admin Menu");
         RegDM_Menu[6].SelectFunc = OSP_returnMainAdmin_menu;
     } else {
-        sprintf(dm_admin_line, " ");
+        Q_snprintf(dm_admin_line, sizeof(dm_admin_line), " ");
         RegDM_Menu[6].SelectFunc = NULL;
     }
     RegDM_Menu[6].text = dm_admin_line;
 
     if (ent->client->resp.entered != 2)
-        sprintf(dm_obs_line, "*Enter OBSERVER Mode");
+        Q_snprintf(dm_obs_line, sizeof(dm_obs_line), "*Enter OBSERVER Mode");
     else
-        sprintf(dm_obs_line, "*Leave OBSERVER Mode");
+        Q_snprintf(dm_obs_line, sizeof(dm_obs_line), "*Leave OBSERVER Mode");
     RegDM_Menu[7].text = dm_obs_line;
 
     if (ent->client->resp.entered != 4 &&
         ent->client->resp.entered != 8)
-        sprintf(dm_chase_line, "*Enter CHASECAM Mode");
+        Q_snprintf(dm_chase_line, sizeof(dm_chase_line), "*Enter CHASECAM Mode");
     else
-        sprintf(dm_chase_line, "*Leave CHASECAM Mode");
+        Q_snprintf(dm_chase_line, sizeof(dm_chase_line), "*Leave CHASECAM Mode");
     RegDM_Menu[8].text = dm_chase_line;
 
     // allow_id 2 and 3 are the server-locked off/on settings, so the line
     // still shows the state but cannot be selected.
     if ((int)allow_id->value == 2) {
-        sprintf(dm_id_line, "*Player ID: OFF [LOCKED]");
+        Q_snprintf(dm_id_line, sizeof(dm_id_line), "*Player ID: OFF [LOCKED]");
         RegDM_Menu[10].SelectFunc = NULL;
     } else if ((int)allow_id->value == 3) {
-        sprintf(dm_id_line, "*Player ID: ON [LOCKED]");
+        Q_snprintf(dm_id_line, sizeof(dm_id_line), "*Player ID: ON [LOCKED]");
         RegDM_Menu[10].SelectFunc = NULL;
     } else {
         RegDM_Menu[10].SelectFunc = OSP_toggleID_menu;
         if (ent->client->resp.osp_r204)
-            sprintf(dm_id_line, "*Player ID: ON");
+            Q_snprintf(dm_id_line, sizeof(dm_id_line), "*Player ID: ON");
         else
-            sprintf(dm_id_line, "*Player ID: OFF");
+            Q_snprintf(dm_id_line, sizeof(dm_id_line), "*Player ID: OFF");
     }
     RegDM_Menu[10].text = dm_id_line;
 
     if (!(int)vote_enable->value) {
-        sprintf(dm_vote_line, "*Voting Menu [DISABLED]");
+        Q_snprintf(dm_vote_line, sizeof(dm_vote_line), "*Voting Menu [DISABLED]");
         RegDM_Menu[5].text = dm_vote_line;
         RegDM_Menu[5].SelectFunc = NULL;
     } else {
-        sprintf(dm_vote_line, "*Voting Menu");
+        Q_snprintf(dm_vote_line, sizeof(dm_vote_line), "*Voting Menu");
         RegDM_Menu[5].text = dm_vote_line;
         RegDM_Menu[5].SelectFunc = OSP_voteMenu;
     }
 
-    // Same Windows-only ngStats row as OSP_updateTeamMenu.
-#ifdef _WIN32
-    if (!dedicated->value && !Q_stricmp(ent->osp_e37c, "loopback") &&
-        (int)nglog_logstyle->value == 4) {
-        sprintf(dm_hud_line, "*View ngStats (browser)");
-        RegDM_Menu[9].text = dm_hud_line;
-        RegDM_Menu[9].SelectFunc = OSP_ngStatsView;
-    } else
-#endif
-    {
-        sprintf(dm_hud_line, "*Change HUD Layout");
-        RegDM_Menu[9].text = dm_hud_line;
-        RegDM_Menu[9].SelectFunc = OSP_changeHUD;
-    }
+    Q_strlcpy(dm_hud_line, "*Change HUD Layout", sizeof(dm_hud_line));
+    RegDM_Menu[9].text = dm_hud_line;
+    RegDM_Menu[9].SelectFunc = OSP_changeHUD;
 
     OSP_setShowParams();
 
@@ -1020,7 +985,7 @@ void OSP_dmReturn_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r09c--;
         EntityListAdd(ent);
         OSP_DoRankSort();
-        q2log_playerEntered(ent);
+        OSP_Stats_PlayerEnter(ent);
     }
 
     PMenu_Close(ent);
@@ -1038,110 +1003,113 @@ void OSP_dmReturn_menu(edict_t *ent, pmenu_t *p)
 void OSP_updateVoteMenu(edict_t *ent)
 {
     if (!(int)vote_enable_map->value) {
-        sprintf(vm_map, "Map: [LOCKED]");
+        Q_snprintf(vm_map, sizeof(vm_map), "Map: [LOCKED]");
         Vote_Menu[3].SelectFunc = NULL;
     } else if (!map_size) {
-        sprintf(vm_map, "Map: [NOT AVAILABLE]");
+        Q_snprintf(vm_map, sizeof(vm_map), "Map: [NOT AVAILABLE]");
         Vote_Menu[3].SelectFunc = NULL;
     } else if (ent->client->resp.osp_r290 == -1) {
-        sprintf(vm_map, "Map: [SELECT]");
+        Q_snprintf(vm_map, sizeof(vm_map), "Map: [SELECT]");
         Vote_Menu[3].SelectFunc = OSP_changeMap_menu;
     } else {
-        sprintf(vm_map, "Map: %s", map[ent->client->resp.osp_r290].name);
+        Q_snprintf(vm_map, sizeof(vm_map), "Map: %s",
+                   ent->client->resp.osp_r290 < map_size ?
+                   map[ent->client->resp.osp_r290].name : "?");
         Vote_Menu[3].SelectFunc = OSP_changeMap_menu;
     }
 
     if (!(int)vote_enable_config->value) {
-        sprintf(vm_config, "Config: [LOCKED]");
+        Q_snprintf(vm_config, sizeof(vm_config), "Config: [LOCKED]");
         Vote_Menu[4].SelectFunc = NULL;
     } else if (!conf_size) {
-        sprintf(vm_config, "Config: [NOT AVAILABLE]");
+        Q_snprintf(vm_config, sizeof(vm_config), "Config: [NOT AVAILABLE]");
         Vote_Menu[4].SelectFunc = NULL;
     } else if (ent->client->resp.osp_r258 == -1) {
-        sprintf(vm_config, "Config: [SELECT]");
+        Q_snprintf(vm_config, sizeof(vm_config), "Config: [SELECT]");
         Vote_Menu[4].SelectFunc = OSP_changeConfig_menu;
     } else {
         // The description if the config has one, otherwise its filename, and
         // either way clipped to 22 characters so the line still fits.
         char cfg[24];
 
-        if (conf_info[ent->client->resp.osp_r258][0])
-            strncpy(cfg, conf_info[ent->client->resp.osp_r258], 22);
+        if (ent->client->resp.osp_r258 >= conf_size)
+            Q_strlcpy(cfg, "?", sizeof(cfg));
+        else if (conf_info[ent->client->resp.osp_r258][0])
+            Q_strlcpy(cfg, conf_info[ent->client->resp.osp_r258], 23);
         else
-            strncpy(cfg, conf_name[ent->client->resp.osp_r258], 22);
-        cfg[22] = 0;
-        sprintf(vm_config, "Config: %s", cfg);
+            Q_strlcpy(cfg, conf_name[ent->client->resp.osp_r258], 23);
+        Q_snprintf(vm_config, sizeof(vm_config), "Config: %s", cfg);
         Vote_Menu[4].SelectFunc = OSP_changeConfig_menu;
     }
 
     if (!(int)vote_enable_toggles->value) {
-        sprintf(vm_toggles, "Item toggles [LOCKED]");
+        Q_snprintf(vm_toggles, sizeof(vm_toggles), "Item toggles [LOCKED]");
         Vote_Menu[5].SelectFunc = NULL;
     } else {
-        sprintf(vm_toggles, "Item toggles...");
+        Q_snprintf(vm_toggles, sizeof(vm_toggles), "Item toggles...");
         Vote_Menu[5].SelectFunc = OSP_voteMenu2;
     }
 
     if (!(int)vote_enable_bots->value) {
-        sprintf(vm_bots, "Gladiator Bots [LOCKED]");
+        Q_snprintf(vm_bots, sizeof(vm_bots), "Gladiator Bots [LOCKED]");
         Vote_Menu[6].SelectFunc = NULL;
     } else {
-        sprintf(vm_bots, "Gladiator Bots...");
+        Q_snprintf(vm_bots, sizeof(vm_bots), "Gladiator Bots...");
         Vote_Menu[6].SelectFunc = OSP_botMenu;
     }
 
     if (!(int)vote_enable_time->value) {
-        sprintf(vm_time, "Timelimit: [LOCKED]");
+        Q_snprintf(vm_time, sizeof(vm_time), "Timelimit: [LOCKED]");
         Vote_Menu[7].SelectFunc = NULL;
     } else if (!ent->client->resp.osp_r2a0) {
-        sprintf(vm_time, "Timelimit: OFF");
+        Q_snprintf(vm_time, sizeof(vm_time), "Timelimit: OFF");
         Vote_Menu[7].SelectFunc = OSP_changeTime_menu;
     } else {
-        sprintf(vm_time, "Timelimit: %d", ent->client->resp.osp_r2a0);
+        Q_snprintf(vm_time, sizeof(vm_time), "Timelimit: %d", ent->client->resp.osp_r2a0);
         Vote_Menu[7].SelectFunc = OSP_changeTime_menu;
     }
 
     if (!(int)vote_enable_frag->value) {
-        sprintf(vm_frag, "Fraglimit: [LOCKED]");
+        Q_snprintf(vm_frag, sizeof(vm_frag), "Fraglimit: [LOCKED]");
         Vote_Menu[8].SelectFunc = NULL;
     } else if (!ent->client->resp.osp_r25c) {
-        sprintf(vm_frag, "Fraglimit: NONE");
+        Q_snprintf(vm_frag, sizeof(vm_frag), "Fraglimit: NONE");
         Vote_Menu[8].SelectFunc = OSP_changeFrag_menu;
     } else {
-        sprintf(vm_frag, "Fraglimit: %d", ent->client->resp.osp_r25c);
+        Q_snprintf(vm_frag, sizeof(vm_frag), "Fraglimit: %d", ent->client->resp.osp_r25c);
         Vote_Menu[8].SelectFunc = OSP_changeFrag_menu;
     }
 
     if (!(int)vote_enable_hook->value) {
-        sprintf(vm_hook, "The Hook: [LOCKED]");
+        Q_snprintf(vm_hook, sizeof(vm_hook), "The Hook: [LOCKED]");
         Vote_Menu[9].SelectFunc = NULL;
     } else if (!ent->client->resp.osp_r260) {
-        sprintf(vm_hook, "The Hook: DISABLED");
+        Q_snprintf(vm_hook, sizeof(vm_hook), "The Hook: DISABLED");
         Vote_Menu[9].SelectFunc = OSP_changeHook_menu;
     } else {
-        sprintf(vm_hook, "The Hook: ENABLED");
+        Q_snprintf(vm_hook, sizeof(vm_hook), "The Hook: ENABLED");
         Vote_Menu[9].SelectFunc = OSP_changeHook_menu;
     }
 
     if (!(int)vote_enable_runes->value) {
-        sprintf(vm_runes, "Runes: [LOCKED]");
+        Q_snprintf(vm_runes, sizeof(vm_runes), "Runes: [LOCKED]");
         Vote_Menu[10].SelectFunc = NULL;
     } else if (!ent->client->resp.osp_r298) {
-        sprintf(vm_runes, "Runes: DISABLED");
+        Q_snprintf(vm_runes, sizeof(vm_runes), "Runes: DISABLED");
         Vote_Menu[10].SelectFunc = OSP_changeRunes_menu;
     } else {
-        sprintf(vm_runes, "Runes: ENABLED");
+        Q_snprintf(vm_runes, sizeof(vm_runes), "Runes: ENABLED");
         Vote_Menu[10].SelectFunc = OSP_changeRunes_menu;
     }
 
     if (!(int)vote_enable_kick->value) {
-        sprintf(vm_kick, "Kick: [LOCKED]");
+        Q_snprintf(vm_kick, sizeof(vm_kick), "Kick: [LOCKED]");
         Vote_Menu[11].SelectFunc = NULL;
     } else if (ent->client->resp.osp_r268 == -1) {
-        sprintf(vm_kick, "Kick: [SELECT]");
+        Q_snprintf(vm_kick, sizeof(vm_kick), "Kick: [SELECT]");
         Vote_Menu[11].SelectFunc = OSP_changeKick_menu;
     } else {
-        sprintf(vm_kick, "Kick: %s",
+        Q_snprintf(vm_kick, sizeof(vm_kick), "Kick: %s",
                 (char *)&ent->client->resp.osp_r26c[1]);
         Vote_Menu[11].SelectFunc = OSP_changeKick_menu;
     }
@@ -1168,58 +1136,58 @@ void OSP_updateVoteMenu2(edict_t *ent)
 {
     {
         if (ent->client->resp.osp_r2a4 & 1)
-            sprintf(v2_line0, "Allow Quad: YES");
+            Q_snprintf(v2_line0, sizeof(v2_line0), "Allow Quad: YES");
         else
-            sprintf(v2_line0, "Allow Quad: NO");
+            Q_snprintf(v2_line0, sizeof(v2_line0), "Allow Quad: NO");
     }
 
     {
         if (ent->client->resp.osp_r2a4 & 2)
-            sprintf(v2_line1, "Allow Invul: YES");
+            Q_snprintf(v2_line1, sizeof(v2_line1), "Allow Invul: YES");
         else
-            sprintf(v2_line1, "Allow Invul: NO");
+            Q_snprintf(v2_line1, sizeof(v2_line1), "Allow Invul: NO");
     }
 
     {
         if (ent->client->resp.osp_r2a4 & 4)
-            sprintf(v2_line2, "Drop Quad: YES");
+            Q_snprintf(v2_line2, sizeof(v2_line2), "Drop Quad: YES");
         else
-            sprintf(v2_line2, "Drop Quad: NO");
+            Q_snprintf(v2_line2, sizeof(v2_line2), "Drop Quad: NO");
     }
 
     {
         if (ent->client->resp.osp_r2a4 & 8)
-            sprintf(v2_line3, "Allow BFG: YES");
+            Q_snprintf(v2_line3, sizeof(v2_line3), "Allow BFG: YES");
         else
-            sprintf(v2_line3, "Allow BFG: NO");
+            Q_snprintf(v2_line3, sizeof(v2_line3), "Allow BFG: NO");
     }
 
     {
         if (ent->client->resp.osp_r2a4 & 0x10)
-            sprintf(v2_line4, "Allow Power Armor: YES");
+            Q_snprintf(v2_line4, sizeof(v2_line4), "Allow Power Armor: YES");
         else
-            sprintf(v2_line4, "Allow Power Armor: NO");
+            Q_snprintf(v2_line4, sizeof(v2_line4), "Allow Power Armor: NO");
     }
 
     {
         if (ent->client->resp.osp_r2a4 & 0x20)
-            sprintf(v2_line5, "Weapons Stay: YES");
+            Q_snprintf(v2_line5, sizeof(v2_line5), "Weapons Stay: YES");
         else
-            sprintf(v2_line5, "Weapons Stay: NO");
+            Q_snprintf(v2_line5, sizeof(v2_line5), "Weapons Stay: NO");
     }
 
     {
         if (ent->client->resp.osp_r2a4 & 0x40)
-            sprintf(v2_line6, "Hurt Self: YES");
+            Q_snprintf(v2_line6, sizeof(v2_line6), "Hurt Self: YES");
         else
-            sprintf(v2_line6, "Hurt Self: NO");
+            Q_snprintf(v2_line6, sizeof(v2_line6), "Hurt Self: NO");
     }
 
     if (m_mode > 1) {
         if (ent->client->resp.osp_r2a4 & 0x80)
-            sprintf(v2_line7, "Hurt Team: YES");
+            Q_snprintf(v2_line7, sizeof(v2_line7), "Hurt Team: YES");
         else
-            sprintf(v2_line7, "Hurt Team: NO");
+            Q_snprintf(v2_line7, sizeof(v2_line7), "Hurt Team: NO");
     } else {
         v2_line7[0] = 0;
         Vote_Menu2[10].SelectFunc = NULL;
@@ -1267,24 +1235,24 @@ void OSP_updateBotMenu(edict_t *ent)
     int         t;
 
     if (ent->client->resp.osp_r29c == -1)
-        sprintf(bot_name_line, "[SELECT]");
+        Q_snprintf(bot_name_line, sizeof(bot_name_line), "[SELECT]");
     else {
         for (ncount = 0, b = botlist; b; b = b->next, ncount++)
             ;
 
         if (!ncount)
-            sprintf(bot_name_line, "[NONE AVAILABLE]");
+            Q_snprintf(bot_name_line, sizeof(bot_name_line), "[NONE AVAILABLE]");
         else {
             for (t = 0, b = botlist; b && t < ent->client->resp.osp_r29c; b = b->next, t++)
                 ;
             if (b)
-                strcpy(bot_name_line, b->name);
+                Q_strlcpy(bot_name_line, b->name, sizeof(bot_name_line));
         }
     }
 
-    sprintf(bot_add_line, "*Add random bots: %d", ent->client->resp.osp_r250);
-    sprintf(bot_rem_line, "*Remove random bots: %d", ent->client->resp.osp_r294);
-    sprintf(bot_total_line, "Total active bots: %d", botglobals.numbots);
+    Q_snprintf(bot_add_line, sizeof(bot_add_line), "*Add random bots: %d", ent->client->resp.osp_r250);
+    Q_snprintf(bot_rem_line, sizeof(bot_rem_line), "*Remove random bots: %d", ent->client->resp.osp_r294);
+    Q_snprintf(bot_total_line, sizeof(bot_total_line), "Total active bots: %d", botglobals.numbots);
 
     bot_add_arg = ent->client->resp.osp_r250;
     bot_rem_arg = ent->client->resp.osp_r294;
@@ -1342,50 +1310,50 @@ void OSP_updateProposalMenu(edict_t *ent)
 
     switch (vote_item) {
     case 1:
-        sprintf(pm_line1, "Change map to %s", vote_value);
+        Q_snprintf(pm_line1, sizeof(pm_line1), "Change map to %s", vote_value);
         break;
     case 2:
-        sprintf(pm_line1, "Set server configuration to");
-        sprintf(pm_line2, "%s", vote_value);
+        Q_snprintf(pm_line1, sizeof(pm_line1), "Set server configuration to");
+        Q_snprintf(pm_line2, sizeof(pm_line2), "%s", vote_value);
         break;
     case 4:
         if (!Q_atoi(vote_value))
-            sprintf(pm_line1, "Change timelimit to OFF");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Change timelimit to OFF");
         else
-            sprintf(pm_line1, "Change timelimit to %s", vote_value);
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Change timelimit to %s", vote_value);
         break;
     case 8:
         if (!Q_atoi(vote_value))
-            sprintf(pm_line1, "Change fraglimit to NONE");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Change fraglimit to NONE");
         else
-            sprintf(pm_line1, "Change fraglimit to %s", vote_value);
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Change fraglimit to %s", vote_value);
         break;
     case 0x10:
         if (Q_atoi(vote_value))
-            sprintf(pm_line1, "Set the hook to ENABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set the hook to ENABLED");
         else
-            sprintf(pm_line1, "Set the hook to DISABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set the hook to DISABLED");
         break;
     case 0x800:
         if (Q_atoi(vote_value))
-            sprintf(pm_line1, "Set runes to ENABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set runes to ENABLED");
         else
-            sprintf(pm_line1, "Set runes to DISABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set runes to DISABLED");
         break;
     case 0x40:
         if (Q_atoi(vote_value))
-            sprintf(pm_line1, "Set the BFG to ENABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set the BFG to ENABLED");
         else
-            sprintf(pm_line1, "Set the BFG to DISABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set the BFG to DISABLED");
         break;
     case 0x80:
         if (Q_atoi(vote_value))
-            sprintf(pm_line1, "Set the Quad to ENABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set the Quad to ENABLED");
         else
-            sprintf(pm_line1, "Set the Quad to DISABLED");
+            Q_snprintf(pm_line1, sizeof(pm_line1), "Set the Quad to DISABLED");
         break;
     case 0x1000:
-        sprintf(pm_line1, "Kick UNKNOWN");
+        Q_snprintf(pm_line1, sizeof(pm_line1), "Kick UNKNOWN");
         {
             edict_t     *other;
             int         i;
@@ -1396,26 +1364,26 @@ void OSP_updateProposalMenu(edict_t *ent)
                     other->client->resp.clientid != Q_atoi(vote_value))
                     continue;
 
-                sprintf(pm_line1, "Kick %s", other->client->pers.greenname);
+                Q_snprintf(pm_line1, sizeof(pm_line1), "Kick %s", other->client->pers.greenname);
                 break;
             }
         }
         break;
     case 0x100:
-        sprintf(pm_line1, "Add 1 Gladiator bot");
+        Q_snprintf(pm_line1, sizeof(pm_line1), "Add 1 Gladiator bot");
         break;
     case 0x200:
-        sprintf(pm_line1, "Add %s Gladiator bots", vote_value);
+        Q_snprintf(pm_line1, sizeof(pm_line1), "Add %s Gladiator bots", vote_value);
         break;
     case 0x400:
-        sprintf(pm_line1, "Remove %s Gladiator bots", vote_value);
+        Q_snprintf(pm_line1, sizeof(pm_line1), "Remove %s Gladiator bots", vote_value);
         break;
     default:
-        sprintf(pm_line1, "Umm, what were we voting for?");
+        Q_snprintf(pm_line1, sizeof(pm_line1), "Umm, what were we voting for?");
         break;
     }
 
-    OSP_menuVotePercent((edict_t *)pm_pct, pm_needed);
+    OSP_menuVotePercent(pm_pct, sizeof(pm_pct), pm_needed, sizeof(pm_needed));
 
     Proposal_Menu[4].text = pm_line1;
     Proposal_Menu[5].text = pm_line2;
@@ -1467,65 +1435,66 @@ void OSP_updateProposalMenu2(edict_t *ent)
     pm2_line7[0] = 0;
 
     if ((Q_atoi(vote_value) & 1) == (item_settings & 1))
-        strcpy(pm2_line0, "*");
+        Q_strlcpy(pm2_line0, "*", sizeof(pm2_line0));
     if (Q_atoi(vote_value) & 1)
-        strcat(pm2_line0, "Allow Quad: YES");
+        Q_strlcat(pm2_line0, "Allow Quad: YES", sizeof(pm2_line0));
     else
-        strcat(pm2_line0, "Allow Quad: NO");
+        Q_strlcat(pm2_line0, "Allow Quad: NO", sizeof(pm2_line0));
 
     if ((Q_atoi(vote_value) & 2) == (item_settings & 2))
-        strcpy(pm2_line1, "*");
+        Q_strlcpy(pm2_line1, "*", sizeof(pm2_line1));
     if (Q_atoi(vote_value) & 2)
-        strcat(pm2_line1, "Allow Invul: YES");
+        Q_strlcat(pm2_line1, "Allow Invul: YES", sizeof(pm2_line1));
     else
-        strcat(pm2_line1, "Allow Invul: NO");
+        Q_strlcat(pm2_line1, "Allow Invul: NO", sizeof(pm2_line1));
 
     if ((Q_atoi(vote_value) & 4) == (item_settings & 4))
-        strcpy(pm2_line2, "*");
+        Q_strlcpy(pm2_line2, "*", sizeof(pm2_line2));
     if (Q_atoi(vote_value) & 4)
-        strcat(pm2_line2, "Drop Quad: YES");
+        Q_strlcat(pm2_line2, "Drop Quad: YES", sizeof(pm2_line2));
     else
-        strcat(pm2_line2, "Drop Quad: NO");
+        Q_strlcat(pm2_line2, "Drop Quad: NO", sizeof(pm2_line2));
 
     if ((Q_atoi(vote_value) & 8) == (item_settings & 8))
-        strcpy(pm2_line3, "*");
+        Q_strlcpy(pm2_line3, "*", sizeof(pm2_line3));
     if (Q_atoi(vote_value) & 8)
-        strcat(pm2_line3, "Allow BFG: YES");
+        Q_strlcat(pm2_line3, "Allow BFG: YES", sizeof(pm2_line3));
     else
-        strcat(pm2_line3, "Allow BFG: NO");
+        Q_strlcat(pm2_line3, "Allow BFG: NO", sizeof(pm2_line3));
 
     if ((Q_atoi(vote_value) & 0x10) == (item_settings & 0x10))
-        strcpy(pm2_line4, "*");
+        Q_strlcpy(pm2_line4, "*", sizeof(pm2_line4));
     if (Q_atoi(vote_value) & 0x10)
-        strcat(pm2_line4, "Allow Power Armor: YES");
+        Q_strlcat(pm2_line4, "Allow Power Armor: YES", sizeof(pm2_line4));
     else
-        strcat(pm2_line4, "Allow Power Armor: NO");
+        Q_strlcat(pm2_line4, "Allow Power Armor: NO", sizeof(pm2_line4));
 
     if ((Q_atoi(vote_value) & 0x20) == (item_settings & 0x20))
-        strcpy(pm2_line5, "*");
+        Q_strlcpy(pm2_line5, "*", sizeof(pm2_line5));
     if (Q_atoi(vote_value) & 0x20)
-        strcat(pm2_line5, "Weapons Stay: YES");
+        Q_strlcat(pm2_line5, "Weapons Stay: YES", sizeof(pm2_line5));
     else
-        strcat(pm2_line5, "Weapons Stay: NO");
+        Q_strlcat(pm2_line5, "Weapons Stay: NO", sizeof(pm2_line5));
 
     if ((Q_atoi(vote_value) & 0x40) == (item_settings & 0x40))
-        strcpy(pm2_line6, "*");
+        Q_strlcpy(pm2_line6, "*", sizeof(pm2_line6));
     if (Q_atoi(vote_value) & 0x40)
-        strcat(pm2_line6, "Hurt Self: YES");
+        Q_strlcat(pm2_line6, "Hurt Self: YES", sizeof(pm2_line6));
     else
-        strcat(pm2_line6, "Hurt Self: NO");
+        Q_strlcat(pm2_line6, "Hurt Self: NO", sizeof(pm2_line6));
 
     if (m_mode > 1) {
         if ((Q_atoi(vote_value) & 0x80) == (item_settings & 0x80))
-            strcpy(pm2_line7, "*");
+            Q_strlcpy(pm2_line7, "*", sizeof(pm2_line7));
         if (Q_atoi(vote_value) & 0x80)
-            strcat(pm2_line7, "Hurt Team: YES");
+            Q_strlcat(pm2_line7, "Hurt Team: YES", sizeof(pm2_line7));
         else
-            strcat(pm2_line7, "Hurt Team: NO");
+            Q_strlcat(pm2_line7, "Hurt Team: NO", sizeof(pm2_line7));
     } else
         pm2_line7[0] = 0;
 
-    OSP_menuVotePercent((edict_t *)pm2_pct, pm2_needed);
+    OSP_menuVotePercent(pm2_pct, sizeof(pm2_pct), pm2_needed,
+                        sizeof(pm2_needed));
 
     Proposal_Menu2[3].text = pm2_line0;
     Proposal_Menu2[4].text = pm2_line1;
@@ -1546,10 +1515,11 @@ void OSP_updateProposalMenu2(edict_t *ent)
 
 // gamex86.dll: 10033452..10033485
 // gamei386.so: 0006073C..00060795
-void OSP_menuVotePercent(edict_t *ent, char *out)
+void OSP_menuVotePercent(char *pct, size_t pctsize, char *out, size_t outsize)
 {
-    OSP_votePercent(ent, 3);
-    sprintf(out, "%d%% Needed to Decide", (int)vote_threshold->value);
+    OSP_voteSummary(pct, pctsize);
+    Q_snprintf(out, outsize, "%d%% Needed to Decide",
+               (int)vote_threshold->value);
 }
 
 // The five "cycle a value" vote-menu leaves. They share one shape: refuse if
@@ -1573,11 +1543,18 @@ void OSP_proposeVote_menu(edict_t *ent, pmenu_t *p)
         return;
     }
     if (ent->client->resp.osp_r254 == 1) {
-        OSP_vote_cmd(ent, 1, 3, "map", map[ent->client->resp.osp_r290].name);
+        // the map list can be reloaded by a config vote between the menu
+        // opening and this key press
+        if (ent->client->resp.osp_r290 >= 0 &&
+            ent->client->resp.osp_r290 < map_size && map)
+            OSP_vote_cmd(ent, 1, 3, "map",
+                         map[ent->client->resp.osp_r290].name);
         PMenu_Close(ent);
         return;
     }
-    if (ent->client->resp.osp_r254 == 2) {
+    if (ent->client->resp.osp_r254 == 2 &&
+        ent->client->resp.osp_r258 >= 0 &&
+        ent->client->resp.osp_r258 < conf_size) {
         // Prefer the config's description; fall back to its filename.
         if (conf_info[ent->client->resp.osp_r258][0])
             OSP_vote_cmd(ent, 1, 3, "config",
@@ -1589,55 +1566,55 @@ void OSP_proposeVote_menu(edict_t *ent, pmenu_t *p)
         return;
     }
     if (ent->client->resp.osp_r254 == 4) {
-        sprintf(value, "%d", ent->client->resp.osp_r2a0);
+        Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r2a0);
         OSP_vote_cmd(ent, 1, 3, "timelimit", value);
         PMenu_Close(ent);
         return;
     }
     if (ent->client->resp.osp_r254 == 8) {
-        sprintf(value, "%d", ent->client->resp.osp_r25c);
+        Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r25c);
         OSP_vote_cmd(ent, 1, 3, "fraglimit", value);
         PMenu_Close(ent);
         return;
     }
     if (ent->client->resp.osp_r254 == 0x10) {
-        sprintf(value, "%d", ent->client->resp.osp_r260);
+        Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r260);
         OSP_vote_cmd(ent, 1, 3, "hook", value);
         PMenu_Close(ent);
         return;
     }
     if (ent->client->resp.osp_r254 == 0x200) {
-        sprintf(value, "%d", ent->client->resp.osp_r298);
+        Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r298);
         OSP_vote_cmd(ent, 1, 3, "runes", value);
         PMenu_Close(ent);
         return;
     }
     if (ent->client->resp.osp_r254 == 0x20) {
-        sprintf(value, "%d", ent->client->resp.osp_r2a4);
+        Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r2a4);
         OSP_vote_cmd(ent, 1, 3, "toggles", value);
         PMenu_Close(ent);
         return;
     }
     if (ent->client->resp.osp_r254 == 0x400) {
-        sprintf(value, "%d", (char)ent->client->resp.osp_r26c[0]);
+        Q_snprintf(value, sizeof(value), "%d", (char)ent->client->resp.osp_r26c[0]);
         OSP_vote_cmd(ent, 1, 3, "kick", value);
         PMenu_Close(ent);
         return;
     }
     if (ent->client->resp.osp_r254 == 0x40) {
-        sprintf(value, "%d", ent->client->resp.osp_r29c);
+        Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r29c);
         OSP_vote_cmd(ent, 1, 3, "specbot", value);
         PMenu_Close(ent);
         return;
     }
     if (ent->client->resp.osp_r254 == 0x80) {
-        sprintf(value, "%d", ent->client->resp.osp_r250);
+        Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r250);
         OSP_vote_cmd(ent, 1, 3, "addbots", value);
         PMenu_Close(ent);
         return;
     }
 
-    sprintf(value, "%d", ent->client->resp.osp_r294);
+    Q_snprintf(value, sizeof(value), "%d", ent->client->resp.osp_r294);
     OSP_vote_cmd(ent, 1, 3, "rembots", value);
     PMenu_Close(ent);
 }
@@ -1817,13 +1794,10 @@ void OSP_changeRunes_menu(edict_t *ent, pmenu_t *p)
 void OSP_changeKick_menu(edict_t *ent, pmenu_t *p)
 {
     edict_t     *other;
-    // Dead: set after each strcpy, never read.
-    int         res;                    // invented name
     int         i;
     int         n;
     int         was;
 
-    res = 0;
     was = ent->client->resp.osp_r268;
     if (ent->client->resp.osp_r254 && ent->client->resp.osp_r254 != 0x400) {
         gi.cprintf(ent, PRINT_HIGH,
@@ -1850,9 +1824,9 @@ void OSP_changeKick_menu(edict_t *ent, pmenu_t *p)
             ent->client->resp.osp_r268 = n;
             ent->client->resp.osp_r26c[0] =
                 (byte)other->client->resp.clientid;
-            strcpy((char *)&ent->client->resp.osp_r26c[1],
-                   other->client->pers.netname);
-            res = 1;
+            Q_strlcpy((char *)&ent->client->resp.osp_r26c[1],
+                      other->client->pers.netname,
+                      sizeof(ent->client->resp.osp_r26c) - 1);
             break;
         }
         if (ent->client->resp.osp_r268 == was)
@@ -1875,9 +1849,9 @@ void OSP_changeKick_menu(edict_t *ent, pmenu_t *p)
             ent->client->resp.osp_r268 = n;
             ent->client->resp.osp_r26c[0] =
                 (byte)other->client->resp.clientid;
-            strcpy((char *)&ent->client->resp.osp_r26c[1],
-                   other->client->pers.netname);
-            res = 1;
+            Q_strlcpy((char *)&ent->client->resp.osp_r26c[1],
+                      other->client->pers.netname,
+                      sizeof(ent->client->resp.osp_r26c) - 1);
             break;
         }
         if (ent->client->resp.osp_r268 == was)
@@ -1953,7 +1927,7 @@ void OSP_addSpecificBot_menu(edict_t *ent, pmenu_t *p)
     } else {
         for (t = 0, b = botlist; b && t < ent->client->resp.osp_r29c; b = b->next, t++)
             ;
-        strcpy(voted_botname, b->name);
+        Q_strlcpy(voted_botname, b->name, sizeof(voted_botname));
         ent->client->resp.osp_r254 = 0x40;
     }
 
@@ -2044,7 +2018,8 @@ void OSP_declineVote_menu(edict_t *ent, pmenu_t *p)
 // gamei386.so: 000616B8..00061731
 int OSP_updateInviteMenu(edict_t *ent)
 {
-    sprintf(invite_teamname, "%s", teams[ent->client->resp.osp_r2cc].netname);
+    Q_snprintf(invite_teamname, sizeof(invite_teamname), "%s",
+               OSP_teamNameFor(ent->client->resp.osp_r2cc));
     invite_teamnum = ent->client->resp.osp_r078 - 1;
     Invite_Menu[7].text = invite_teamname;
     Invite_Menu[11].arg = &invite_teamnum;
@@ -2086,14 +2061,14 @@ void OSP_inviteClose_menu(edict_t *ent, pmenu_t *p)
 int OSP_updateAdminMenu(edict_t *ent)
 {
     if (m_mode > 0) {
-        sprintf(admin_title, "*Match Control");
+        Q_snprintf(admin_title, sizeof(admin_title), "*Match Control");
         AdminMain_Menu[9].SelectFunc = NULL;
         if (m_mode > 1)
             AdminMain_Menu[12].SelectFunc = OSP_returnMainTeam_menu;
         else
             AdminMain_Menu[12].SelectFunc = OSP_returnMainDM_menu;
     } else {
-        sprintf(admin_title, " ");
+        Q_snprintf(admin_title, sizeof(admin_title), " ");
         AdminMain_Menu[9].SelectFunc = NULL;
         AdminMain_Menu[12].SelectFunc = OSP_returnMainDM_menu;
     }
@@ -2128,67 +2103,69 @@ int OSP_updateAdminSelectMenu(edict_t *ent)
     int     which = ent->client->resp.osp_r238;     // invented name
 
     if (which == 1) {
-        strcpy(as_title, "[ KICK Player Menu ]");
-        strcpy(as_prompt, "*Select player to KICK:");
+        Q_strlcpy(as_title, "[ KICK Player Menu ]", sizeof(as_title));
+        Q_strlcpy(as_prompt, "*Select player to KICK:", sizeof(as_prompt));
 
         if (ent->client->resp.osp_r290 == -1) {
-            strcpy(as_choice, "*[ SELECT ]");
-            strcpy(as_addr, " ");
-            strcpy(as_action, " ");
+            Q_strlcpy(as_choice, "*[ SELECT ]", sizeof(as_choice));
+            Q_strlcpy(as_addr, " ", sizeof(as_addr));
+            Q_strlcpy(as_action, " ", sizeof(as_action));
             AdminSelect_Menu[11].SelectFunc = NULL;
         } else {
-            sprintf(as_choice, "%s",
+            Q_snprintf(as_choice, sizeof(as_choice), "%s",
                     game.clients[ent->client->resp.osp_r290].pers.netname);
-            sprintf(as_addr, "[ %s ]",
+            Q_snprintf(as_addr, sizeof(as_addr), "[ %s ]",
                     g_edicts[ent->client->resp.osp_r290 + 1].osp_e37c);
-            strcpy(as_action, "*KICK selected player");
+            Q_strlcpy(as_action, "*KICK selected player", sizeof(as_action));
             AdminSelect_Menu[11].SelectFunc = OSP_playerAdminChoose;
         }
         AdminSelect_Menu[4].SelectFunc = OSP_playerAdminSelect_menu;
     } else if (which == 2) {
-        strcpy(as_title, "[ *BAN* Player Menu ]");
-        strcpy(as_prompt, "*Select player to *BAN*:");
+        Q_strlcpy(as_title, "[ *BAN* Player Menu ]", sizeof(as_title));
+        Q_strlcpy(as_prompt, "*Select player to *BAN*:", sizeof(as_prompt));
 
         if (ent->client->resp.osp_r290 == -1) {
-            strcpy(as_choice, "*[ SELECT ]");
-            strcpy(as_addr, " ");
-            strcpy(as_action, " ");
+            Q_strlcpy(as_choice, "*[ SELECT ]", sizeof(as_choice));
+            Q_strlcpy(as_addr, " ", sizeof(as_addr));
+            Q_strlcpy(as_action, " ", sizeof(as_action));
             AdminSelect_Menu[11].SelectFunc = NULL;
         } else {
-            sprintf(as_choice, "%s",
+            Q_snprintf(as_choice, sizeof(as_choice), "%s",
                     game.clients[ent->client->resp.osp_r290].pers.netname);
-            sprintf(as_addr, "[ %s ]",
+            Q_snprintf(as_addr, sizeof(as_addr), "[ %s ]",
                     g_edicts[ent->client->resp.osp_r290 + 1].osp_e37c);
-            strcpy(as_action, "*BAN selected player");
+            Q_strlcpy(as_action, "*BAN selected player", sizeof(as_action));
             AdminSelect_Menu[11].SelectFunc = OSP_playerAdminChoose;
         }
         AdminSelect_Menu[4].SelectFunc = OSP_playerAdminSelect_menu;
     } else if (which == 4) {
-        strcpy(as_title, "[ Map Selection Menu ]");
-        strcpy(as_prompt, "*Select new map to load:");
-        strcpy(as_addr, " ");
+        Q_strlcpy(as_title, "[ Map Selection Menu ]", sizeof(as_title));
+        Q_strlcpy(as_prompt, "*Select new map to load:", sizeof(as_prompt));
+        Q_strlcpy(as_addr, " ", sizeof(as_addr));
         AdminSelect_Menu[4].SelectFunc = OSP_mapAdminSelect_menu;
         AdminSelect_Menu[11].SelectFunc = OSP_mapAdminChoose;
 
         if (!map_size) {
-            sprintf(as_choice, "[ NO MAPS AVAILABLE ]");
-            sprintf(as_action, " ");
+            Q_snprintf(as_choice, sizeof(as_choice), "[ NO MAPS AVAILABLE ]");
+            Q_snprintf(as_action, sizeof(as_action), " ");
             AdminSelect_Menu[4].SelectFunc = NULL;
             AdminSelect_Menu[11].SelectFunc = NULL;
         } else if (ent->client->resp.osp_r290 == -1) {
-            strcpy(as_choice, "*[ SELECT ]");
-            sprintf(as_action, " ");
+            Q_strlcpy(as_choice, "*[ SELECT ]", sizeof(as_choice));
+            Q_snprintf(as_action, sizeof(as_action), " ");
             AdminSelect_Menu[11].SelectFunc = NULL;
         } else {
-            sprintf(as_choice, "%s", map[ent->client->resp.osp_r290].name);
-            strcpy(as_action, "*Load selected map");
+            Q_snprintf(as_choice, sizeof(as_choice), "%s",
+                   ent->client->resp.osp_r290 < map_size ?
+                   map[ent->client->resp.osp_r290].name : "?");
+            Q_strlcpy(as_action, "*Load selected map", sizeof(as_action));
             AdminSelect_Menu[11].SelectFunc = OSP_mapAdminChoose;
         }
     } else {
-        strcpy(as_title, "[ ERROR ERROR ]");
-        strcpy(as_prompt, "*ERROR IN ADMIN MENU");
-        strcpy(as_choice, " ");
-        strcpy(as_addr, " ");
+        Q_strlcpy(as_title, "[ ERROR ERROR ]", sizeof(as_title));
+        Q_strlcpy(as_prompt, "*ERROR IN ADMIN MENU", sizeof(as_prompt));
+        Q_strlcpy(as_choice, " ", sizeof(as_choice));
+        Q_strlcpy(as_addr, " ", sizeof(as_addr));
     }
 
     AdminSelect_Menu[1].text = as_title;
@@ -2271,9 +2248,10 @@ void OSP_mapAdminChoose(edict_t *ent, pmenu_t *p)
     sel = ent->client->resp.osp_r290;
     PMenu_Close(ent);
 
-    if (sel > -1 && OSP_mapExists(ent, map[sel].name, true)) {
+    if (sel > -1 && sel < map_size && map &&
+        OSP_mapExists(ent, map[sel].name, true)) {
         sl_SoftGameEnd(&gi, level);
-        q2log_gameEnd("referee map change", 0);
+        OSP_Stats_MatchEnd("referee map change");
         manual_map = 1;
         EndDMLevel();
         return;
@@ -2292,7 +2270,7 @@ void OSP_playerAdminChoose(edict_t *ent, pmenu_t *p)
 {
     edict_t     *target = g_edicts + ent->client->resp.osp_r290 + 1;
 
-    if (ent->client->resp.osp_r290 > -1) {
+    if (ent->client->resp.osp_r290 > -1 && target->client) {
         if (ent->client->resp.osp_r238 == 2)
             OSP_rban_cmd(ent, target->client->pers.netname);
         else if (target == ent)

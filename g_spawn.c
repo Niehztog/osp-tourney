@@ -1,6 +1,9 @@
 
 
 #include "g_local.h"
+#include "bl_redirgi.h"
+#include "bl_spawn.h"
+#include "bl_main.h"
 
 typedef struct {
     char    *name;
@@ -639,8 +642,6 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
     char        teamname[16];
     char        teamskin[128];
     int         referee;
-    int         osp_dead;           // invented name; unreferenced, but present in real's frame
-    extern int      botglobals;
     cvar_t      *player_reload;
 
     skill_level = Q_clip(skill->value, 0, 3);
@@ -763,14 +764,18 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
         OSP_setupRuneSpawn(0);
     }
 
-    botglobals = 0;
+    // v2.75 declared a bogus `extern int botglobals;` local here and assigned
+    // through it, which zeroed the first int of the SDK's bot_globals_t.  That
+    // is `numbots`, so say so.
+    botglobals.numbots = 0;
     BotInitMuzzleFlashToSoundindex();
     BotSpawn();
-    BotLib_BotLoadMap(mapname);
-    q2log_gameInit(1);
+    // the bot library's ABI takes a char *; it does not write through it
+    BotLib_BotLoadMap((char *)mapname);
+    OSP_Stats_GameInit();
     sl_GameStart(&gi, level);
     if (m_mode < 1)
-        q2log_gameStart();
+        OSP_Stats_MatchStart();
     console_stampcount = 0;
 }
 
@@ -936,17 +941,17 @@ const char dm_statusbar[] =
 
 // OSP's own tail: the two popup-menu stat_strings, the match-status cell,
 // the frags/time/rank block and the five rune indicators.
-    "xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 18 \txr -44 \tyt 2 \tstring2 \"Frags\" \txr -68 \tyt 10 \tstat_string 18 \tyt 18 \tstat_string 19 endif if 17 \txr -44 \tyt 66 \tstat_string 17 \txr -36 \tyt 58 \tstring2 \"Time\" endif if 20 \tyt 34 \tstring2 \"Rank\" \txr -44 \tyt 42 \tstat_string 20 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif "
+    "xl 4 if 27 \tyb -34 \tstat_string 27 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 18 \txr -44 \tyt 2 \tstring2 \"Frags\" \txr -68 \tyt 10 \tstat_string 18 \tyt 18 \tstat_string 19 endif if 17 \txr -44 \tyt 66 \tstat_string 17 \txr -36 \tyt 58 \tstring2 \"Time\" endif if 20 \tyt 34 \tstring2 \"Rank\" \txr -44 \tyt 42 \tstat_string 20 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif "
     ;
 
 // The three alternate status bars, in real's own .data order right after
 // dm_statusbar.
 const char dm_statusbar_alt[] =
-    "yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 29 \tyb\t-76 \txv\t246 \tnum\t2\t30 \txv\t296 \tpic\t29 \tyb\t-50 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 18 \txr -44 \tyt 2 \tstring2 \"Frags\" \txr -68 \tyt 10 \tstat_string 18 \tyt 18 \tstat_string 19 endif if 17 \txv 180 \tyb -38 \tstat_string 17 \txv 188 \tyb -46 \tstring2 \"Time\" endif if 20 \txr -36 \tyt 34 \tstring2 \"Rank\" \txr -44 \tyt 42 \tstat_string 20 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
+    "yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 29 \tyb\t-76 \txv\t246 \tnum\t2\t30 \txv\t296 \tpic\t29 \tyb\t-50 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 18 \txr -44 \tyt 2 \tstring2 \"Frags\" \txr -68 \tyt 10 \tstat_string 18 \tyt 18 \tstat_string 19 endif if 17 \txv 180 \tyb -38 \tstat_string 17 \txv 188 \tyb -46 \tstring2 \"Time\" endif if 20 \txr -36 \tyt 34 \tstring2 \"Rank\" \txr -44 \tyt 42 \tstat_string 20 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
 const char team_statusbar[] =
-    "yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 29 \tyb\t-76 \txv\t246 \tnum\t2\t30 \txv\t296 \tpic\t29 \tyb\t-50 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 17 \txr -36 \tyt 50 \tstring2 \"Time\" \txr -44 \tyt 58 \tstat_string 17 endif if 18 \txr -124 \tyt 2 \tstat_string 18 \txr -108 \tyt 10 \tstat_string 19 endif if 20 \txr -124 \tyt 26 \tstat_string 20 \txr -108 \tyt 34 \tstat_string 21 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
+    "yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 29 \tyb\t-76 \txv\t246 \tnum\t2\t30 \txv\t296 \tpic\t29 \tyb\t-50 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 17 \txr -36 \tyt 50 \tstring2 \"Time\" \txr -44 \tyt 58 \tstat_string 17 endif if 18 \txr -124 \tyt 2 \tstat_string 18 \txr -108 \tyt 10 \tstat_string 19 endif if 20 \txr -124 \tyt 26 \tstat_string 20 \txr -108 \tyt 34 \tstat_string 21 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
 const char team_statusbar_alt[] =
-    "yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 29 \tyb\t-76 \txv\t246 \tnum\t2\t30 \txv\t296 \tpic\t29 \tyb\t-50 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 28 \tyb -42 \tstat_string 28 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 17 \txv 180 \tyb -38 \tstat_string 17 \txv 188 \tyb -46 \tstring2 \"Time\" endif if 18 \txr -124 \tyt 2 \tstat_string 18 \txr -108 \tyt 10 \tstat_string 19 endif if 20 \txr -124 \tyt 26 \tstat_string 20 \txr -108 \tyt 34 \tstat_string 21 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
+    "yb\t-24 xv\t0 hnum xv\t50 pic 0 if 2 \txv\t100 \tanum \txv\t150 \tpic 2 endif if 4 \txv\t200 \trnum \txv\t250 \tpic 4 endif if 6 \txv\t296 \tpic 6 endif yb\t-50 if 7 \txv\t0 \tpic 7 \txv\t26 \tyb\t-42 \tstat_string 8 \tyb\t-50 endif if 9 \txv\t246 \tnum\t2\t10 \txv\t296 \tpic\t9 endif if 29 \tyb\t-76 \txv\t246 \tnum\t2\t30 \txv\t296 \tpic\t29 \tyb\t-50 endif if 11 \txv\t148 \tpic\t11 endif xl 4 if 27 \tyb -34 \tstat_string 27 endif if 16 \txv 44 \tyb -67 \tstat_string 16 endif if 17 \txv 180 \tyb -38 \tstat_string 17 \txv 188 \tyb -46 \tstring2 \"Time\" endif if 18 \txr -124 \tyt 2 \tstat_string 18 \txr -108 \tyt 10 \tstat_string 19 endif if 20 \txr -124 \tyt 26 \tstat_string 20 \txr -108 \tyt 34 \tstat_string 21 endif xr -68 yt 90 if 22 \tstring \"  RESIST\" endif if 23 \tstring \"STRENGTH\" endif if 24 \tstring \"   HASTE\" endif if 25 \tstring \"   REGEN\" endif if 26 \tstring \" VAMPIRE\" endif ";
 
 static const char *const lightstyles[] = {
     // 0 normal
@@ -1031,7 +1036,7 @@ void SP_worldspawn(edict_t *ent)
     if (server_log) {
         char    date[64];
 
-        ngLog_getDateInfo(date, 0);
+        OSP_Stats_DateString(date, sizeof(date));
         OSP_logAdminLog("Map: %s (%s)", level.mapname, date);
     }
 
@@ -1047,28 +1052,22 @@ void SP_worldspawn(edict_t *ent)
     frag_offset = 0;
 
     if (m_mode > 1) {
-        sprintf(buf, "%15s", teams[0].greenname);
+        Q_snprintf(buf, sizeof(buf), "%15s", teams[0].greenname);
         gi.configstring(0x625, buf);
-        sprintf(buf, "%15s", teams[1].greenname);
+        Q_snprintf(buf, sizeof(buf), "%15s", teams[1].greenname);
         gi.configstring(0x627, buf);
         OSP_teamReset();
     }
 
-    sprintf(buf, "%s", "OSP Tourney DM v(2.75)");
+    Q_strlcpy(buf, "OSP Tourney DM v(2.75)", sizeof(buf));
     for (i = 0; i < strlen(buf) ; i++)
         buf[i] |= 128;
     gi.configstring(0x629, buf);
 
-    sprintf(buf, "%s", match_endinfo->string);
+    Q_strlcpy(buf, match_endinfo->string, 64);
     for (i = 0; i < strlen(buf) ; i++)
         buf[i] |= 128;
-    buf[63] = 0;
     gi.configstring(0x62a, buf);
-
-    sprintf(buf, "Stats at: http://Quake2.ngWorldStats.com");
-    for (i = 0; i < strlen(buf) ; i++)
-        buf[i] |= 128;
-    gi.configstring(0x62b, buf);
 
     if (!match_endmusic || !match_endmusic->string[0] ||
         !strcmp(match_endmusic->string, "default")) {

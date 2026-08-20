@@ -132,7 +132,7 @@ bool Pickup_Weapon(edict_t *ent, edict_t *other)
     }
 
     other->client->resp.osp_r23c = 0;
-    q2log_pickupItem(ent->item->pickup_name, 0, other);
+    OSP_Stats_ItemPickup(ent->item->pickup_name, 0, other);
 
     return true;
 }

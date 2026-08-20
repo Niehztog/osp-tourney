@@ -7,17 +7,34 @@ current master.
 
 That brings in the modern game API, frame-number timers, the rewritten
 savegame system, protocol extensions, and twenty years of accumulated crash,
-overflow and out-of-bounds fixes. tourney's own code comes through intact: all
-267 cvars, all 138 client commands, all 108 spawn classnames, the arena and
-team system, the runes, the bot glue, the ngWorldStats logging and the menu
-engine.
+overflow and out-of-bounds fixes. tourney's own code comes through intact: the
+cvars, the client commands, all 108 spawn classnames, the arena and team
+system, the runes, the bot glue and the menu engine.
 
-Two fixes are the port's own rather than Q2PRO's: `pers.spectator` stays an
-`int` because tourney also counts speed-cheat strikes in it, and the two buffer
-overruns the reconstruction reproduces on purpose are fixed here.
+Two things are the port's own rather than Q2PRO's.
+
+**The NetGames USA logging is gone.** ngWorldStats and ngStats have been
+offline for over twenty years, and what the subsystem still did on every map
+change was scramble a log nothing can read, launch `ngWorldStats` and
+`ngStatsQ2T` through `system()`, and ask every connecting client to hand over
+its ngWorldStats account password in cleartext. The events it recorded were
+worth keeping, so they are written locally instead — one JSON object per line,
+appended to `osptourney.jsonl` in the game directory, controlled by `statsfile`
+and `statsname`. The Standard Log (`sl_log_method`) is unaffected and now has a
+file writer of its own, so the two can run at once.
+
+**tourney's own bugs are fixed.** The reconstruction reproduces them on purpose;
+a port should not ship them. That covers every client-reachable buffer overflow
+in the mod — including one that granted referee status to anyone connecting
+from a long enough address — a dozen crashes and out-of-bounds accesses, a
+hidden auto-ban that fired on the client's userinfo key order rather than on
+anything the player did, and two kick paths that deliberately fed the departing
+client a corrupt protocol message. The Makefile builds with `_FORTIFY_SOURCE`
+and the stack protector on as a result, rather than off.
 
 * [doc/q2pro-port.md](doc/q2pro-port.md) — how the replay was done, which
-  passes were re-run rather than diffed, every deviation, and what was checked.
+  passes were re-run rather than diffed, every deviation, what was removed and
+  why, every bug fixed, and what was checked.
 
 Build it the same way as the reconstruction: `make`. Output is `game<cpu>.so`,
 which is what Q2PRO looks for.
@@ -84,8 +101,9 @@ engine, such as Yamagi Quake II.
 Reconstructed on top of id Software's Quake II 3.20 game SDK, id's Quake II
 CTF 1.02 SDK (the grapple hook and menu system), Mr. Elusive's Gladiator
 Bot Q2 game SDK (the bot integration layer), and the RSA Data Security MD5
-reference implementation (`md5c.c`, used for log verification). Each of
-those components carries its own original license terms.
+reference implementation (`md5c.c`, used for log verification; present on
+`main`, removed on `q2pro-enhancements` with the logging that called it).
+Each of those components carries its own original license terms.
 
 ## Disclaimer
 

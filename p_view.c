@@ -1045,7 +1045,7 @@ void ClientEndServerFrame(edict_t *ent)
     if (current_client->resp.osp_r200) {
         if (current_client->quad_framenum &&
             current_client->quad_framenum < level.framenum) {
-            q2log_expireItem("Quad", ent, ent->client->resp.osp_r200);
+            OSP_Stats_ItemExpire("Quad", ent, ent->client->resp.osp_r200);
             if (!current_client->invincible_framenum)
                 ent->client->resp.osp_r200 = 0;
             current_client->quad_framenum = 0;
@@ -1054,7 +1054,7 @@ void ClientEndServerFrame(edict_t *ent)
         if (current_client->resp.osp_r200 &&
             current_client->invincible_framenum &&
             current_client->invincible_framenum < level.framenum) {
-            q2log_expireItem("Invulnerability", ent,
+            OSP_Stats_ItemExpire("Invulnerability", ent,
                              ent->client->resp.osp_r200);
             if (!current_client->quad_framenum)
                 ent->client->resp.osp_r200 = 0;

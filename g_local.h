@@ -31,10 +31,6 @@
 // declares a local spelled `errno`, which needs glibc's macro out of scope.
 #include <stdio.h>
 #include <time.h>
-#include <sys/timeb.h>
-#include <netdb.h>
-#include "global.h"
-#include "md5.h"
 #include "botlib.h"
 #include "bl_debug.h"
 
@@ -98,7 +94,6 @@
 
 // Two popup-menu layout slots.  <invented names>.
 #define STAT_OSP_LAYOUT1        27
-#define STAT_OSP_LAYOUT2        28
 
 // The values of resp.entered.
 #define ENTERED_ENTERED         1
@@ -495,8 +490,6 @@ bool OSP_Pickup_Rune(edict_t *ent, edict_t *other);
 void     OSP_Drop_Rune(edict_t *ent, const gitem_t *item);
 
 // The mod's own subsystems.
-void     q2log_useItem(char *name, edict_t *ent);
-void     q2log_pickupItem(char *name, int arg, edict_t *ent);
 bool OSP_runesHasHaste(edict_t *ent);
 void     OSP_respawnRune(edict_t *ent);
 // g_utils.c compares item->use against these two, so they stay external
@@ -512,7 +505,7 @@ void     OSP_seedPlayer(gclient_t *client);
 bool OSP_disableItems(edict_t *ent);
 // The five `sv <name>` handlers ServerCommand dispatches to.
 void     OSP_allready_svcmd(void);
-void     OSP_allnotready_svcmd(edict_t *ent);
+void     OSP_allnotready_svcmd(bool announce);
 void     OSP_rmpause_cmd(void);
 void     OSP_rstopmatch_cmd(edict_t *ent);
 void     OSP_playerlist_svcmd(void);
@@ -574,7 +567,7 @@ bool OSP_checkMaxRunes(void);
 // The cached `runes_enable` bitmask; see the RUNE_* bits above.
 extern  int     rune_stat;
 
-// The per-player accuracy/damage table behind the ngLog accuracy report,
+// The per-player accuracy/damage table behind the accuracy report,
 // indexed by client->resp.clientid.  Member names <invented>.  Every update
 // site is gated by `sync_stat > 2`.
 #define ACC_BLASTER         0
@@ -601,102 +594,20 @@ typedef struct {
 } p_acc_t;
 
 // ---------------------------------------------------------------------------
-// The mod's logging stack. Three layers, each its own TU:
-//   nglog.c   -- the ngLog/ngStats file writer (`ngLog_*`, `__nglog_*`)
-//   q2log.c   -- the game-event layer that formats lines and hands them down
-//   stdlog.c  -- the "Standard Log" 1.2 format, a second consumer of nglog
+// The mod's logging. Two independent local logs, each its own TU:
+//   osp_stats.c -- the JSON-lines game-event / statistics log (`OSP_Stats_*`)
+//   stdlog.c    -- the "Standard Log" 1.2 format, with its writer in
+//                  sl_write.c
+// v2.75's NetGames USA stack (nglog.c, ngmark.c, q2log.c and the RFC 1321 MD5
+// reference it used to sign ngWorldStats logs) is gone; osp_stats.h says why.
 // ---------------------------------------------------------------------------
-extern  int     ngloglog_status;
-extern  int     sl_ngloglog_status;
+extern  int     sl_status;   // 0 = off, 1 = open, 2 = already open
 extern  cvar_t  *sl_log_logbots;
 extern  cvar_t  *sl_log_style;
 extern  cvar_t  *sl_filename;
 extern  cvar_t  *sl_log_flush;
 extern  cvar_t  *sl_log_method;
-extern  cvar_t  *nglog_logstyle;
-extern  cvar_t  *nglog_logstyle_working;
-extern  cvar_t  *nglog_logname;
-extern  cvar_t  *nglog_flush;
-extern  cvar_t  *nglog_buffer;
-extern  cvar_t  *nglog_logchat;
-extern  cvar_t  *nglog_logmiscpickup;
-extern  cvar_t  *nglog_worldstats;
-extern  cvar_t  *nglog_ngstats_browser;
-extern  cvar_t  *nglog_ngstats_exec;
-extern  cvar_t  *nglog_ngstats_cfg;
-extern  cvar_t  *nglog_ngstats_logdir;
-extern  cvar_t  *nglog_ngstats_vidrestart;
-extern  cvar_t  *ngWorldStats_Status;
-extern  int     __nglog_num_errs;
-extern  char    __nglog_error_msg[8][4096];
-extern  int     __nglog_logstyle;
-extern  int     __nglog_worldlog;
-extern  int     __nglog_flush;
-extern  int     __nglog_buffer;
-extern  int     __nglog_ngstats_exec;
-extern  char    __nglog_logpath[1024];
-extern  char    __nglog_logname[1024];
-extern  char    __nglog_log_prefix[1024];
-extern  char    __nglog_worldlog_path[1024];
-extern  char    __nglog_worldlog_name[1024];
-extern  char    __nglog_worldlog_prefix[1024];
-extern  char    __nglog_worldlog_tag[64];
-extern  char    __nglog_rel_path[1024];
-extern  char    __nglog_ngstats_logdir[1024];
-extern  char    __nglog_ngstats_cfg[1024];
-extern  FILE    *log_file;
-extern  FILE    *worldlog_file;
-extern  int     buffer_lines;
-extern  int     wbuffer_lines;
-extern  MD5_CTX context;
 
-void    ngLog_logFlush(FILE *f);
-void    ngLog_ngStatsCall(int arg);
-int     ngLog_fileExists(char *name);
-void    ngLog_errorMsgClear(void);
-void    ngLog_rotateFile(void);
-char    *ngLog_hostAddr(void);
-void    ngLog_inputLine(char *line);
-char    *ngLog_playerIdentifier(char *a, char *b);
-void    ngLog_transMark(char *out, int *count);
-
-int     ngLog_init(void);
-void    ngLog_logWrite(char *line, int which);
-void    ngLog_logClose(int which, int reason);
-void    ngLog_getDateInfo(char *out, int fmt);
-void    ngLog_giveMark(char *out);
-void    ngLog_initMark(void);
-
-void    q2log_logWrite(char *line);
-void    q2log_showErrors(void);
-int     q2log_init(void);
-void    q2log_gameInit(int restart);
-void    q2log_listDissedItems(char *line);
-void    q2log_logStart(void);
-void    q2log_logStartHeader(void);
-void    q2log_customStart(void);
-void    q2log_logTime(void);
-void    q2log_gameStart(void);
-void    q2log_gameEnd(char *reason, int closereason);
-void    q2log_playerConnect(edict_t *ent);
-void    q2log_playerReconnect(edict_t *ent);
-void    q2log_playerEntered(edict_t *ent);
-void    q2log_playerDisconnect(edict_t *ent);
-void    q2log_playerRename(edict_t *ent, char *oldname);
-void    q2log_playerRespawn(edict_t *ent);
-void    q2log_playerMode(edict_t *ent, char *mode);
-void    q2log_playerChat(char *text);
-void    q2log_playerZBOT(edict_t *ent, char *extra);
-void    q2log_teamName(char *name);
-void    q2log_teamRename(char *oldname, char *newname);
-void    q2log_teamJoin(edict_t *ent);
-void    q2log_teamLeave(edict_t *ent);
-void    q2log_voteInfo(char *what, char *a, char *b);
-void    q2log_expireItem(char *name, edict_t *ent, int arg);
-void    q2log_dropItem(char *name, int arg, edict_t *ent);
-void    q2log_logAccuracy(void);
-void    q2log_logAccuracyStats(edict_t *ent);
-void    q2log_clientid_cmd(edict_t *ent);
 int     sl_Logging(game_import_t *import, char *patch);
 int     sl_OpenLogFile(game_import_t *import);
 void    sl_GameStart(game_import_t *import, level_locals_t level);
@@ -722,10 +633,9 @@ void    sl_LogPlayerConnect(game_import_t *import, char *name, int unused,
 void    sl_LogPlayerLeft(game_import_t *import, char *name, float time);
 void    sl_LogPlayerRename(game_import_t *import, char *oldname, char *newname,
                            float time);
-void    sl_LogScore(game_import_t *import, char *killer, char *victim,
+void    sl_LogScore(game_import_t *import, char *player, char *other,
                     char *event, char *weapon, int score, float time, int ping);
-void    q2log_stdlog_logWrite(char *line);
-void    q2log_stdlog_showErrors(void);
+void    sl_logWrite(char *line);
 
 // The two teams.  Each carries its name twice: plain, and with 0x80 added to
 // every byte, which is how Quake II's charset renders it green.
@@ -752,6 +662,8 @@ typedef struct {
 } team_t;
 
 extern  team_t  teams[2];
+
+const char *OSP_teamNameFor(int team);
 
 extern  int     sync_stat;
 extern  int     active_clients;
@@ -869,7 +781,7 @@ extern  cvar_t  *team_hurtself;
 extern  cvar_t  *fast_minpbound;
 extern  cvar_t  *fast_maxpbound;
 extern  cvar_t  *fast_respawn;
-extern  cvar_t  *nglog_logallpickups;
+extern  cvar_t  *stats_logallpickups;
 extern  cvar_t  *hook_initdamage;
 extern  cvar_t  *numgibs;
 
@@ -1297,7 +1209,6 @@ void    OSP_returnMainDM_menu(edict_t *ent, pmenu_t *p);
 void    OSP_returnMainAdmin_menu(edict_t *ent, pmenu_t *p);
 void    OSP_toggleID_menu(edict_t *ent, pmenu_t *p);
 void    OSP_changeHUD(edict_t *ent, pmenu_t *p);
-void    OSP_ngStatsView(edict_t *ent, pmenu_t *p);
 void    OSP_changeObserve(edict_t *ent, pmenu_t *p);
 void    OSP_changeChase(edict_t *ent, pmenu_t *p);
 void    OSP_botMenu(edict_t *ent, pmenu_t *p);
@@ -1332,7 +1243,10 @@ void    OSP_updateProposalMenu(edict_t *ent);
 void    OSP_updateProposalMenu2(edict_t *ent);
 void    OSP_acceptVote_menu(edict_t *ent, pmenu_t *p);
 void    OSP_declineVote_menu(edict_t *ent, pmenu_t *p);
-void    OSP_menuVotePercent(edict_t *ent, char *out);
+void    OSP_menuVotePercent(char *pct, size_t pctsize, char *out,
+                            size_t outsize);
+void    OSP_voteSummary(char *out, size_t size);
+bool    FloodProtect(edict_t *ent);
 void    OSP_id_cmd(edict_t *ent);
 void    OSP_hud_cmd(edict_t *ent);
 void    OSP_yes_cmd(edict_t *ent);
@@ -1385,6 +1299,7 @@ int      read_player_entry(FILE *f, char *name, char *pass, char *addr);
 void     OSP_loadMaps(void);
 void     OSP_loadPlayers(char *filename);
 int      OSP_playerAllow(char *name, char *userinfo);
+bool     OSP_addrMatch(const char *addr, const char *entry);
 int      OSP_addBan(char *name, char *addr);
 bool OSP_removeBan(char *name, char *addr);
 void     OSP_listbans(edict_t *ent);
@@ -1596,10 +1511,15 @@ extern  int     next_map;
 
 // osp_hiscore.c (<INVENTED FILENAME>). One entry of the per-map high
 // score table.  Type and member names <INVENTED>.
+// The three fields are drawn in fixed-width scoreboard columns, so they are
+// short.  OSP_HS_FIELD is what the file parser and the date formatter write
+// through, and it has to match.
+#define OSP_HS_FIELD    16
+
 typedef struct {
-    char    name[16];
-    char    score[16];
-    char    date[16];
+    char    name[OSP_HS_FIELD];
+    char    score[OSP_HS_FIELD];
+    char    date[OSP_HS_FIELD];
     int     isnew;          // 1 = set during this map, drawn with a '*'
 } hs_player_t;
 
@@ -1735,6 +1655,8 @@ void     OSP_1v1QueueCheck(void);
 void     OSP_initTeamFrags(edict_t *ent);
 void     OSP_playerTeamFrags(edict_t *ent);
 void     OSP_updateTeamFrags(void);
+void     CameraThink(edict_t *ent);
+void     OSP_defaultteam_cmd(edict_t *ent);
 void     OSP_defaultjoincode_cmd(edict_t *ent);
 void     OSP_joincode_cmd(edict_t *ent);
 void     OSP_teamname_cmd(edict_t *ent);
@@ -1790,7 +1712,6 @@ typedef struct {
     // a field gets a real name only when something actually names it.
     int       osp_r000;
     int       clientid;
-    int       osp_r008;
     int       osp_r00c;
     int       osp_r010;
     int       osp_r014;
@@ -1818,8 +1739,6 @@ typedef struct {
     int       osp_r0a8;
     int       osp_r0ac;
     int       osp_r0b0;
-    // `char`: it holds the ngWorldStats password string.
-    char      osp_r0b4[32];
     int       osp_r0d4;
     int       osp_r0d8;
     int       osp_r0dc;
@@ -1828,7 +1747,7 @@ typedef struct {
     int       osp_r0e8;
     int       osp_r0ec;
     int       osp_r0f0;
-    byte      osp_r0f4[256];
+    char      osp_r0f4[256];   // the skin name in force for this client
     // Invented names: ClientThink's 16-sample ping accumulator.
     int       osp_r1f4;     // sample count
     unsigned  osp_r1f8;     // sample sum
@@ -2147,8 +2066,12 @@ struct edict_s {
     moveinfo_t      moveinfo;
     monsterinfo_t   monsterinfo;
 
-    char            osp_e37c[32];   // a string; %s in the q2log_* lines
+    char            osp_e37c[32];   // the client's dotted-quad, as a string
     int             osp_e39c;
+    // ClientUserinfoChanged's client_infochange lockout.  v2.75 kept it in
+    // the Gladiator SDK's `char *charname` and cast the frame number to and
+    // from a pointer, which does not round-trip on a 64-bit build.
+    int             osp_infochange_framenum;
     char            osp_e3a0[16];   // default team name
     char            osp_e3b0[80];   // default team skin
     int             osp_e400;
@@ -2164,3 +2087,5 @@ struct edict_s {
 
     visiblebbox_t   box;
 };
+
+#include "osp_stats.h"

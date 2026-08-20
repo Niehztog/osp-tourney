@@ -31,17 +31,15 @@ void OSP_setMOTD(void)
     cvar_t  *motdfile = gi.cvar("motd_file", "motd.txt", 0);
     cvar_t  *center = gi.cvar("motd_center", "0", 0);
     int     i;
-    char    c;
+    int     c = -1;
 
     if (gamedir && basedir) {
-        char    path[64] = {0};
+        char    path[MAX_OSPATH];
         char    *p = path;
 
-        sprintf(path, "%s/%s/", basedir->string, gamedir->string);
-        if (motdfile)
-            strcat(path, motdfile->string);
-        else
-            strcat(path, "motd.txt");
+        Q_snprintf(path, sizeof(path), "%s/%s/%s", basedir->string,
+                   gamedir->string,
+                   motdfile ? motdfile->string : "motd.txt");
 
         f = fopen(p, "r");
 
@@ -96,35 +94,31 @@ void OSP_setMOTD(void)
 
     if (!(int)center->value) {
         y = (9 - lines) * 8 - 136;
-        strcpy(match_motd, "xl 4 ");
-        len = strlen(match_motd);
+        Q_strlcpy(match_motd, "xl 4 ", sizeof(match_motd));
 
         for (i = 0; i < lines; i++, y += 8) {
-            Q_snprintf(buf, 1024, "yb %d string \"%s\"", y, motdpage[i]);
-            strcpy(match_motd + len, buf);
-            len += strlen(buf);
+            Q_snprintf(buf, sizeof(buf), "yb %d string \"%s\"", y, motdpage[i]);
+            Q_strlcat(match_motd, buf, sizeof(match_motd));
         }
     } else {
         y = 64;
-        strcpy(match_motd, "xv 32 ");
-        len = strlen(match_motd);
+        Q_strlcpy(match_motd, "xv 32 ", sizeof(match_motd));
 
         for (i = 0; i < lines; i++, y += 8) {
-            Q_snprintf(buf, 1024, "yv %d string \"%s\"", y, motdpage[i]);
-            strcpy(match_motd + len, buf);
-            len += strlen(buf);
+            Q_snprintf(buf, sizeof(buf), "yv %d string \"%s\"", y, motdpage[i]);
+            Q_strlcat(match_motd, buf, sizeof(match_motd));
         }
 
-        strcat(match_motd, "xl 4 ");
+        Q_strlcat(match_motd, "xl 4 ", sizeof(match_motd));
     }
 
-    strcat(match_motd, "yb -56 string \"");
-    strcat(match_motd, "OSP Tourney DM v(2.75)");
-    strcat(match_motd, "\" yb -48 string2 \"Orange Smoothie Productions\"");
-    strcat(match_motd, "yb -40 string2 \"http://www.OrangeSmoothie.org\"");
-    strcat(match_motd, "yb -32 string2 \"");
-    strcat(match_motd, "rhea@OrangeSmoothie.org");
-    strcat(match_motd, "\"");
+    Q_strlcat(match_motd,
+              "yb -56 string \"OSP Tourney DM v(2.75)\""
+              " yb -48 string2 \"Orange Smoothie Productions\""
+              "yb -40 string2 \"http://www.OrangeSmoothie.org\""
+              "yb -32 string2 \"rhea@OrangeSmoothie.org\"",
+              sizeof(match_motd));
+    (void)len;
 }
 
 // gamex86.dll: 1002DDAE..1002DDCC
@@ -146,292 +140,294 @@ void OSP_showMOTD(edict_t *ent)
 // gamei386.so: 00051BAC..00052FEC
 void OSP_setShowParams(void)
 {
-    char    buf[80];
-    char    tmp[80];
+    // Both grow with cvars and with the map's descriptive name, so they are
+    // sized for the worst case rather than for the common one.
+    char    buf[512];
+    char    tmp[256];
     cvar_t  *host;
     int     x;
 
     host = gi.cvar("hostname", "noname", 0);
 
     if (m_mode == 1) {
-        sprintf(buf, "xv 2 yv 0 string \"Match: %s\"", host->string);
-        strcpy(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "xv 2 yv 0 string \"Match: %s\"", host->string);
+        Q_strlcpy(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 8 string2 \"------------------------------\"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 8 string2 \"------------------------------\"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 16 string \"Number of connected players: %i\"", active_clients);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 16 string \"Number of connected players: %i\"", active_clients);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 24 string \"Number of qualifying spots : %d\"", (int)qualifier_numspots->value);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 24 string \"Number of qualifying spots : %d\"", (int)qualifier_numspots->value);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "%s (%s)", level.level_name, level.mapname);
+        Q_snprintf(tmp, sizeof(tmp), "%s (%s)", level.level_name, level.mapname);
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 40 string2 \"Map: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 40 string2 \"Map: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "%d", (int)dmflags->value);
+        Q_snprintf(tmp, sizeof(tmp), "%d", (int)dmflags->value);
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 48 string2 \"DM Flags: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 48 string2 \"DM Flags: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)fraglimit->value)
-            sprintf(tmp, "%d", (int)fraglimit->value);
+            Q_snprintf(tmp, sizeof(tmp), "%d", (int)fraglimit->value);
         else
-            sprintf(tmp, "NONE");
+            Q_snprintf(tmp, sizeof(tmp), "NONE");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 56 string2 \"Fraglimit: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 56 string2 \"Fraglimit: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)timelimit->value) {
             if ((int)timelimit->value == 1)
-                sprintf(tmp, "1 minute");
+                Q_snprintf(tmp, sizeof(tmp), "1 minute");
             else
-                sprintf(tmp, "%d minutes", (int)timelimit->value);
+                Q_snprintf(tmp, sizeof(tmp), "%d minutes", (int)timelimit->value);
         } else
-            sprintf(tmp, "NONE");
+            Q_snprintf(tmp, sizeof(tmp), "NONE");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 64 string2 \"Timelimit: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 64 string2 \"Timelimit: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)hook_enable->value)
-            sprintf(tmp, "ENABLED");
+            Q_snprintf(tmp, sizeof(tmp), "ENABLED");
         else
-            sprintf(tmp, "DISABLED");
+            Q_snprintf(tmp, sizeof(tmp), "DISABLED");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 72 string2 \"The Hook : %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 72 string2 \"The Hook : %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 104 string \"Good Luck!!\"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 104 string \"Good Luck!!\"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 80 string2 \"Removed Items:\"xv 10 yv 88 string \"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 80 string2 \"Removed Items:\"xv 10 yv 88 string \"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         buf[0] = 0;
         OSP_listDisabledItems(buf);
-        strcat(buf, "\"");
-        strcat(match_info, buf);
+        Q_strlcat(buf, "\"", sizeof(buf));
+        Q_strlcat(match_info, buf, sizeof(match_info));
     } else if (m_mode == 2) {
-        sprintf(buf, "xv 2 yv 0 string \"Match: %s\"", host->string);
-        strcpy(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "xv 2 yv 0 string \"Match: %s\"", host->string);
+        Q_strlcpy(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 8 string2 \"------------------------------\"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 8 string2 \"------------------------------\"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "# of players:");
+        Q_snprintf(tmp, sizeof(tmp), "# of players:");
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 16 string \"%s %s %i\"", teams[0].netname, tmp,
+        Q_snprintf(buf, sizeof(buf), "yv 16 string \"%s %s %i\"", teams[0].netname, tmp,
                 OSP_teamCount(0));
-        strcat(match_info, buf);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 24 string \"%s %s %i\"", teams[1].netname, tmp,
+        Q_snprintf(buf, sizeof(buf), "yv 24 string \"%s %s %i\"", teams[1].netname, tmp,
                 OSP_teamCount(1));
-        strcat(match_info, buf);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "skin:");
+        Q_snprintf(tmp, sizeof(tmp), "skin:");
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 40 string \"%s %s %s\"", teams[0].netname, tmp, teams[0].skin);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 40 string \"%s %s %s\"", teams[0].netname, tmp, teams[0].skin);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 48 string \"%s %s %s\"", teams[1].netname, tmp, teams[1].skin);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 48 string \"%s %s %s\"", teams[1].netname, tmp, teams[1].skin);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "%s (%s)", level.level_name, level.mapname);
+        Q_snprintf(tmp, sizeof(tmp), "%s (%s)", level.level_name, level.mapname);
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 64 string2 \"Map: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 64 string2 \"Map: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "%d", (int)dmflags->value);
+        Q_snprintf(tmp, sizeof(tmp), "%d", (int)dmflags->value);
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 72 string2 \"DM Flags : %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 72 string2 \"DM Flags : %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)fraglimit->value)
-            sprintf(tmp, "%d", (int)fraglimit->value);
+            Q_snprintf(tmp, sizeof(tmp), "%d", (int)fraglimit->value);
         else
-            sprintf(tmp, "NONE");
+            Q_snprintf(tmp, sizeof(tmp), "NONE");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 80 string2 \"Fraglimit: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 80 string2 \"Fraglimit: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)timelimit->value) {
             if ((int)timelimit->value == 1)
-                sprintf(tmp, "1 minute");
+                Q_snprintf(tmp, sizeof(tmp), "1 minute");
             else
-                sprintf(tmp, "%d minutes", (int)timelimit->value);
+                Q_snprintf(tmp, sizeof(tmp), "%d minutes", (int)timelimit->value);
         } else
-            sprintf(tmp, "NONE");
+            Q_snprintf(tmp, sizeof(tmp), "NONE");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 88 string2 \"Timelimit: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 88 string2 \"Timelimit: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)hook_enable->value)
-            sprintf(tmp, "ENABLED");
+            Q_snprintf(tmp, sizeof(tmp), "ENABLED");
         else
-            sprintf(tmp, "DISABLED");
+            Q_snprintf(tmp, sizeof(tmp), "DISABLED");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 96 string2 \"The Hook : %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 96 string2 \"The Hook : %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if (!(int)team_overtime_mode->value)
-            sprintf(tmp, "NONE (match can end in a tie)");
+            Q_snprintf(tmp, sizeof(tmp), "NONE (match can end in a tie)");
         else if ((int)team_overtime_mode->value == 1)
-            sprintf(tmp, "Sudden Death (first death decides)");
+            Q_snprintf(tmp, sizeof(tmp), "Sudden Death (first death decides)");
         else if ((int)team_overtime_time->value == 1)
-            sprintf(tmp, "Timed round (1 minute)");
+            Q_snprintf(tmp, sizeof(tmp), "Timed round (1 minute)");
         else
-            sprintf(tmp, "Timed round (%d minutes)",
+            Q_snprintf(tmp, sizeof(tmp), "Timed round (%d minutes)",
                     (int)team_overtime_time->value);
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 104 string2 \"Overtime : %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 104 string2 \"Overtime : %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if (teams[0].osp_m11c)
-            sprintf(tmp, "YES");
+            Q_snprintf(tmp, sizeof(tmp), "YES");
         else
-            sprintf(tmp, "NO");
+            Q_snprintf(tmp, sizeof(tmp), "NO");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 112 string2 \"Hurt Team: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 112 string2 \"Hurt Team: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if (teams[0].osp_m120)
-            sprintf(tmp, "YES");
+            Q_snprintf(tmp, sizeof(tmp), "YES");
         else
-            sprintf(tmp, "NO");
+            Q_snprintf(tmp, sizeof(tmp), "NO");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 120 string2 \"Hurt Self: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 120 string2 \"Hurt Self: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 152 string \"Good Luck!!\"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 152 string \"Good Luck!!\"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 128 string2 \"Removed Items:\"xv 10 yv 136 string \"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 128 string2 \"Removed Items:\"xv 10 yv 136 string \"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         buf[0] = 0;
         OSP_listDisabledItems(buf);
-        strcat(buf, "\"");
-        strcat(match_info, buf);
+        Q_strlcat(buf, "\"", sizeof(buf));
+        Q_strlcat(match_info, buf, sizeof(match_info));
     } else if (m_mode == 3) {
-        sprintf(buf, "xv 2 yv 0 string \"Match: %s\"", host->string);
-        strcpy(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "xv 2 yv 0 string \"Match: %s\"", host->string);
+        Q_strlcpy(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 8 string2 \"------------------------------\"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 8 string2 \"------------------------------\"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "vs.");
+        Q_snprintf(tmp, sizeof(tmp), "vs.");
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 16 string \"*** %s %s %s ***\"", teams[0].netname, tmp,
+        Q_snprintf(buf, sizeof(buf), "yv 16 string \"*** %s %s %s ***\"", teams[0].netname, tmp,
                 teams[1].netname);
-        strcat(match_info, buf);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "%s (%s)", level.level_name, level.mapname);
+        Q_snprintf(tmp, sizeof(tmp), "%s (%s)", level.level_name, level.mapname);
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 32 string2 \"Map: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 32 string2 \"Map: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(tmp, "%d", (int)dmflags->value);
+        Q_snprintf(tmp, sizeof(tmp), "%d", (int)dmflags->value);
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 40 string2 \"DM Flags : %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 40 string2 \"DM Flags : %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)fraglimit->value)
-            sprintf(tmp, "%d", (int)fraglimit->value);
+            Q_snprintf(tmp, sizeof(tmp), "%d", (int)fraglimit->value);
         else
-            sprintf(tmp, "NONE");
+            Q_snprintf(tmp, sizeof(tmp), "NONE");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 48 string2 \"Fraglimit: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 48 string2 \"Fraglimit: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)timelimit->value) {
             if ((int)timelimit->value == 1)
-                sprintf(tmp, "1 minute");
+                Q_snprintf(tmp, sizeof(tmp), "1 minute");
             else
-                sprintf(tmp, "%d minutes", (int)timelimit->value);
+                Q_snprintf(tmp, sizeof(tmp), "%d minutes", (int)timelimit->value);
         } else
-            sprintf(tmp, "NONE");
+            Q_snprintf(tmp, sizeof(tmp), "NONE");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 56 string2 \"Timelimit: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 56 string2 \"Timelimit: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if ((int)hook_enable->value)
-            sprintf(tmp, "ENABLED");
+            Q_snprintf(tmp, sizeof(tmp), "ENABLED");
         else
-            sprintf(tmp, "DISABLED");
+            Q_snprintf(tmp, sizeof(tmp), "DISABLED");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 64 string2 \"The Hook : %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 64 string2 \"The Hook : %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if (!(int)team_overtime_mode->value)
-            sprintf(tmp, "NONE (match can end in a tie)");
+            Q_snprintf(tmp, sizeof(tmp), "NONE (match can end in a tie)");
         else if ((int)team_overtime_mode->value == 1)
-            sprintf(tmp, "Sudden Death (first death decides)");
+            Q_snprintf(tmp, sizeof(tmp), "Sudden Death (first death decides)");
         else if ((int)team_overtime_time->value == 1)
-            sprintf(tmp, "Timed round (1 minute)");
+            Q_snprintf(tmp, sizeof(tmp), "Timed round (1 minute)");
         else
-            sprintf(tmp, "Timed round (%d minutes)",
+            Q_snprintf(tmp, sizeof(tmp), "Timed round (%d minutes)",
                     (int)team_overtime_time->value);
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 72 string2 \"Overtime : %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 72 string2 \"Overtime : %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         if (teams[0].osp_m120)
-            sprintf(tmp, "YES");
+            Q_snprintf(tmp, sizeof(tmp), "YES");
         else
-            sprintf(tmp, "NO");
+            Q_snprintf(tmp, sizeof(tmp), "NO");
 
         for (x = 0; x < strlen(tmp); x++)
             tmp[x] += 128;
-        sprintf(buf, "yv 80 string2 \"Hurt Self: %s\"", tmp);
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 80 string2 \"Hurt Self: %s\"", tmp);
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 112 string \"Good Luck!!\"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 112 string \"Good Luck!!\"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
-        sprintf(buf, "yv 88 string2 \"Removed Items:\"xv 10 yv 96 string \"");
-        strcat(match_info, buf);
+        Q_snprintf(buf, sizeof(buf), "yv 88 string2 \"Removed Items:\"xv 10 yv 96 string \"");
+        Q_strlcat(match_info, buf, sizeof(match_info));
 
         buf[0] = 0;
         OSP_listDisabledItems(buf);
-        strcat(buf, "\"");
-        strcat(match_info, buf);
+        Q_strlcat(buf, "\"", sizeof(buf));
+        Q_strlcat(match_info, buf, sizeof(match_info));
     }
 }
 
@@ -521,7 +517,7 @@ void OSP_showScores(int *list, int count, edict_t *ent)
             eff = cl->resp.score * 100 /
                   (cl->resp.score + cl->resp.osp_r014);
 
-        // Row zero doubles as the ngWorldStats leader/champion banner.
+        // Row zero doubles as the leader/champion banner.
         if (!i) {
             if (cl->resp.entered == ENTERED_ENTERED) {
                 if (level.intermission_framenum == 0)
@@ -543,7 +539,7 @@ void OSP_showScores(int *list, int count, edict_t *ent)
                 }
 
                 nchars = strlen(headbuf);
-                strcpy(buf + outlen, headbuf);
+                memcpy(buf + outlen, headbuf, nchars + 1);
                 outlen += nchars;
             }
 
@@ -557,7 +553,9 @@ void OSP_showScores(int *list, int count, edict_t *ent)
                 Q_snprintf(headbuf, 1024, "xv 8 yv 26 string \"Player          Frags Deaths Time Ping\"xv 8 ");
 
             nchars = strlen(headbuf);
-            strcpy(buf + outlen, headbuf);
+            if (outlen + nchars >= sizeof(buf))
+                break;
+            memcpy(buf + outlen, headbuf, nchars + 1);
             outlen += nchars;
         }
 
@@ -574,31 +572,33 @@ void OSP_showScores(int *list, int count, edict_t *ent)
                 // (a) plain DM: no rank marker, and the selected rline is
                 // pulled out to xv -48 with a leading \r / 0x8d.
                 if (cl->resp.entered == ENTERED_ENTERED)
-                    sprintf(rline, "%2i %-16s%4i  %3i %3i%%%4i %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "%2i %-16s%4i  %3i %3i%%%4i %3i  %4i",
                             i + 1, cl->pers.netname, cl->resp.score,
                             cl->resp.osp_r014, eff,
                             cl->resp.score * 36000 / nframes, nframes / 600,
                             cl->ping);
                 else if (other->osp_e39c)
-                    sprintf(rline, "   %-16s<<<Referee>>>      %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "   %-16s<<<Referee>>>      %3i  %4i",
                             cl->pers.netname, nframes / 600, cl->ping);
                 else if (cl->resp.entered == 2)
-                    sprintf(rline, "   %-16s(Observing)        %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "   %-16s(Observing)        %3i  %4i",
                             cl->pers.netname, nframes / 600, cl->ping);
                 else if (cl->resp.entered == 16)
-                    sprintf(rline, "   %-16s(Autocam)          %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "   %-16s(Autocam)          %3i  %4i",
                             cl->pers.netname, nframes / 600, cl->ping);
-                else {
-                    sprintf(chase, "(Chasing %s)",
-                            cl->chase_target->client->pers.greenname);
+                else if (cl->chase_target && cl->chase_target->client) {
+                    Q_snprintf(chase, sizeof(chase), "(Chasing %s)",
+                               cl->chase_target->client->pers.greenname);
 
                     if (strlen(cl->chase_target->client->pers.netname) == 15)
-                        sprintf(rline, "   %-16s%-24s%3i", cl->pers.netname,
-                                chase, cl->ping);
+                        Q_snprintf(rline, sizeof(rline), "   %-16s%-24s%3i",
+                                   cl->pers.netname, chase, cl->ping);
                     else
-                        sprintf(rline, "   %-16s%-24s%4i", cl->pers.netname,
-                                chase, cl->ping);
-                }
+                        Q_snprintf(rline, sizeof(rline), "   %-16s%-24s%4i",
+                                   cl->pers.netname, chase, cl->ping);
+                } else
+                    Q_snprintf(rline, sizeof(rline), "   %-16s%-24s%4i",
+                               cl->pers.netname, "(Waiting)", cl->ping);
 
                 if (other != ent) {
                     if (i == ent->client->resp.osp_r2b0) {
@@ -620,31 +620,33 @@ void OSP_showScores(int *list, int count, edict_t *ent)
             } else if (level.intermission_framenum != 0) {
                 // (b) intermission: same columns, rank marker, four spaces.
                 if (cl->resp.entered == ENTERED_ENTERED)
-                    sprintf(rline, "%c%2i %-16s%4i  %3i %3i%%%4i %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "%c%2i %-16s%4i  %3i %3i%%%4i %3i  %4i",
                             mark, i + 1, cl->pers.netname, cl->resp.score,
                             cl->resp.osp_r014, eff,
                             cl->resp.score * 36000 / nframes, nframes / 600,
                             cl->ping);
                 else if (other->osp_e39c)
-                    sprintf(rline, "    %-16s<<<REFEREE>>>      %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "    %-16s<<<REFEREE>>>      %3i  %4i",
                             cl->pers.netname, nframes / 600, cl->ping);
                 else if (cl->resp.entered == 2)
-                    sprintf(rline, "    %-16s(Observing)        %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "    %-16s(Observing)        %3i  %4i",
                             cl->pers.netname, nframes / 600, cl->ping);
                 else if (cl->resp.entered == 16)
-                    sprintf(rline, "    %-16s(Autocam)          %3i  %4i",
+                    Q_snprintf(rline, sizeof(rline), "    %-16s(Autocam)          %3i  %4i",
                             cl->pers.netname, nframes / 600, cl->ping);
-                else {
-                    sprintf(chase, "(Chasing %s)",
-                            cl->chase_target->client->pers.greenname);
+                else if (cl->chase_target && cl->chase_target->client) {
+                    Q_snprintf(chase, sizeof(chase), "(Chasing %s)",
+                               cl->chase_target->client->pers.greenname);
 
                     if (strlen(cl->chase_target->client->pers.netname) == 15)
-                        sprintf(rline, "    %-16s%-24s%3i", cl->pers.netname,
-                                chase, cl->ping);
+                        Q_snprintf(rline, sizeof(rline), "    %-16s%-24s%3i",
+                                   cl->pers.netname, chase, cl->ping);
                     else
-                        sprintf(rline, "    %-16s%-24s%4i", cl->pers.netname,
-                                chase, cl->ping);
-                }
+                        Q_snprintf(rline, sizeof(rline), "    %-16s%-24s%4i",
+                                   cl->pers.netname, chase, cl->ping);
+                } else
+                    Q_snprintf(rline, sizeof(rline), "    %-16s%-24s%4i",
+                               cl->pers.netname, "(Waiting)", cl->ping);
 
                 if (other != ent)
                     Q_snprintf(headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
@@ -653,23 +655,26 @@ void OSP_showScores(int *list, int count, edict_t *ent)
             } else {
                 // (c) match running: frags/deaths/ping only.
                 if (cl->resp.entered == ENTERED_ENTERED)
-                    sprintf(rline, "%c%2i %-16s%4i   %3i   %4i", mark, i + 1,
+                    Q_snprintf(rline, sizeof(rline), "%c%2i %-16s%4i   %3i   %4i", mark, i + 1,
                             cl->pers.netname, cl->resp.score,
                             cl->resp.osp_r014, cl->ping);
                 else if (other->osp_e39c)
-                    sprintf(rline, "    %-16s<<<Referee>>>%4i",
+                    Q_snprintf(rline, sizeof(rline), "    %-16s<<<Referee>>>%4i",
                             cl->pers.netname, cl->ping);
                 else if (cl->resp.entered == 2)
-                    sprintf(rline, "    %-16s(Observing)  %4i",
+                    Q_snprintf(rline, sizeof(rline), "    %-16s(Observing)  %4i",
                             cl->pers.netname, cl->ping);
                 else if (cl->resp.entered == 16)
-                    sprintf(rline, "    %-16s(Autocam)    %4i",
+                    Q_snprintf(rline, sizeof(rline), "    %-16s(Autocam)    %4i",
                             cl->pers.netname, cl->ping);
                 else {
-                    sprintf(chase, "(Chasing #%d)",
-                            cl->chase_target->client->resp.osp_r208);
-                    sprintf(rline, "    %-16s%-13s%4i", cl->pers.netname, chase,
-                            cl->ping);
+                    if (cl->chase_target && cl->chase_target->client)
+                        Q_snprintf(chase, sizeof(chase), "(Chasing #%d)",
+                                   cl->chase_target->client->resp.osp_r208);
+                    else
+                        Q_strlcpy(chase, "(Waiting)", sizeof(chase));
+                    Q_snprintf(rline, sizeof(rline), "    %-16s%-13s%4i",
+                               cl->pers.netname, chase, cl->ping);
                 }
 
                 if (other != ent)
@@ -683,29 +688,29 @@ void OSP_showScores(int *list, int count, edict_t *ent)
             // six separate wrap literals in the PE, no shared tail and no goto.
             if (other->osp_e39c == 1 ||
                 (cl->resp.entered != ENTERED_ENTERED && other->osp_e39c == 2)) {
-                sprintf(rline, "%-16s<<<Referee>>>%3i  %4i", cl->pers.netname,
+                Q_snprintf(rline, sizeof(rline), "%-16s<<<Referee>>>%3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
                 Q_snprintf(headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
             } else if (cl->resp.entered == 2) {
-                sprintf(rline, "%-16s(Observing)  %3i  %4i", cl->pers.netname,
+                Q_snprintf(rline, sizeof(rline), "%-16s(Observing)  %3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
                 Q_snprintf(headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
             } else if (cl->resp.entered == 16) {
-                sprintf(rline, "%-16s(Autocam)    %3i  %4i", cl->pers.netname,
+                Q_snprintf(rline, sizeof(rline), "%-16s(Autocam)    %3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
                 Q_snprintf(headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
-            } else if (cl->chase_target) {
-                sprintf(chase, "(Chasing %s)",
-                        cl->chase_target->client->pers.greenname);
-                sprintf(rline, "%-16s%-18s%4i", cl->pers.netname, chase,
-                        nframes / 600, cl->ping);
+            } else if (cl->chase_target && cl->chase_target->client) {
+                Q_snprintf(chase, sizeof(chase), "(Chasing %s)",
+                           cl->chase_target->client->pers.greenname);
+                Q_snprintf(rline, sizeof(rline), "%-16s%-18s%3i  %4i",
+                           cl->pers.netname, chase, nframes / 600, cl->ping);
                 Q_snprintf(headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
             } else if (cl->resp.osp_r20c) {
-                sprintf(rline, "%-16s*** READY ***%3i  %4i", cl->pers.netname,
+                Q_snprintf(rline, sizeof(rline), "%-16s*** READY ***%3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
                 Q_snprintf(headbuf, 1024, "yv %i string \"%s\"", y, rline);
             } else {
-                sprintf(rline, "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
+                Q_snprintf(rline, sizeof(rline), "%-16s [NOT READY] %3i  %4i", cl->pers.netname,
                         nframes / 600, cl->ping);
                 Q_snprintf(headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
             }
@@ -713,15 +718,12 @@ void OSP_showScores(int *list, int count, edict_t *ent)
 
 appended:
         nchars = strlen(headbuf);
-        if (outlen + nchars > sizeof(buf))
+        if (outlen + nchars >= sizeof(buf))
             break;
 
-        strcpy(buf + outlen, headbuf);
+        memcpy(buf + outlen, headbuf, nchars + 1);
         outlen += nchars;
     }
-
-    if ((int)gi.cvar("nglog_worldstats", "0", 0)->value)
-        ent->client->ps.stats[28] = 0x62b;
 
     if (level.intermission_framenum != 0 && sync_stat != 8)
         ent->client->ps.stats[27] = 0x62a;
@@ -735,7 +737,7 @@ appended:
         ent->client->resp.entered == ENTERED_ENTERED) {
         char        *cur;
 
-        strcpy(old_scores, buf);
+        Q_strlcpy(old_scores, buf, sizeof(old_scores));
 
         if ((cur = strchr(old_scores, '\r')))
             * cur = ' ';
@@ -786,17 +788,17 @@ void OSP_showPlayer(edict_t *ent)
     deaths = other->client->resp.osp_r014;
     suicides = other->client->resp.osp_r2c0;
 
-    sprintf(name, "Player: %s (%s)", other->client->pers.greenname, other->client->resp.osp_r0f4);
-    sprintf(buf, "xv 0 yv 0 string2 \"%s\"", name);
+    Q_snprintf(name, sizeof(name), "Player: %s (%s)", other->client->pers.greenname, other->client->resp.osp_r0f4);
+    Q_snprintf(buf, sizeof(buf), "xv 0 yv 0 string2 \"%s\"", name);
 
-    strcpy(line, "_");
+    Q_strlcpy(line, "_", sizeof(line));
     {
         for (cid = 0; cid < strlen(name) - 1 && cid < 59; cid++)
-            strcat(line, "_");
+            Q_strlcat(line, "_", sizeof(line));
     }
 
-    sprintf(name, "yv 4 string2 \"%s\"", line);
-    strcat(buf, name);
+    Q_snprintf(name, sizeof(name), "yv 4 string2 \"%s\"", line);
+    Q_strlcat(buf, name, sizeof(buf));
 
     y = 18;
 
@@ -808,9 +810,9 @@ void OSP_showPlayer(edict_t *ent)
     else
         eff = 100.0f * frags / (0.0f + frags + deaths);
 
-    sprintf(line, "yv %d string \"Frags   :%3d     Efficiency: %.1f%%\"",
+    Q_snprintf(line, sizeof(line), "yv %d string \"Frags   :%3d     Efficiency: %.1f%%\"",
             y, frags, eff);
-    strcat(buf, line);
+    Q_strlcat(buf, line, sizeof(buf));
     y += 8;
 
     if (level.intermission_framenum != 0)
@@ -834,18 +836,23 @@ void OSP_showPlayer(edict_t *ent)
         }
 
         fph = frags * 36000 / i;
-        sprintf(line, "yv %d string \"Deaths  :%3d     Frags/Hour: %d\"",
+        Q_snprintf(line, sizeof(line), "yv %d string \"Deaths  :%3d     Frags/Hour: %d\"",
                 y, deaths, fph);
     }
-    strcat(buf, line);
+    Q_strlcat(buf, line, sizeof(buf));
     y += 8;
 
-    sprintf(line, "yv %d string \"Suicides: %2d     Rank: %d/%d\"",
+    Q_snprintf(line, sizeof(line), "yv %d string \"Suicides: %2d     Rank: %d/%d\"",
             y, suicides, other->client->resp.osp_r208, active_clients);
-    strcat(buf, line);
+    Q_strlcat(buf, line, sizeof(buf));
     y += 16;
 
     cid = other->client->resp.clientid;
+    if (cid < 0 || cid >= q_countof(p_acc)) {
+        gi.cprintf(ent, PRINT_CHAT, "** Sorry, no stats for that player!\n");
+        Cmd_InvUse_f(ent);
+        return;
+    }
 
     {
         int             index;          // invented name
@@ -853,13 +860,13 @@ void OSP_showPlayer(edict_t *ent)
         for (i = 0; i < 10; i++) {
             index = a_info[i].index;
             if (p_acc[cid].shots[index]) {
-                sprintf(line, "yv %d string \"%s %.1f%% (%d/%d hits)\"", y,
+                Q_snprintf(line, sizeof(line), "yv %d string \"%s %.1f%% (%d/%d hits)\"", y,
                         a_info[i].name,
                         (double)(100 * p_acc[cid].hits[index]) /
                         p_acc[cid].shots[index],
                         p_acc[cid].hits[index],
                         p_acc[cid].shots[index]);
-                strcat(buf, line);
+                Q_strlcat(buf, line, sizeof(buf));
                 found = 1;
                 y += 8;
             }
@@ -867,24 +874,24 @@ void OSP_showPlayer(edict_t *ent)
     }
 
     if (!found) {
-        sprintf(line, "yv %d string \"Hasn't taken a shot.\"", y);
-        strcat(buf, line);
+        Q_snprintf(line, sizeof(line), "yv %d string \"Hasn't taken a shot.\"", y);
+        Q_strlcat(buf, line, sizeof(buf));
         y += 8;
     } else {
         y += 8;
-        sprintf(line, "yv %d string2 \"Total damage given: %d\"", y,
+        Q_snprintf(line, sizeof(line), "yv %d string2 \"Total damage given: %d\"", y,
                 p_acc[cid].dgiven);
-        strcat(buf, line);
+        Q_strlcat(buf, line, sizeof(buf));
         y += 8;
-        sprintf(line, "yv %d string2 \"Total damage rcvd : %d\"", y,
+        Q_snprintf(line, sizeof(line), "yv %d string2 \"Total damage rcvd : %d\"", y,
                 p_acc[cid].dtaken);
-        strcat(buf, line);
+        Q_strlcat(buf, line, sizeof(buf));
         y += 8;
     }
 
     y += 8;
-    sprintf(line, "yv %d cstring \"\x90 CONTINUE \x91\"", y);
-    strcat(buf, line);
+    Q_snprintf(line, sizeof(line), "yv %d cstring \"\x90 CONTINUE \x91\"", y);
+    Q_strlcat(buf, line, sizeof(buf));
 
     gi.WriteByte(svc_layout);
     gi.WriteString(buf);

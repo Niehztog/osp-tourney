@@ -2,6 +2,8 @@
 #include "g_local.h"
 #include "m_player.h"
 #include "bl_main.h"
+#include "bl_redirgi.h"
+#include "bl_spawn.h"
 
 void ClientUserinfoChanged(edict_t *ent, char *userinfo);
 void ClientDisconnect(edict_t *ent);
@@ -514,7 +516,7 @@ static void TossClientWeapon(edict_t *self)
     if (!((int)(dmflags->value) & DF_QUAD_DROP)) {
         if (self->client->resp.osp_r200 &&
             self->client->quad_framenum < level.framenum) {
-            q2log_expireItem("Quad", self, self->client->resp.osp_r200);
+            OSP_Stats_ItemExpire("Quad", self, self->client->resp.osp_r200);
             self->client->resp.osp_r200 = 0;
         }
         quad = false;
@@ -539,7 +541,7 @@ static void TossClientWeapon(edict_t *self)
         self->client->v_angle[YAW] -= spread;
         drop->spawnflags |= DROPPED_PLAYER_ITEM;
 
-        q2log_dropItem("Quad", drop - g_edicts, self);
+        OSP_Stats_ItemDrop("Quad", drop - g_edicts, self);
         self->client->resp.osp_r200 = 0;
 
         drop->touch = Touch_Item;
@@ -618,7 +620,7 @@ void player_die(edict_t *self, edict_t *inflictor, edict_t *attacker, int damage
 
         if (sync_stat > 2)
             sl_WriteStdLogDeath(&gi, level, self, inflictor, attacker);
-        q2log_logDeath(self, inflictor, attacker);
+        OSP_Stats_Death(self, inflictor, attacker);
 
         if ((int)client_deathweapdrop->value)
             TossClientWeapon(self);
@@ -713,15 +715,12 @@ void InitClientPersistant(gclient_t *client, bool full)
 static void InitClientResp(gclient_t *client)
 {
     int     clientid;
-    int     save;
 
     clientid = client->resp.clientid;
-    save = client->resp.osp_r008;
 
     memset(&client->resp, 0, sizeof(client->resp));
 
     client->resp.clientid = clientid;
-    client->resp.osp_r008 = save;
     client->resp.enterframe = level.framenum;
     client->resp.coop_respawn = client->pers;
     client->resp.team = 2;
@@ -1202,8 +1201,7 @@ static void PutClientInServer(edict_t *ent)
         OSP_setSingleAccuracy(ent);
         client->resp.osp_r240 = 0;
 
-        if (!worldlog_file)
-            q2log_playerMode(ent, "Observe");
+        OSP_Stats_PlayerMode(ent, "Observe");
     } else {
         ent->movetype = MOVETYPE_WALK;
         ent->solid = SOLID_BBOX;
@@ -1312,7 +1310,7 @@ static void PutClientInServer(edict_t *ent)
 
     if (client->resp.entered == ENTERED_ENTERED &&
         sync_stat > 2 && !level.intermission_framenum)
-        q2log_playerRespawn(ent);
+        OSP_Stats_PlayerRespawn(ent);
 }
 
 /*
@@ -1334,14 +1332,9 @@ static void ClientBeginDeathmatch(edict_t *ent)
         ent->client->resp.team = 2;
     }
 
-    if (worldlog_file && !(ent->flags & FL_OSP_NOCMD)) {
-        ent->client->resp.osp_r2a8 = 0;
-        gi.WriteByte(svc_stufftext);
-        gi.WriteString("cmd _ngws_client_id $ngWorldStats_password $ngworldstats_password\n");
-        gi.unicast(ent, true);
-    } else if (!ent->client->resp.osp_r2a8) {
+    if (!ent->client->resp.osp_r2a8) {
         ent->client->resp.osp_r2a8 = 1;
-        q2log_playerConnect(ent);
+        OSP_Stats_PlayerConnect(ent);
     }
 
     if (m_mode > 0 && !ent->osp_e39c && !(ent->flags & FL_OSP_NOCMD)) {
@@ -1500,14 +1493,16 @@ void ClientBegin(edict_t *ent)
 
     if (!ent->client->resp.osp_r210) {
         OSP_giveClientID(ent);
-        strcpy(p_acc[ent->client->resp.clientid].osp_a010, ent->osp_e37c);
+        if (ent->client->resp.clientid >= 0 &&
+            ent->client->resp.clientid < q_countof(p_acc))
+            Q_strlcpy(p_acc[ent->client->resp.clientid].osp_a010,
+                      ent->osp_e37c,
+                      sizeof(p_acc[ent->client->resp.clientid].osp_a010));
 
-        if (!worldlog_file || (ent->flags & FL_OSP_BOT)) {
-            ent->client->resp.osp_r2a8 = 1;
-            q2log_playerConnect(ent);
-        }
+        ent->client->resp.osp_r2a8 = 1;
+        OSP_Stats_PlayerConnect(ent);
     } else {
-        q2log_playerReconnect(ent);
+        OSP_Stats_PlayerReconnect(ent);
         EntityListAdd(ent);
 
         if (m_mode == 2) {
@@ -1525,7 +1520,8 @@ void ClientBegin(edict_t *ent)
 
             who_paused = -1;
             match_paused = 3;
-            sprintf(message, "%s has returned!\nMatch continues.\n", reconn_player);
+            Q_snprintf(message, sizeof(message),
+                   "%s has returned!\nMatch continues.\n", reconn_player);
             gi.bprintf(PRINT_CHAT, "%s", message);
             reconn_player[0] = 0;
         }
@@ -1562,7 +1558,8 @@ void ClientUserinfoChanged(edict_t *ent, char *userinfo)
     didskin = 0;
 
     if (!Info_Validate(userinfo))
-        strcpy(userinfo, "\\name\\badinfo\\skin\\male/grunt");
+        Q_strlcpy(userinfo, "\\name\\badinfo\\skin\\male/grunt",
+                  MAX_INFO_STRING);
 
     if ((int)client_maxrate->value && !(ent->flags & FL_OSP_BOT)) {
         s = Info_ValueForKey(userinfo, "rate");
@@ -1576,17 +1573,16 @@ void ClientUserinfoChanged(edict_t *ent, char *userinfo)
 
     s = Info_ValueForKey(userinfo, "name");
     if (OSP_playerAllow(s, userinfo) ||
-        (!m_mode && ent->charname && (int)ent->charname > level.framenum))
+        (!m_mode && ent->osp_infochange_framenum > level.framenum))
         s = ent->client->pers.netname;
     else
         s = Info_ValueForKey(userinfo, "name");
 
     if (ent->client->pers.netname[0]) {
-        strncpy(newnick, s, 15);
-        newnick[15] = 0;
+        Q_strlcpy(newnick, s, 16);
         if (Q_stricmp(ent->client->pers.netname, newnick) &&
             ent->client->resp.osp_r2a8) {
-            q2log_playerRename(ent, s);
+            OSP_Stats_PlayerRename(ent, s);
             sl_LogPlayerRename(&gi, ent->client->pers.netname, s, level.time);
             if (server_log)
                 OSP_logAdminLog("Rename: %s -> %s", ent->client->pers.netname, s);
@@ -1597,16 +1593,17 @@ void ClientUserinfoChanged(edict_t *ent, char *userinfo)
         char    buf[24];
 
         if ((int)client_infochange->value)
-            ent->charname = (char *)(level.framenum +
-                                     (int)client_infochange->value * 10);
+            ent->osp_infochange_framenum = level.framenum +
+                                           (int)client_infochange->value * 10;
         else
-            ent->charname = NULL;
+            ent->osp_infochange_framenum = 0;
 
-        memcpy(ent->client->pers.netname, s, 15);
-        if (ent->client->resp.clientid >= 0) {
-            memcpy(p_acc[ent->client->resp.clientid].netname, s, 16);
-            p_acc[ent->client->resp.clientid].netname[15] = 0;
-        }
+        Q_strlcpy(ent->client->pers.netname, s,
+                  sizeof(ent->client->pers.netname));
+        if (ent->client->resp.clientid >= 0 &&
+            ent->client->resp.clientid < q_countof(p_acc))
+            Q_strlcpy(p_acc[ent->client->resp.clientid].netname, s,
+                      sizeof(p_acc[ent->client->resp.clientid].netname));
 
         for (i = 0; i < 16; i++)
             ent->client->pers.greenname[i] = 0;
@@ -1616,13 +1613,13 @@ void ClientUserinfoChanged(edict_t *ent, char *userinfo)
 
         if (m_mode == 3 && ent->client->resp.entered == ENTERED_ENTERED &&
             !ent->client->resp.osp_r210 && !level.intermission_framenum) {
-            memcpy(teams[tnum].netname, ent->client->pers.netname, 16);
-            memcpy(teams[tnum].greenname, ent->client->pers.greenname, 16);
-            sprintf(buf, "%15s", teams[tnum].greenname);
+            Q_strlcpy(teams[tnum].netname, ent->client->pers.netname, 16);
+            Q_strlcpy(teams[tnum].greenname, ent->client->pers.greenname, 16);
+            Q_snprintf(buf, sizeof(buf), "%15s", teams[tnum].greenname);
             gi.configstring(0x625 + tnum * 2, buf);
 
             if (ent->inuse && ent->client && !(ent->flags & FL_OSP_NOCMD)) {
-                sprintf(buf, "%15s", teams[tnum].netname);
+                Q_snprintf(buf, sizeof(buf), "%15s", teams[tnum].netname);
                 OSP_clientConfigString(ent, 0x625 + tnum * 2, buf);
             }
         }
@@ -1635,31 +1632,34 @@ void ClientUserinfoChanged(edict_t *ent, char *userinfo)
             s = ent->client->resp.osp_r0f4;
         else {
             s = qualifier_skinname->string;
-            strncpy(ent->client->resp.osp_r0f4, s, 255);
+            Q_strlcpy(ent->client->resp.osp_r0f4, s,
+                      sizeof(ent->client->resp.osp_r0f4));
             didskin = 1;
         }
-    } else if ((m_mode > 1 && (int)team_lockskin->value) ||
-               (m_mode == 2 && tnum != 2)) {
+    } else if (tnum != 2 && ((m_mode > 1 && (int)team_lockskin->value) ||
+                             m_mode == 2)) {
         if (!strcmp(ent->client->resp.osp_r0f4, teams[tnum].skin))
             s = ent->client->resp.osp_r0f4;
         else {
             s = teams[tnum].skin;
-            strncpy(ent->client->resp.osp_r0f4, s, 255);
+            Q_strlcpy(ent->client->resp.osp_r0f4, s,
+                      sizeof(ent->client->resp.osp_r0f4));
             didskin = 1;
         }
     } else {
         s = Info_ValueForKey(userinfo, "skin");
-        if (!(m_mode || !ent->charname ||
-              (int)ent->charname <= level.framenum || didskin) ||
+        if (!(m_mode || ent->osp_infochange_framenum <= level.framenum ||
+              didskin) ||
             !strcmp(ent->client->resp.osp_r0f4, s)) {
             s = ent->client->resp.osp_r0f4;
         } else {
-            strncpy(ent->client->resp.osp_r0f4, s, 255);
+            Q_strlcpy(ent->client->resp.osp_r0f4, s,
+                      sizeof(ent->client->resp.osp_r0f4));
             if ((int)client_infochange->value)
-                ent->charname = (char *)(level.framenum +
-                                         (int)client_infochange->value * 10);
+                ent->osp_infochange_framenum = level.framenum +
+                                               (int)client_infochange->value * 10;
             else
-                ent->charname = NULL;
+                ent->osp_infochange_framenum = 0;
             didskin = 1;
         }
     }
@@ -1705,13 +1705,9 @@ loadgames will.
 // gamei386.so: 0003C174..0003C81E
 qboolean ClientConnect(edict_t *ent, char *userinfo)
 {
-    char    addr[1024];
-    char    match[7] = { '`', 'r', 'e', 'q', 'i', '`', 0 };
+    char    addr[MAX_INFO_VALUE];
     char    *value;
     int     idx;
-
-    for (idx = 0; idx < 6; idx++)
-        match[idx] -= 4;
 
     /* FL_OSP_NOCMD is the target's tested 0x2000 bit here (also FL_BOT). */
     if (ent->flags & FL_OSP_NOCMD) {
@@ -1731,15 +1727,16 @@ qboolean ClientConnect(edict_t *ent, char *userinfo)
     if (idx) {
         if (idx < 0) {
             value = Info_ValueForKey(userinfo, "name");
-            sprintf(addr, "%s is already connected.", value);
+            Q_snprintf(addr, sizeof(addr), "%s is already connected.", value);
             Info_SetValueForKey(userinfo, "rejmsg", addr);
         } else if (idx == 1) {
             value = Info_ValueForKey(userinfo, "name");
-            sprintf(addr, "%s is not allowed to play.", value);
+            Q_snprintf(addr, sizeof(addr), "%s is not allowed to play.", value);
             Info_SetValueForKey(userinfo, "rejmsg", addr);
         } else if (idx == 2) {
             value = Info_ValueForKey(userinfo, "name");
-            sprintf(addr, "Incorrect password/address for %s", value);
+            Q_snprintf(addr, sizeof(addr), "Incorrect password/address for %s",
+                       value);
             Info_SetValueForKey(userinfo, "rejmsg", addr);
         } else
             Info_SetValueForKey(userinfo, "rejmsg", "Your address has been banned!");
@@ -1802,26 +1799,23 @@ qboolean ClientConnect(edict_t *ent, char *userinfo)
     }
 
     if (ent->flags & FL_OSP_BOT) {
-        strcpy(addr, "SERVER_BOT");
-        ent->client->resp.osp_r008 = 0;
+        Q_strlcpy(addr, "SERVER_BOT", sizeof(addr));
     } else {
         value = Info_ValueForKey(userinfo, "ip");
-        sprintf(addr, "%s", value);
+        Q_strlcpy(addr, value, sizeof(addr));
         value = strchr(addr, ':');
         if (value)
             *value = 0;
-        if (strstr(userinfo, match) == userinfo)
-            ent->client->resp.osp_r008 = 1;
-        else
-            ent->client->resp.osp_r008 = 0;
     }
 
     gi.dprintf("(%s connected from %s)\n", ent->client->pers.netname, addr);
-    strcpy(ent->osp_e37c, addr);
+    // osp_e37c is 32 bytes and the referee flag is the next field along, so
+    // an address too long for it used to hand out referee status
+    Q_strlcpy(ent->osp_e37c, addr, sizeof(ent->osp_e37c));
     if (server_log) {
         char    date[64];
 
-        ngLog_getDateInfo(date, 0);
+        OSP_Stats_DateString(date, sizeof(date));
         OSP_logAdminLog("Connect: %s - %s (%s)", addr,
                         ent->client->pers.netname, date);
     }
@@ -1855,7 +1849,7 @@ void ClientDisconnect(edict_t *ent)
         return;
 
     if (server_log) {
-        ngLog_getDateInfo(when, 0);
+        OSP_Stats_DateString(when, sizeof(when));
         if (!(ent->flags & FL_OSP_BOT))
             OSP_logAdminLog("Disconnect: %s (%s)",
                             ent->client->pers.netname, when);
@@ -1888,9 +1882,9 @@ void ClientDisconnect(edict_t *ent)
         tno = 2;
 
     sl_LogPlayerDisconnect(&gi, level, ent);
-    q2log_playerDisconnect(ent);
+    OSP_Stats_PlayerLeave(ent);
     if (!level.intermission_framenum)
-        q2log_logAccuracyStats(ent);
+        OSP_Stats_Accuracy(ent);
 
     OSP_playerAnnounce(ent, 10);
     PlayerResetGrapple(ent);
@@ -1920,7 +1914,8 @@ void ClientDisconnect(edict_t *ent)
     if ((int)client_recover->value && state == ENTERED_ENTERED &&
         sync_stat > 2 && !ent->client->resp.osp_r07c[0] &&
         !level.intermission_framenum && !(ent->flags & FL_OSP_BOT)) {
-        strcpy(ent->client->resp.osp_r214, ent->client->pers.netname);
+        Q_strlcpy(ent->client->resp.osp_r214, ent->client->pers.netname,
+                  sizeof(ent->client->resp.osp_r214));
         ent->client->resp.osp_r018 = level.framenum;
         OSP_saveClient(ent);
     } else {
@@ -1961,13 +1956,14 @@ void ClientDisconnect(edict_t *ent)
         char    message[64];
 
         who_paused = -2;
-        strncpy(reconn_player, ent->client->pers.netname, 15);
+        Q_strlcpy(reconn_player, ent->client->pers.netname, 16);
         reconn_player[15] = 0;
         reconn_index = tno;
         pause_time = team_recovertime->value;
         match_paused = 1;
-        sprintf(message, "Waiting for %s to reconnect.\n(%d seconds)\n",
-                reconn_player, (int)pause_time);
+        Q_snprintf(message, sizeof(message),
+                   "Waiting for %s to reconnect.\n(%d seconds)\n",
+                   reconn_player, (int)pause_time);
 
         for (state = 1; state <= game.maxclients; state++) {
             p = g_edicts + state;
@@ -1988,7 +1984,7 @@ void ClientDisconnect(edict_t *ent)
             gi.bprintf(PRINT_HIGH,
                        "%s left on own accord.  Vote terminated.\n",
                        ent->client->pers.netname);
-            q2log_voteInfo("Fail", "Player manually left", NULL);
+            OSP_Stats_Vote("Fail", "Player manually left", NULL);
             OSP_clearVotes();
             OSP_closeMenus();
         } else
@@ -2015,7 +2011,7 @@ void ClientDisconnect(edict_t *ent)
 
     gi.bprintf(PRINT_HIGH, "%s wimped out and left. (clients = %i)\n",
                ent->client->pers.netname, active_clients);
-    strcpy(ent->client->pers.netname, "");
+    ent->client->pers.netname[0] = 0;
     Info_SetValueForKey(ent->client->pers.userinfo, "skin", "");
     BotLib_BotClientSettings(ent);
 
@@ -2095,11 +2091,13 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
                 !(ent->flags & FL_BOT)) {
                 if (client->resp.osp_r234) {
                     gi.WriteByte(svc_stufftext);
-                    strcpy(intermission_command, "stop\n");
+                    Q_strlcpy(intermission_command, "stop\n",
+                              sizeof(intermission_command));
                     if ((ent->osp_e39c == 1 &&
                          (int)demo_referee->value > 1) ||
                         (int)demo_player->value > 1)
-                        strcpy(intermission_command, "stop; screenshot\n");
+                        Q_strlcpy(intermission_command, "stop; screenshot\n",
+                                  sizeof(intermission_command));
                     gi.WriteString(intermission_command);
                     gi.unicast(ent, true);
                 }
@@ -2108,16 +2106,20 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
                     if (!match_endmusic || !match_endmusic->string[0] ||
                         !strcmp(match_endmusic->string, "default")) {
                         i = Q_rand() % 5;
-                        sprintf(intermission_command, "play %s\n",
+                        Q_snprintf(intermission_command, sizeof(intermission_command),
+                                   "play %s\n",
                                 wav_file + i * 25);
                     } else
-                        sprintf(intermission_command, "play %s\n",
+                        Q_snprintf(intermission_command, sizeof(intermission_command),
+                                   "play %s\n",
                                 match_endmusic->string);
                 } else if (client->resp.team == 2 ||
                            teams[client->resp.team].osp_m124 == 2)
-                    sprintf(intermission_command, "play makron/laf4.wav\n");
+                    Q_strlcpy(intermission_command, "play makron/laf4.wav\n",
+                              sizeof(intermission_command));
                 else
-                    sprintf(intermission_command, "play world/xian1.wav\n");
+                    Q_strlcpy(intermission_command, "play world/xian1.wav\n",
+                              sizeof(intermission_command));
 
                 gi.WriteByte(svc_stufftext);
                 gi.WriteString(intermission_command);
@@ -2216,7 +2218,7 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
                     Cmd_InvUse_f(ent);
                 client->resp.osp_r010 = level.framenum + 8;
             }
-            CameraThink(ent, ucmd);
+            CameraThink(ent);
             return;
         }
 
@@ -2481,7 +2483,7 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
 
                 client->resp.osp_r024 = level.framenum + 60;
                 gi.WriteByte(svc_stufftext);
-                sprintf(maxfps_command, "cl_maxfps %d\n",
+                Q_snprintf(maxfps_command, sizeof(maxfps_command), "cl_maxfps %d\n",
                         (int)client_maxfps->value);
                 gi.WriteString(maxfps_command);
                 gi.unicast(ent, false);
@@ -2494,10 +2496,6 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
                 client->resp.entered == ENTERED_ENTERED) {
                 if (client->respawn_framenum + 0.2f < level.time)
                     client->resp.osp_r23c = 0;
-                if (bot_watch && ent->client->resp.osp_r008) {
-                    OnBotDetection(ent, "cr");
-                    return;
-                }
                 client->weapon_thunk = true;
                 Think_Weapon(ent);
             }
@@ -2571,8 +2569,6 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
                 gi.bprintf(PRINT_CHAT, "Admin has returned!\n");
                 gi.bprintf(PRINT_CHAT, "Admin has returned!\n");
                 gi.bprintf(PRINT_CHAT, "Admin has returned!\n");
-                if ((int)nglog_ngstats_vidrestart->value)
-                    gi.AddCommandString("vid_restart\n");
             }
         }
     }
