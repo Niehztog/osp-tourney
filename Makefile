@@ -31,15 +31,18 @@ DEBUG_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -g -O0
 
 # Required to build 1999 C with a current gcc.
 #  -fno-strict-aliasing -fwrapv  the workspace standard for this era of code
-#  -w                            the tree still carries pre-existing warnings,
-#                                nearly all in the donor layer and in vanilla
-#                                code; doc/q2pro-port.md has the breakdown
+#  -Wall                         the tree is clean under it.  It used to be -w,
+#                                which is how a set of real defects went
+#                                unmeasured -- see doc/q2pro-port.md.  -Wextra
+#                                is still too loud to gate on: it reports the
+#                                335 old-style `foo()` prototypes tourney's own
+#                                code is written in.
 #
 # The reconstruction's -fno-stack-protector / -D_FORTIFY_SOURCE=0 relaxation is
 # gone: tourney's own string handling has been audited end to end and every
 # unbounded copy into a fixed buffer is now a bounded one, so the hardening the
 # toolchain offers is switched on rather than switched off.
-MODERN_CFLAGS=-fno-strict-aliasing -fwrapv -w \
+MODERN_CFLAGS=-fno-strict-aliasing -fwrapv -Wall \
 	-D_FORTIFY_SOURCE=2 -fstack-protector-strong
 
 LDFLAGS=-ldl -lm

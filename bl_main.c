@@ -185,7 +185,7 @@ void BotExecuteInput(edict_t *bot)
     //set the view independent movement
     ucmd.forwardmove = DotProduct(forward, bi->dir) * bi->speed;
     ucmd.sidemove = DotProduct(right, bi->dir) * bi->speed;
-    ucmd.upmove = abs(forward[2]) * bi->dir[2] * bi->speed;
+    ucmd.upmove = fabsf(forward[2]) * bi->dir[2] * bi->speed;
     //normal keyboard movement
     if (bi->actionflags & ACTION_MOVEFORWARD) ucmd.forwardmove += 400;
     if (bi->actionflags & ACTION_MOVEBACK) ucmd.forwardmove -= 400;

@@ -231,7 +231,6 @@ void OSP_loadMaps(void)
 int read_map_entry(FILE *f, char *name, int *lo, int *hi)
 {
     int     len = 0;
-    char    *start = NULL;  // invented name; zeroed, never used again
     int     fld = 0;
     int     quoting = 0;
     char    word[64] = {0};

@@ -677,12 +677,13 @@ message     two letters; starting lightlevel and ending lightlevel
 void target_lightramp_think(edict_t *self)
 {
     char    style[2];
+    float   diff = (level.framenum - self->timestamp) * FRAMETIME;
 
-    style[0] = 'a' + self->movedir[0] + (level.time - self->timestamp) / FRAMETIME * self->movedir[2];
+    style[0] = 'a' + self->movedir[0] + diff * self->movedir[2];
     style[1] = 0;
     gi.configstring(game.csr.lights + self->enemy->style, style);
 
-    if ((level.time - self->timestamp) < self->speed) {
+    if (diff < self->speed) {
         self->nextthink = level.framenum + 1;
     } else if (self->spawnflags & 1) {
         SWAP(float, self->movedir[0], self->movedir[1]);

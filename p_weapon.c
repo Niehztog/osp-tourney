@@ -540,7 +540,7 @@ static void weapon_grenade_fire(edict_t *ent, bool held)
     AngleVectors(ent->client->v_angle, forward, right, NULL);
     P_ProjectSource(ent->client, ent->s.origin, offset, forward, right, start);
 
-    timer = ent->client->grenade_framenum - level.time;
+    timer = (ent->client->grenade_framenum - level.framenum) * FRAMETIME;
     speed = GRENADE_MINSPEED + (GRENADE_TIMER - timer) * ((GRENADE_MAXSPEED - GRENADE_MINSPEED) / GRENADE_TIMER);
     fire_grenade2(ent, start, forward, damage, speed, timer, radius, held);
 

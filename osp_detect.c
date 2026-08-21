@@ -19,7 +19,7 @@ void ClientDisconnect(edict_t *ent);
 // existence and size are evidence; its name and type are <INVENTED>.
 static int          zb_count;
 static float        zb_delta[2];
-static int          zb_pad;
+static q_unused int zb_pad;
 static byte         zb_shoot;
 static float        zb_distance;
 static gclient_t    *zb_target;

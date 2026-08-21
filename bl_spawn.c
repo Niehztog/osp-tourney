@@ -21,7 +21,6 @@ int old_botcount = -1;
 //#define TOURNEY
 
 #ifdef TOURNEY
-#define ENTERED_ENTERED 0x01    // TOURNEY-related
 extern int bots_votedin;
 extern int old_botcount;
 #endif

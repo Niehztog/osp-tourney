@@ -638,9 +638,9 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
     char        *com_token;
     int         i;
     int         skill_level;
-    char        netaddr[32];
-    char        tname[16];
-    char        tskin[128];
+    char        netaddr[sizeof(g_edicts[0].osp_e37c)];
+    char        tname[sizeof(g_edicts[0].osp_e3a0)];
+    char        tskin[sizeof(g_edicts[0].osp_e3b0)];
     int         referee;
     cvar_t      *pl_reload;
 
@@ -665,19 +665,16 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
         }
 
         referee = g_edicts[i].osp_e39c;
-        strncpy(netaddr, g_edicts[i].osp_e37c, 31);
-        strncpy(tname, g_edicts[i].osp_e3a0, 15);
-        strncpy(tskin, g_edicts[i].osp_e3b0, 127);
-        netaddr[31] = 0;
-        tname[15] = 0;
-        tskin[127] = 0;
+        Q_strlcpy(netaddr, g_edicts[i].osp_e37c, sizeof(netaddr));
+        Q_strlcpy(tname, g_edicts[i].osp_e3a0, sizeof(tname));
+        Q_strlcpy(tskin, g_edicts[i].osp_e3b0, sizeof(tskin));
 
         memset(&g_edicts[i], 0, sizeof(g_edicts[0]));
 
         g_edicts[i].osp_e39c = referee;
-        strncpy(g_edicts[i].osp_e37c, netaddr, 31);
-        strncpy(g_edicts[i].osp_e3a0, tname, 15);
-        strncpy(g_edicts[i].osp_e3b0, tskin, 127);
+        Q_strlcpy(g_edicts[i].osp_e37c, netaddr, sizeof(g_edicts[i].osp_e37c));
+        Q_strlcpy(g_edicts[i].osp_e3a0, tname, sizeof(g_edicts[i].osp_e3a0));
+        Q_strlcpy(g_edicts[i].osp_e3b0, tskin, sizeof(g_edicts[i].osp_e3b0));
     }
 
     Q_strlcpy(level.mapname, mapname, sizeof(level.mapname));
