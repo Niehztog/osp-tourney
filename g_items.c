@@ -520,7 +520,6 @@ bool Add_Ammo(edict_t *ent, const gitem_t *item, int count)
 // gamei386.so: 00020118..00020376
 static bool Pickup_Ammo(edict_t *ent, edict_t *other)
 {
-    int         oldcount;
     int         count;
     bool    weapon;
 
@@ -532,8 +531,6 @@ static bool Pickup_Ammo(edict_t *ent, edict_t *other)
     else
         count = ent->item->quantity;
 
-    // vanilla's oldcount survives as a dead assignment.
-    oldcount = other->client->pers.inventory[ITEM_INDEX(ent->item)];
 
     if (!Add_Ammo(other, ent->item, count))
         return false;
@@ -1181,10 +1178,10 @@ be on an entity that hasn't spawned yet.
 // gamei386.so: 00021894..00021B34
 void SpawnItem(edict_t *ent, const gitem_t *item)
 {
-    // ONE function-scope `master`, shared by all three chain walks.  `i` is
-    // dead -- a `for` init clause where a `while` would do.
+    // ONE function-scope `master`, shared by all three chain walks.  The
+    // original spelled each walk as a `for` with a dead init clause; they are
+    // `while`s here.
     edict_t *master;
-    int     i;                      // invented name
 
     PrecacheItem(item);
 
@@ -1201,9 +1198,11 @@ void SpawnItem(edict_t *ent, const gitem_t *item)
             if (item->pickup == Pickup_Armor) {
                 if (ent->team) {
                     master = ent;
-                    for (i = 0; ent; ent = ent->chain)
+                    while (ent) {
                         if (!OSP_disableItems(ent))
                             break;
+                        ent = ent->chain;
+                    }
                     if (!ent) {
                         G_FreeEdict(master);
                         return;
@@ -1218,9 +1217,11 @@ void SpawnItem(edict_t *ent, const gitem_t *item)
             if (item->pickup == Pickup_Health || item->pickup == Pickup_Adrenaline || item->pickup == Pickup_AncientHead) {
                 if (ent->team) {
                     master = ent;
-                    for (i = 0; ent; ent = ent->chain)
+                    while (ent) {
                         if (!OSP_disableItems(ent))
                             break;
+                        ent = ent->chain;
+                    }
                     if (!ent) {
                         G_FreeEdict(master);
                         return;
@@ -1235,9 +1236,11 @@ void SpawnItem(edict_t *ent, const gitem_t *item)
             if ((item->flags == IT_AMMO) || (strcmp(ent->classname, "weapon_bfg") == 0)) {
                 if (ent->team) {
                     master = ent;
-                    for (i = 0; ent; ent = ent->chain)
+                    while (ent) {
                         if (!OSP_disableItems(ent))
                             break;
+                        ent = ent->chain;
+                    }
                     if (!ent) {
                         G_FreeEdict(master);
                         return;

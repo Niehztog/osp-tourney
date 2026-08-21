@@ -869,12 +869,12 @@ void Bot_WriteString(const char *s)
 {
     if (!s)
     {
-        strcpy(&networkmessage.message[networkmessage.writebyte], "");
+        networkmessage.message[networkmessage.writebyte] = 0;
         networkmessage.writebyte++;
     } //end if
     else
     {
-        strcpy(&networkmessage.message[networkmessage.writebyte], s);
+        strcpy((char *)&networkmessage.message[networkmessage.writebyte], s);
         networkmessage.writebyte += strlen(s) + 1;
     } //end else
 } //end of the function Bot_WriteString

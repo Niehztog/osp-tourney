@@ -351,9 +351,8 @@ void Grenade_Explode(edict_t *ent)
 {
     vec3_t      origin;
     int         mod;
-    int         added;  // invented name; dead -- set, never read
 
-    added = 0;
+    // The original carried a dead accumulator here, set and never read.
     if (ent->owner->client)
         PlayerNoise(ent->owner, ent->s.origin, PNOISE_IMPACT);
 
@@ -380,7 +379,6 @@ void Grenade_Explode(edict_t *ent)
                 p_acc[ent->owner->client->resp.clientid].dgiven += (int)points;
                 p_acc[ent->enemy->client->resp.clientid].dtaken += (int)points;
                 p_acc[ent->enemy->client->resp.clientid].taken[ACC_GRENADE] += (int)points;
-                added = 1;
             }
         } else {
             mod = MOD_GRENADE;
@@ -390,7 +388,6 @@ void Grenade_Explode(edict_t *ent)
                 p_acc[ent->owner->client->resp.clientid].dgiven += (int)points;
                 p_acc[ent->enemy->client->resp.clientid].dtaken += (int)points;
                 p_acc[ent->enemy->client->resp.clientid].taken[ACC_GRENADELAUNCHER] += (int)points;
-                added = 1;
             }
         }
         T_Damage(ent->enemy, ent, ent->owner, dir, ent->s.origin, vec3_origin, (int)points, (int)points, DAMAGE_RADIUS, mod);
@@ -553,9 +550,8 @@ fire_rocket
 void rocket_touch(edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *surf)
 {
     vec3_t      origin;
-    // Dead local: zeroed at entry and set true right after the accuracy-stat
-    // credit block below, never read.  Invented name.
-    bool    hit = false;
+    // The original carried a dead flag here, set right after the accuracy-stat
+    // credit block below and never read.
 
     if (other == ent->owner)
         return;
@@ -579,7 +575,6 @@ void rocket_touch(edict_t *ent, edict_t *other, cplane_t *plane, csurface_t *sur
             p_acc[ent->owner->client->resp.clientid].dgiven += ent->dmg;
             p_acc[other->client->resp.clientid].dtaken += ent->dmg;
             p_acc[other->client->resp.clientid].taken[ACC_ROCKET] += ent->dmg;
-            hit = true;
         }
     }
 

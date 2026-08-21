@@ -351,7 +351,7 @@ static char admin_title[32];
 // real's .bss gives this position 64 bytes where one line needs 32, and the
 // next TU's block starts exactly 0x40 on.  Only its existence and size are
 // evidence -- the name is <INVENTED>.
-static char admin_unused_line[32];
+static q_unused char admin_unused_line[32];
 
 // <INVENTED NAMES>: the three ints the AdminMain_Menu select entries carry,
 // dereferenced into resp.osp_r238.

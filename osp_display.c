@@ -123,7 +123,7 @@ void OSP_setMOTD(void)
 
 // gamex86.dll: 1002DDAE..1002DDCC
 // gamei386.so: 00051B78..00051BAB
-void OSP_showMOTD(edict_t *ent)
+void OSP_showMOTD(void)
 {
     gi.WriteByte(svc_layout);
     gi.WriteString(match_motd);
@@ -433,7 +433,7 @@ void OSP_setShowParams(void)
 
 // gamex86.dll: 1002F1FA..1002F218
 // gamei386.so: 00052FEC..0005301F
-void OSP_showParams(edict_t *ent)
+void OSP_showParams(void)
 {
     gi.WriteByte(svc_layout);
     gi.WriteString(match_info);

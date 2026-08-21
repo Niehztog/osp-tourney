@@ -1275,7 +1275,7 @@ void misc_viper_bomb_prethink(edict_t *self)
 
     self->groundentity = NULL;
 
-    diff = self->timestamp - level.time;
+    diff = (self->timestamp - level.framenum) * FRAMETIME;
     if (diff < -1.0f)
         diff = -1.0f;
 

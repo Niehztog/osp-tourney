@@ -714,7 +714,7 @@ Cmd_Kill_f
 void Cmd_Kill_f(edict_t *ent)
 {
     // ONE combined condition with ONE return.
-    if (((level.time - ent->client->respawn_framenum) < 5 && sync_stat != 2) ||
+    if (((level.framenum - ent->client->respawn_framenum) < 5 * BASE_FRAMERATE && sync_stat != 2) ||
         ent->client->resp.entered != ENTERED_ENTERED)
         return;
 

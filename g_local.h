@@ -1640,9 +1640,9 @@ void     OSP_playerAnnounce(edict_t *ent, char sound);
 void     OSP_parseArmor(void);
 void     OSP_parseString(const char *s, gitem_armor_t *info);
 void     OSP_setMOTD(void);
-void     OSP_showMOTD();
+void     OSP_showMOTD(void);
 void     OSP_setShowParams(void);
-void     OSP_showParams();
+void     OSP_showParams(void);
 void     OSP_showScores(int *list, int count, edict_t *ent);
 void     OSP_showPlayer(edict_t *ent);
 
@@ -1685,7 +1685,7 @@ edict_t *NextMap(void);
 
 void     OSP_initHighScores(void);
 void     OSP_formatHighScores(void);
-void     OSP_showHighScores();
+void     OSP_showHighScores(void);
 void     OSP_updateHighScores(void);
 void     OSP_loadHighScores(void);
 void     OSP_writeHighScores(void);

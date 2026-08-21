@@ -373,6 +373,65 @@ here, and so is everything the audit it asked for turned up afterwards.
   `greenname` by indexing 16 bytes past `netname`.
 * `OSP_speedDetect` passed an `int` to a `%f` conversion in the admin log.
 
+**Timer units.** The `nextthink` and `timers` passes in the table above retype
+every timer from a float count of seconds to an `int` count of frames. That
+makes a field's type stop saying what its unit is: `int nextthink` and
+`int timestamp` hold frames, `float level.time` holds seconds, and mixing them
+compiles silently and runs wrong by a factor of ten. A mechanical pass can
+convert a write without its matching read, or miss a file its diff never
+touched, and nothing complains -- not the compiler, not a boot test, not an
+entity census, because none of those waits for a think.
+
+`g_phys.c`'s `SV_RunThink` was missed outright. It kept `float thinktime` and
+compared `ent->nextthink` -- an `int` frame count since `g_local.h` -- against
+`level.time`, so **every think in the mod fired ten times late**: doors, plats,
+item respawns, trigger delays, the whole match state machine. Measured with a
+breakpoint: an item scheduled for `level.framenum + 2` fired on frame 20.
+Q2PRO's own Ground Zero pack had the identical defect, in the identical
+function, from the identical replay; `doc/mission-packs.md` there records it.
+
+Six more sites were converted on one side only. Each is restored to the form
+baseq2 has for the same expression:
+
+* `Cmd_Kill_f` tested `(level.time - respawn_framenum) < 5`. The difference is
+  always negative once the frame counter has run for a second, so **`kill` was
+  refused for good** outside a live match.
+* `target_lightramp_think` computed its lightstyle character *and* its loop
+  condition from `(level.time - timestamp) / FRAMETIME`, so the character was
+  garbage and the think never terminated.
+* `misc_viper_bomb_prethink` scaled the bomb's velocity by
+  `timestamp - level.time`.
+* `Weapon_HandGrenade` derived both the fuse and the throw speed from
+  `grenade_framenum - level.time`.
+* `ClientThink`'s post-respawn reset tested
+  `respawn_framenum + 0.2f < level.time`, which is never true.
+
+These are masked by `SV_RunThink` in the *opposite* direction, so fixing either
+half alone moves the breakage rather than removing it. They land together.
+
+Two checks find the class. Cross-unit mixing: for every line mentioning
+`level.time`, look for an `int`-declared timer field on the same line. Lost
+scale: grep for `level.framenum` next to a floating-point literal with no
+`* BASE_FRAMERATE`. Neither catches a `SV_RunThink` written wholly in the wrong
+unit, and only one thing does -- **run a level and wait**. Break on a think and
+print `level.framenum`; the frame it fires on must be the frame it was
+scheduled for.
+
+**Three more, found the same way.** `bl_main.c` called `abs()` on a `vec3_t`
+element to build the bots' view-relative `upmove`; `abs()` takes an `int`, so
+any magnitude below 1 truncated to zero and **bots could never swim up or
+down**. `p_menu.c`'s menu handle is a libc allocation hanging off `gclient_t`
+outside `pers`, and nothing closed it on `ClientDisconnect` while
+`PutClientInServer` memsets the part of the struct it lives in -- so it leaked
+on every disconnect and every spawn, including the spawn every client gets on a
+level change. And `g_local.h` declared `OSP_showMOTD`, `OSP_showParams` and
+`OSP_showHighScores` as `()` rather than with prototypes, which switched off
+argument checking: the first two are called with no argument where the
+definition takes an `edict_t *`, and the third is called *with* one where the
+definition takes none. Harmless only because no body uses the parameter, and a
+hard error under C23. All three are `(void)` now, at the declaration, the
+definition and the call.
+
 **Hardening.** The Makefile's `-fno-stack-protector -D_FORTIFY_SOURCE=0` is
 gone; the release build is `-D_FORTIFY_SOURCE=2 -fstack-protector-strong`. That
 was only possible once every unbounded copy into a fixed buffer had become a
@@ -452,9 +511,26 @@ function declarations (the `bl_*` headers are included where their functions
 are called now), a dozen dead locals, three dead labels and eight `abs()` calls
 on a float. What is left is 202 unused parameters, 102 signed/unsigned
 comparisons and 17 missing field initialisers, none of them in code this branch
-changes, plus four set-but-unused locals in vanilla `g_items.c`/`g_weapon.c`,
-two `-Wpointer-sign` and one `abs()` in the Gladiator SDK, and one `#endif`
-label there.
+changes.
+
+**The Makefile builds with `-Wall` now, and the tree is clean under it on both
+gcc and clang.** It used to build with `-w`, and that is how the timer-unit
+defects below went unmeasured for a whole audit: `-w` silences the compiler
+about code nobody is reading either. The residual `-Wall` reports that stood in
+the way are gone with it -- the four set-but-unused locals in vanilla
+`g_items.c`/`g_weapon.c` (deleted, with a note where each one was, since this
+branch is not address-matched), the two `-Wpointer-sign` and the `#endif` label
+in the Gladiator SDK, `SelectCoopSpawnPoint` and two invented-name statics
+(tagged `q_unused` like the rest of the dead-but-kept code) -- and enabling it
+immediately found a real one: `SpawnEntities` saved and restored
+`edict_t::osp_e3b0` with `strncpy(dst, src, 127)` into an 80-byte field, 48
+bytes past its end, on every level load. That is the same field and the same
+mistake the `OSP_defaultTeam` entry above records, at a second site the audit
+missed. All three save/restore pairs take their length from the field now.
+
+`-Wextra` is still not gated on: it reports the 335 old-style `foo()`
+prototypes tourney's own code is written in, which is a rewrite rather than a
+fix.
 
 Building
 --------

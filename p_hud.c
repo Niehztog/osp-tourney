@@ -185,7 +185,7 @@ void DeathmatchScoreboardMessage(edict_t *ent, edict_t *killer)
         }
 
         if (!ent->client->resp.osp_r034) {
-            OSP_showHighScores(ent);
+            OSP_showHighScores();
             return;
         }
     }

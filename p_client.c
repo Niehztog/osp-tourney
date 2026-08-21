@@ -933,7 +933,7 @@ static edict_t *SelectDeathmatchSpawnPoint(edict_t *ent)
 // nothing calls this, but the original binary keeps it too.
 // gamex86.dll: absent
 // gamei386.so: absent
-static edict_t *SelectCoopSpawnPoint(edict_t *ent)
+static q_unused edict_t *SelectCoopSpawnPoint(edict_t *ent)
 {
     int     index;
     edict_t *spot = NULL;
@@ -1176,7 +1176,10 @@ static void PutClientInServer(edict_t *ent)
 
     ClientUserinfoChanged(ent, userinfo);
 
-    // clear everything but the persistant data
+    // clear everything but the persistant data.  The menu handle lives in the
+    // part about to be zeroed, so free it first or the allocation is orphaned.
+    if (client->menu)
+        PMenu_Close(ent);
     saved = client->pers;
     memset(client, 0, sizeof(*client));
     client->pers = saved;
@@ -1858,6 +1861,9 @@ void ClientDisconnect(edict_t *ent)
                             ent->client->pers.netname, when);
     }
 
+    if (ent->client->menu)
+        PMenu_Close(ent);
+
     state = ent->client->resp.entered;
     if (m_mode == 3)
         OSP_1v1Remove(ent, 1);
@@ -2494,7 +2500,7 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
         if (client->latched_buttons & BUTTON_ATTACK) {
             if (!client->weapon_thunk && client->resp.osp_r240 == 2 &&
                 client->resp.entered == ENTERED_ENTERED) {
-                if (client->respawn_framenum + 0.2f < level.time)
+                if (level.framenum > client->respawn_framenum + 0.2f * BASE_FRAMERATE)
                     client->resp.osp_r23c = 0;
                 client->weapon_thunk = true;
                 Think_Weapon(ent);

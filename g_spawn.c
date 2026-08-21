@@ -638,9 +638,9 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
     char        *com_token;
     int         i;
     int         skill_level;
-    char        address[32];
-    char        teamname[16];
-    char        teamskin[128];
+    char        address[sizeof(g_edicts[0].osp_e37c)];
+    char        teamname[sizeof(g_edicts[0].osp_e3a0)];
+    char        teamskin[sizeof(g_edicts[0].osp_e3b0)];
     int         referee;
     cvar_t      *player_reload;
 
@@ -663,19 +663,16 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
             memset(g_edicts, 0, sizeof(g_edicts[0]));
         } else {
             referee = g_edicts[i].osp_e39c;
-            strncpy(address, g_edicts[i].osp_e37c, 31);
-            strncpy(teamname, g_edicts[i].osp_e3a0, 15);
-            strncpy(teamskin, g_edicts[i].osp_e3b0, 127);
-            address[31] = 0;
-            teamname[15] = 0;
-            teamskin[127] = 0;
+            Q_strlcpy(address, g_edicts[i].osp_e37c, sizeof(address));
+            Q_strlcpy(teamname, g_edicts[i].osp_e3a0, sizeof(teamname));
+            Q_strlcpy(teamskin, g_edicts[i].osp_e3b0, sizeof(teamskin));
 
             memset(&g_edicts[i], 0, sizeof(g_edicts[0]));
 
             g_edicts[i].osp_e39c = referee;
-            strncpy(g_edicts[i].osp_e37c, address, 31);
-            strncpy(g_edicts[i].osp_e3a0, teamname, 15);
-            strncpy(g_edicts[i].osp_e3b0, teamskin, 127);
+            Q_strlcpy(g_edicts[i].osp_e37c, address, sizeof(g_edicts[i].osp_e37c));
+            Q_strlcpy(g_edicts[i].osp_e3a0, teamname, sizeof(g_edicts[i].osp_e3a0));
+            Q_strlcpy(g_edicts[i].osp_e3b0, teamskin, sizeof(g_edicts[i].osp_e3b0));
         }
     }
 
