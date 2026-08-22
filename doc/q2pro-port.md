@@ -432,6 +432,31 @@ definition takes none. Harmless only because no body uses the parameter, and a
 hard error under C23. All three are `(void)` now, at the declaration, the
 definition and the call.
 
+**The bot network message had no bound at all.** `bl_redirgi.c` redirects the
+game import table so that a message the game writes for a bot is assembled in
+the SDK's own `bot_networkmessage_t` instead of the engine's, and not one of the
+six primitive writers checked `writebyte` against the 2048-byte buffer it indexes
+-- `Bot_WriteString` was a bare `strcpy` into it. Every other writer
+(`Bot_WritePosition`, `Bot_WriteDir`, `Bot_WriteAngle`) funnels through those
+six, so bounding them bounds the lot.
+
+The reachable path is not a single oversized write, it is accumulation: the
+buffer holds one whole message and is cleared only when `Bot_multicast` or
+`Bot_unicast` flushes it, so any game path that writes bytes and then returns
+without multicasting leaves `writebyte` where it was, and it climbs across
+frames. A single `gi.WriteString` of a scoreboard page is over 1400 bytes on its
+own. Each writer now asks for its space first and drops the write if it does not
+fit, the message is marked overflowed, and `BotWriteMessage` refuses to send an
+overflowed one -- half a message desyncs the receiver's parser, which is
+precisely the behaviour the two detection routines above were removed for doing
+on purpose. The warning is printed once per message rather than once per write.
+`ReadByte`/`ReadShort` are bounded by `writebyte` too, so `Bot_multicast`'s
+header parse returns -1 on a short message rather than whatever the tail of the
+buffer held. Verified by driving the writers past the end under a debugger: 600
+`Bot_WriteLong` calls stop at 2048 with the byte after the buffer untouched, 200
+33-byte `Bot_WriteString` calls stop at 2046, and a clean message written after
+the next `BotClearMessage` still flushes.
+
 **Hardening.** The Makefile's `-fno-stack-protector -D_FORTIFY_SOURCE=0` is
 gone; the release build is `-D_FORTIFY_SOURCE=2 -fstack-protector-strong`. That
 was only possible once every unbounded copy into a fixed buffer had become a

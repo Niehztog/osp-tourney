@@ -23,6 +23,7 @@ typedef struct bot_networkmessage_s
 {
     int writebyte;                                          //current byte to write in message
     int readbyte;                                           //current byte to read from the message
+    qboolean overflowed;                                    //a write did not fit
     unsigned char message[MAX_NETWORKMESSAGE];  //message data
 } bot_networkmessage_t;
 //muzzle flash information
@@ -643,6 +644,13 @@ int ReadShort(bot_networkmessage_t *m)
 {
     int c;
 
+    //reading past what was written is not meaningful; say so rather than
+    //returning whatever the tail of the buffer happens to hold
+    if (m->readbyte + 2 > m->writebyte)
+    {
+        m->readbyte = m->writebyte;
+        return -1;
+    } //end if
     c = (int) m->message[m->readbyte] + ((int) m->message[m->readbyte+1] << 8);
     m->readbyte += 2;
     return c;
@@ -659,6 +667,11 @@ int ReadByte(bot_networkmessage_t *m)
 {
     int c;
 
+    if (m->readbyte + 1 > m->writebyte)
+    {
+        m->readbyte = m->writebyte;
+        return -1;
+    } //end if
     c = m->message[m->readbyte];
     m->readbyte++;
     return c;
@@ -675,6 +688,13 @@ void BotWriteMessage(bot_networkmessage_t *m)
 {
     int i;
 
+    //a message that did not fit is incomplete, and half a message desyncs the
+    //receiver's parser -- drop it rather than send it
+    if (m->overflowed)
+    {
+        newgameimport.dprintf("WARNING: BotWriteMessage: message overflowed, dropped\n");
+        return;
+    } //end if
     for (i = 0; i < m->writebyte; i++)
     {
         newgameimport.WriteByte(m->message[i]);
@@ -694,7 +714,35 @@ void BotClearMessage(void)
     //clear the global network message
     networkmessage.writebyte = 0;
     networkmessage.readbyte = 0;
+    networkmessage.overflowed = false;
 } //end of the function BotClearMessage
+//===========================================================================
+//
+// Parameter:               len, the number of bytes about to be written
+// Returns:                 where to write them, or NULL if they do not fit
+// Changes Globals:     networkmessage
+//===========================================================================
+static unsigned char *BotMessageSpace(int len)
+{
+    //the SDK's writers had no bound at all.  The buffer holds one whole
+    //message and is only cleared when Bot_multicast or Bot_unicast flushes it,
+    //so game code that writes bytes and then returns without multicasting
+    //leaves writebyte where it was -- it accumulates across frames until
+    //something overruns the 2048.  Report once per message and drop the rest.
+    if (networkmessage.writebyte < 0 ||
+        len > MAX_NETWORKMESSAGE - networkmessage.writebyte)
+    {
+        if (!networkmessage.overflowed)
+        {
+            newgameimport.dprintf("WARNING: bot network message overflow "
+                                  "(%d bytes written, %d more wanted)\n",
+                                  networkmessage.writebyte, len);
+        } //end if
+        networkmessage.overflowed = true;
+        return NULL;
+    } //end if
+    return &networkmessage.message[networkmessage.writebyte];
+} //end of the function BotMessageSpace
 //===========================================================================
 //
 // Parameter:               -
@@ -771,12 +819,16 @@ void Bot_unicast(edict_t *ent, qboolean reliable)
 // gamei386.so: 0007A710..0007A760
 void Bot_WriteChar(int c)
 {
+    unsigned char *p;
+
     if (c < -128 || c > 127)
     {
         newgameimport.dprintf("WARNING: Bot_WriteChar: range error");
     } //end if
-    networkmessage.message[networkmessage.writebyte] = c;
-    networkmessage.writebyte++;
+    if (!(p = BotMessageSpace(1)))
+        return;
+    p[0] = c;
+    networkmessage.writebyte += 1;
 } //end of the function Bot_WriteChar
 //===========================================================================
 //
@@ -788,6 +840,8 @@ void Bot_WriteChar(int c)
 // gamei386.so: 0007A760..0007A796
 void Bot_WriteByte(int c)
 {
+    unsigned char *p;
+
     if (c < 0 || c > 255)
     {
         //NOTE: in target_laser_think: gi.WriteByte (self->s.skinnum); the
@@ -796,8 +850,10 @@ void Bot_WriteByte(int c)
         //newgameimport.dprintf("WARNING: Bot_WriteByte: range error");
         c = 0;
     } //end if
-    networkmessage.message[networkmessage.writebyte] = c;
-    networkmessage.writebyte++;
+    if (!(p = BotMessageSpace(1)))
+        return;
+    p[0] = c;
+    networkmessage.writebyte += 1;
 } //end of the function Bot_WriteByte
 //===========================================================================
 //
@@ -809,6 +865,8 @@ void Bot_WriteByte(int c)
 // gamei386.so: 0007A798..0007A7F3
 void Bot_WriteShort(int c)
 {
+    unsigned char *p;
+
     if (c < (short)0x8000 || c > (short)0x7fff)
     {
         //NOTE: I guess somewhere in the original id code is some sort of bug
@@ -816,10 +874,11 @@ void Bot_WriteShort(int c)
         //newgameimport.dprintf("WARNING: Bot_WriteShort: range error");
         c = 0;
     } //end if
-    networkmessage.message[networkmessage.writebyte] = c & 0xff;
-    networkmessage.writebyte++;
-    networkmessage.message[networkmessage.writebyte] = c >> 8;
-    networkmessage.writebyte++;
+    if (!(p = BotMessageSpace(2)))
+        return;
+    p[0] = c & 0xff;
+    p[1] = c >> 8;
+    networkmessage.writebyte += 2;
 } //end of the function Bot_WriteShort
 //===========================================================================
 //
@@ -831,14 +890,15 @@ void Bot_WriteShort(int c)
 // gamei386.so: 0007A7F4..0007A87E
 void Bot_WriteLong(int c)
 {
-    networkmessage.message[networkmessage.writebyte] = c&0xff;
-    networkmessage.writebyte++;
-    networkmessage.message[networkmessage.writebyte] = (c>>8)&0xff;
-    networkmessage.writebyte++;
-    networkmessage.message[networkmessage.writebyte] = (c>>16)&0xff;
-    networkmessage.writebyte++;
-    networkmessage.message[networkmessage.writebyte] = c>>24;
-    networkmessage.writebyte++;
+    unsigned char *p;
+
+    if (!(p = BotMessageSpace(4)))
+        return;
+    p[0] = c&0xff;
+    p[1] = (c>>8)&0xff;
+    p[2] = (c>>16)&0xff;
+    p[3] = c>>24;
+    networkmessage.writebyte += 4;
 } //end of the function Bot_WriteLong
 //===========================================================================
 //
@@ -850,11 +910,14 @@ void Bot_WriteLong(int c)
 // gamei386.so: 0007A880..0007A8BA
 void Bot_WriteFloat(float f)
 {
+    unsigned char *p;
     int c;
 
     c = LittleLong(*(int *) &f);
 
-    memcpy(&networkmessage.message[networkmessage.writebyte], &c, 4);
+    if (!(p = BotMessageSpace(4)))
+        return;
+    memcpy(p, &c, 4);
     networkmessage.writebyte += 4;
 } //end of the function Bot_WriteFloat
 //===========================================================================
@@ -867,16 +930,24 @@ void Bot_WriteFloat(float f)
 // gamei386.so: 0007A8BC..0007A91F
 void Bot_WriteString(const char *s)
 {
-    if (!s)
+    unsigned char *p;
+    size_t len;
+
+    //the string and its terminator, in one bounds check.  This was a bare
+    //strcpy into the buffer at whatever offset writebyte held, and the only
+    //length any caller passes is its own -- gi.WriteString of a scoreboard
+    //page is over 1400 bytes on its own.
+    len = s ? strlen(s) + 1 : 1;
+    if (len > MAX_NETWORKMESSAGE)
+        len = MAX_NETWORKMESSAGE;
+    if (!(p = BotMessageSpace(len)))
+        return;
+    if (s)
     {
-        networkmessage.message[networkmessage.writebyte] = 0;
-        networkmessage.writebyte++;
+        memcpy(p, s, len - 1);
     } //end if
-    else
-    {
-        strcpy((char *)&networkmessage.message[networkmessage.writebyte], s);
-        networkmessage.writebyte += strlen(s) + 1;
-    } //end else
+    p[len - 1] = 0;
+    networkmessage.writebyte += len;
 } //end of the function Bot_WriteString
 //===========================================================================
 //
