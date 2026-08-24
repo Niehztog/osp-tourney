@@ -349,6 +349,21 @@ here, and so is everything the audit it asked for turned up afterwards.
   bot's, with a skin indexed by the client loop counter rather than by the
   team — walking off the end of `teams[]` for every client past the second.
 
+**`match_mode` was never range-checked.** It selects the ruleset and only 0..3
+exist, but all three of its read sites took `(int)match_mode->value` raw and the
+mode chain in `OSP_gameInit` ended in a catch-all `else`. Anything outside the
+range was therefore announced as 1v1 -- on the console, and to every client and
+server browser through the `CVAR_SERVERINFO` `match_type` -- while none of the
+34 `m_mode == 3` branches ran. `match_mode 4` still satisfied `m_mode > 1`, so
+it advertised a duel and played a team game with `team_maxplayers` left
+unclamped; `match_mode -1` failed that test, so it advertised a duel and played
+a free-for-all with the match state machine switched on. There is one
+`OSP_matchMode()` now, which clamps to 0..3 and writes the clamped value back,
+called at each of the three sites -- `InitGame` runs once per game library load
+and `SP_worldspawn` runs per map, so a live `set match_mode 4` would otherwise
+reach the next map unvalidated. The chain's final arm tests `m_mode == 3` like
+the other three test theirs.
+
 **Hidden and hostile behaviour.**
 
 * `ClientConnect` built the string `\name\` byte by byte, so that it never
