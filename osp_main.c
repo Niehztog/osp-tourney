@@ -235,6 +235,40 @@ cvar_t * vote_enable_kick;
 char    match_motd[1024];
 char    match_info[1024];
 
+/*
+==============
+OSP_matchMode
+
+match_mode picks the ruleset and only 0..3 exist.  It used to be read raw at
+all three of its sites, so any other value fell through the mode chain's final
+`else` and was announced as 1v1 -- on the console, and to every client and
+server browser through the CVAR_SERVERINFO `match_type` -- while none of the 34
+`m_mode == 3` branches ran.  4 advertised a duel and played a team game; -1
+advertised a duel and played a free-for-all.
+
+Clamp it the way this file clamps every other out-of-range cvar, and write the
+clamped value back so the cvar agrees with the mode being played.  The check
+belongs at each site rather than once in OSP_gameInit, because InitGame runs
+once per game library load and SP_worldspawn runs per map: a live
+`set match_mode 4` would otherwise reach the next map unvalidated.
+==============
+*/
+int OSP_matchMode(void)
+{
+    char        buf[32];
+    int         mode;
+
+    mode = (int)match_mode->value;
+    if (mode < 0 || mode > 3) {
+        mode = mode < 0 ? 0 : 3;
+        Q_snprintf(buf, sizeof(buf), "%d", mode);
+        gi.cvar_set("match_mode", buf);
+        gi.dprintf("match_mode out of range!\nSetting match_mode to: %s\n", buf);
+    }
+
+    return mode;
+}
+
 // Register every cvar the mod owns and clamp the ones that have a legal range.
 // gamex86.dll: 10023D00..10025911
 // gamei386.so: 00048254..0004AA2E
@@ -268,7 +302,7 @@ void OSP_gameInit(void)
     bots_warmuptime = gi.cvar("bots_warmuptime", "0", 0);
 
     match_mode = gi.cvar("match_mode", "0", 0);
-    m_mode = (int)match_mode->value;
+    m_mode = OSP_matchMode();
     match_type = gi.cvar("match_type", "RegularDM", CVAR_SERVERINFO);
     match_features = gi.cvar("match_info", "None", CVAR_SERVERINFO);
     match_latejoin = gi.cvar("match_latejoin", "2", 0);
@@ -579,7 +613,7 @@ void OSP_gameInit(void)
         sync_stat = 0;
         gi.cvar_set("match_type", "TeamPlay");
         gi.dprintf("Mode: *** DM TEAM-PLAY MODE ***\n");
-    } else {
+    } else if (m_mode == 3) {
         sync_stat = 0;
         gi.cvar_set("match_type", "1-vs-1");
         gi.dprintf("Mode: *** DM 1V1 MODE ***\n");

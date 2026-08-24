@@ -751,7 +751,7 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
 
     PlayerTrail_Init();
 
-    m_mode = (int)match_mode->value;
+    m_mode = OSP_matchMode();
     player_reload = gi.cvar("player_reload", "0", 0);
     if ((int)player_reload->value)
         OSP_playerlist_svcmd();
@@ -1018,7 +1018,7 @@ void SP_worldspawn(edict_t *ent)
     //---------------
 
     match_mode = gi.cvar("match_mode", "0", 0);
-    m_mode = (int)match_mode->value;
+    m_mode = OSP_matchMode();
 
     // reserve some spots for dead player bodies for coop / deathmatch
     InitBodyQue();

@@ -1598,6 +1598,7 @@ void        OSP_configLoad(void);
 void     OSP_configList(edict_t *ent);
 bool OSP_configExists(edict_t *ent, char *name);
 bool OSP_configFileExists(char *name);
+int      OSP_matchMode(void);
 void     OSP_gameInit(void);
 void     OSP_endClean(void);
 void     OSP_initWeapItem(void);
