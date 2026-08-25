@@ -69,6 +69,32 @@ all: build_debug build_release
 
 targets: $(TARGETS)
 
+# pm_time has no fixed unit -- 8 ms tics on a plain server, milliseconds on an
+# extended one -- so every hold has to be written `<ms> >> PM_TIME_SHIFT`.  The
+# pre-extension spellings (`14`, `160>>3`) still compile and still look right,
+# so nothing in the toolchain catches them; this does.  Run it by hand with
+# `make check-pm-time`, and `make check-pm-time-control` restores two of the
+# defects to show the check actually fires.  See tools/check-pm-time.sh.
+#
+# It runs as a stamp the objects depend on rather than as a prerequisite of
+# `targets`, so it is ordered strictly before every compile even under -j, and
+# re-runs only when a source it scans has changed.
+CHECK_SRCS=$(wildcard *.c *.h shared/*.c shared/*.h)
+CHECK_STAMP=$(BUILDDIR)/.pm-time-ok
+
+$(CHECK_STAMP): $(CHECK_SRCS) tools/check-pm-time.sh
+	tools/check-pm-time.sh $(CHECK_SRCS)
+	@touch $@
+
+check-pm-time:
+	tools/check-pm-time.sh $(CHECK_SRCS)
+
+check-pm-time-control:
+	tools/check-pm-time.sh --self-test
+
+.PHONY: all build_debug build_release targets check-pm-time check-pm-time-control \
+	clean clean-debug clean-release clean2
+
 # In the link order recovered from the shipped gamei386.so, with q_shared.o
 # replaced by the engine's shared.c and Q2PRO's generated g_ptrs.c appended.
 GAME_OBJS = \
@@ -128,7 +154,7 @@ GAME_OBJS = \
 $(BUILDDIR)/game$(ARCH).$(SHLIBEXT) : $(GAME_OBJS)
 	$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(GAME_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/%.o : %.c
+$(BUILDDIR)/%.o : %.c $(CHECK_STAMP)
 	$(DO_SHLIB_CC)
 
 #####
@@ -142,4 +168,4 @@ clean-release:
 	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR)
 
 clean2:
-	-rm -f $(GAME_OBJS)
+	-rm -f $(GAME_OBJS) $(CHECK_STAMP)

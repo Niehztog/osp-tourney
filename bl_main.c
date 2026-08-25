@@ -527,8 +527,13 @@ void BotLib_BotUpdateClient(edict_t *bot)
     VectorCopy(bot->velocity, buc.velocity);
     //pm_flags
     buc.pm_flags = bot->client->ps.pmove.pm_flags;
-    //pm_time
-    buc.pm_time = bot->client->ps.pmove.pm_time;
+    //pm_time.  bot_updateclient_t is the 1999 botlib ABI: a byte, one unit per
+    //8 ms.  ps.pmove.pm_time is in those same units on a plain server but in
+    //milliseconds on an extended one, so undo whatever PM_TIME_SHIFT did not
+    //do -- 3 - PM_TIME_SHIFT is 0 plain, 3 extended.  Clamp as well: extended
+    //pm_time is a uint16_t and the engine's own waterjump hold (2040 ms) does
+    //not survive the byte on its own.
+    buc.pm_time = min(bot->client->ps.pmove.pm_time >> (3 - PM_TIME_SHIFT), 255);
     //gravity
     buc.gravity = sv_gravity->value;
     //delta_angles (NOTE: the bot->client->ps.pmove.delta_angles are of type short)
