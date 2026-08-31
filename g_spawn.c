@@ -652,6 +652,23 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
 
     gi.FreeTags(TAG_LEVEL);
 
+    // A menu handle is TAG_LEVEL memory now (p_menu.c moved it off libc
+    // malloc, which is what lets a level change reclaim it instead of leaking
+    // it), so the free above has just invalidated every open menu.  Clearing
+    // the handle is not optional: osp_menus.c calls PMenu_Close(ent)
+    // UNCONDITIONALLY in a dozen leaves -- OSP_voteMenu and OSP_helpMenu among
+    // them -- and that close tests the handle rather than `inmenu`, so it would
+    // read `num` and the row pointers back out of released memory and hand
+    // those to gi.TagFree.
+    // `< maxclients`, not `<=`: the loop further down walks g_edicts, where
+    // index 0 is the world and the clients are 1..maxclients, and game.clients
+    // is the other indexing -- 0..maxclients-1.
+    for (i = 0; i < game.maxclients; i++) {
+        game.clients[i].menu = NULL;
+        game.clients[i].inmenu = false;
+        game.clients[i].menudirty = false;
+    }
+
     G_FreePrecaches();
 
     memset(&level, 0, sizeof(level));

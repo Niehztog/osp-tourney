@@ -1150,8 +1150,17 @@ typedef enum {
     CTF_GRAPPLE_STATE_HANG  = 4
 } grapple_state_t;
 
-void PMenu_Open(edict_t *ent, pmenu_t *entries, int cur, int num);
+void PMenu_Open(edict_t *ent, const pmenu_t *entries, int cur, int num);
 void PMenu_Close(edict_t *ent);
+void PMenu_UpdateEntry(pmenu_t *entry, const char *text, int align,
+                       void (*SelectFunc)(edict_t *ent, struct pmenu_s *entry));
+// Re-copy `entries` into this client's private rows.  Every leaf in
+// osp_menus.c that restages a table calls it before PMenu_Update(); see
+// p_menu.c for why it is silent when no menu is open.
+void PMenu_Sync(edict_t *ent, const pmenu_t *entries);
+// Compose and write the layout now.  PMenu_Update() is the rate-limited door
+// to it, and ClientEndServerFrame is what flushes what that door defers.
+void PMenu_Do_Update(edict_t *ent);
 void PMenu_Update(edict_t *ent);
 void PMenu_Next(edict_t *ent);
 void PMenu_Prev(edict_t *ent);
@@ -1874,6 +1883,11 @@ struct gclient_s {
     int         respawn_framenum;       // can respawn when time > this
     pmenuhnd_t  *menu;              // id CTF's own field
     bool        inmenu;
+    // p_menu.c departure 3: a menu redraw the input earned, flushed at the
+    // engine's cadence in ClientEndServerFrame rather than at the rate the
+    // player can hold down a cursor key.
+    float       menutime;           // next allowed refresh
+    bool        menudirty;
 
 #define FLOOD_MSGS  10
 

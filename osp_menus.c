@@ -359,6 +359,44 @@ static int  admin_mode_map = 1;
 static int  admin_mode_ban = 2;
 static int  admin_mode_kick = 4;
 
+/*
+================
+OSP_refereeOnly
+
+THE MENU ROUTE INTO THE ADMIN TREE HAS NO CHECK OF ITS OWN.
+
+The text route does: osp_clientcmd.c gates `r_kick`, `r_ban`, `r_map` and the
+rest behind `else if (ent->osp_e39c)`, so a player who types one is refused by
+the dispatcher before the command function is reached -- which is why
+OSP_rban_cmd and friends never needed a check inside them.  The menu route
+reaches the SAME functions and was gated by one thing only: whether
+OSP_updateTeamMenu/OSP_updateDMMenu had left a SelectFunc on the "*Admin Menu"
+row.  That is a field in a file-scope table, written from THIS client's
+`osp_e39c` and read by every client -- so before p_menu.c's per-client copy, a
+referee opening their menu handed the row to anyone else who had one open and
+then moved the cursor.
+
+The copy closes the reachable path; this closes the CLASS.  A row's SelectFunc
+is a drawing decision.  It is not an authorisation, and nothing below it should
+have been treating it as one.  Six entry points ask here: the two that open an
+admin menu, the two that move its selection, and the two that act.
+
+Truthy, not `== 1`, because that is what the flag means: 1 is a referee who came
+in through the match's ref_passwd and 2 is one who used `referee` with
+referee_password or rcon.  Both are referees, both are what osp_clientcmd.c's
+dispatcher accepts, and both are what the menu row itself tests -- so this adds
+no new policy, it applies the existing one where it was missing.
+================
+*/
+static bool OSP_refereeOnly(edict_t *ent)
+{
+    if (ent->osp_e39c)
+        return true;
+
+    gi.cprintf(ent, PRINT_HIGH, "You are not a referee.\n");
+    return false;
+}
+
 // gamex86.dll: 100309E0..10030A2B
 // gamei386.so: 0005DAFC..0005DB40
 void OSP_teamMenu(edict_t *ent)
@@ -393,6 +431,11 @@ void OSP_adminMenu(edict_t *ent)
 {
     int     cur;
 
+    // Before the toggle, not inside it: a non-referee has no admin menu to
+    // close, and `inven` closes whatever is open anyway.
+    if (!OSP_refereeOnly(ent))
+        return;
+
     if (ent->client->inmenu)
         PMenu_Close(ent);
     else {
@@ -405,8 +448,22 @@ void OSP_adminMenu(edict_t *ent)
 // gamei386.so: 0005DBC8..0005DC1F
 void OSP_adminSelectMenu(edict_t *ent, pmenu_t *p)
 {
+    int     which;
+
+    if (!OSP_refereeOnly(ent))
+        return;
+
+    // READ THE ARG BEFORE THE CLOSE.  `p` points into this client's private
+    // copy of the rows, and PMenu_Close() frees that copy -- so the original's
+    // order, close and then dereference, became a read of released memory the
+    // moment the entries stopped being the global table (p_menu.c departure
+    // 2).  It is the only leaf that does this: the other two `*(int *)p->arg`
+    // sites, OSP_joinTeam_menu and OSP_changeItems_menu, read before they
+    // close anything.
+    which = *(int *)p->arg;
+
     PMenu_Close(ent);
-    ent->client->resp.osp_r238 = *(int *)p->arg;
+    ent->client->resp.osp_r238 = which;
     ent->client->resp.osp_r290 = -1;
     OSP_updateAdminSelectMenu(ent);
     PMenu_Open(ent, AdminSelect_Menu, 6, 17);
@@ -690,12 +747,14 @@ void OSP_returnMainTeam_menu(edict_t *ent, pmenu_t *p)
 void OSP_toggleID_menu(edict_t *ent, pmenu_t *p)
 {
     OSP_id_cmd(ent);
-    if (m_mode > 1)
+    if (m_mode > 1) {
         OSP_updateTeamMenu(ent);
-    else
+        PMenu_Sync(ent, Team_Menu);
+    } else {
         OSP_updateDMMenu(ent);
+        PMenu_Sync(ent, RegDM_Menu);
+    }
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 1003151E..1003152F
@@ -866,9 +925,22 @@ int OSP_updateDMMenu(edict_t *ent)
         Q_snprintf(dm_play_line, sizeof(dm_play_line), "*Enter the Game");
     RegDM_Menu[4].text = dm_play_line;
 
+    // THE `else` IS NOT COSMETIC.  These tables are file-scope globals and the
+    // builders restage them per client, so a branch that only ever CLEARS a
+    // SelectFunc is a one-way latch.  `RegDM_Menu[4]` -- "Enter the Game" -- is
+    // assigned nowhere else in the mod, so its only non-NULL value is the
+    // initialiser.  One referee opening the DM menu, or anyone opening it
+    // during a match with late joining locked, killed that row for EVERY
+    // client; and because the table has static storage duration and nothing
+    // re-initialises it, the row stayed dead across map changes for the life of
+    // the loaded library.  Copying the rows per client (p_menu.c departure 2)
+    // does not reach this: what is latched is the template every copy is taken
+    // from.
     if (ent->osp_e39c == 1 ||
         (sync_stat == 4 && (int)match_latejoin->value <= 1))
         RegDM_Menu[4].SelectFunc = NULL;
+    else
+        RegDM_Menu[4].SelectFunc = OSP_dmReturn_menu;
 
     if (ent->osp_e39c) {
         Q_snprintf(dm_admin_line, sizeof(dm_admin_line), "*Admin Menu");
@@ -1183,11 +1255,18 @@ void OSP_updateVoteMenu2(edict_t *ent)
             Q_snprintf(v2_line6, sizeof(v2_line6), "Hurt Self: NO");
     }
 
+    // The second one-way latch, and the same reasoning as RegDM_Menu[4] in
+    // OSP_updateDMMenu: "Hurt Team" is blanked outside team play and never put
+    // back, so a DM map followed by a team map left the row drawn -- its text
+    // IS restaged below -- but dead, for the life of the loaded library.  The
+    // restore has to be explicit because the table is a global, not because of
+    // anything this client did.
     if (m_mode > 1) {
         if (ent->client->resp.osp_r2a4 & 0x80)
             Q_snprintf(v2_line7, sizeof(v2_line7), "Hurt Team: YES");
         else
             Q_snprintf(v2_line7, sizeof(v2_line7), "Hurt Team: NO");
+        Vote_Menu2[10].SelectFunc = OSP_changeItems_menu;
     } else {
         v2_line7[0] = 0;
         Vote_Menu2[10].SelectFunc = NULL;
@@ -1646,8 +1725,8 @@ void OSP_changeMap_menu(edict_t *ent, pmenu_t *p)
     }
 
     OSP_updateVoteMenu(ent);
+    PMenu_Sync(ent, Vote_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 100339DD..10033B12
@@ -1677,8 +1756,8 @@ void OSP_changeConfig_menu(edict_t *ent, pmenu_t *p)
     }
 
     OSP_updateVoteMenu(ent);
+    PMenu_Sync(ent, Vote_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 10033B12..10033C6A
@@ -1706,8 +1785,8 @@ void OSP_changeTime_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0;
 
     OSP_updateVoteMenu(ent);
+    PMenu_Sync(ent, Vote_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 10033C6A..10033DC2
@@ -1735,8 +1814,8 @@ void OSP_changeFrag_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0;
 
     OSP_updateVoteMenu(ent);
+    PMenu_Sync(ent, Vote_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 10033DC2..10033E80
@@ -1755,8 +1834,8 @@ void OSP_changeHook_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0;
 
     OSP_updateVoteMenu(ent);
+    PMenu_Sync(ent, Vote_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 10033E80..10033F63
@@ -1781,8 +1860,8 @@ void OSP_changeRunes_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0;
 
     OSP_updateVoteMenu(ent);
+    PMenu_Sync(ent, Vote_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // Step the kick target to the next/previous connected client. resp.osp_r268 is
@@ -1863,8 +1942,8 @@ void OSP_changeKick_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0;
 
     OSP_updateVoteMenu(ent);
+    PMenu_Sync(ent, Vote_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 1003426E..1003432B
@@ -1886,8 +1965,8 @@ void OSP_changeItems_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0;
 
     OSP_updateVoteMenu2(ent);
+    PMenu_Sync(ent, Vote_Menu2);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // Cycle through the names in the bot config file. Selecting a name clears the
@@ -1932,8 +2011,8 @@ void OSP_addSpecificBot_menu(edict_t *ent, pmenu_t *p)
     }
 
     OSP_updateBotMenu(ent);
+    PMenu_Sync(ent, Bot_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 100344FB..10034689
@@ -1965,8 +2044,8 @@ void OSP_addBots_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0x80;
 
     OSP_updateBotMenu(ent);
+    PMenu_Sync(ent, Bot_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 10034689..100347B4
@@ -1994,8 +2073,8 @@ void OSP_removeBots_menu(edict_t *ent, pmenu_t *p)
         ent->client->resp.osp_r254 = 0x100;
 
     OSP_updateBotMenu(ent);
+    PMenu_Sync(ent, Bot_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // gamex86.dll: 100347B4..100347D1
@@ -2183,6 +2262,9 @@ int OSP_updateAdminSelectMenu(edict_t *ent)
 // gamei386.so: 00061DB8..00061E4A
 void OSP_mapAdminSelect_menu(edict_t *ent, pmenu_t *p)
 {
+    if (!OSP_refereeOnly(ent))
+        return;
+
     if (ent->client->resp.osp_r264)
         ent->client->resp.osp_r290--;
     else
@@ -2196,8 +2278,8 @@ void OSP_mapAdminSelect_menu(edict_t *ent, pmenu_t *p)
     }
 
     OSP_updateAdminSelectMenu(ent);
+    PMenu_Sync(ent, AdminSelect_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // Step to the next/previous connected client. resp.osp_r290 holds a client
@@ -2210,6 +2292,9 @@ void OSP_playerAdminSelect_menu(edict_t *ent, pmenu_t *p)
     edict_t     *other;
     int         i;
     int         found;
+
+    if (!OSP_refereeOnly(ent))
+        return;
 
     found = -1;
     if (ent->client->resp.osp_r264) {
@@ -2232,8 +2317,8 @@ void OSP_playerAdminSelect_menu(edict_t *ent, pmenu_t *p)
 
     ent->client->resp.osp_r290 = found;
     OSP_updateAdminSelectMenu(ent);
+    PMenu_Sync(ent, AdminSelect_Menu);
     PMenu_Update(ent);
-    gi.unicast(ent, true);
 }
 
 // A referee picking a map out of the admin menu ends the level immediately --
@@ -2244,6 +2329,10 @@ void OSP_playerAdminSelect_menu(edict_t *ent, pmenu_t *p)
 void OSP_mapAdminChoose(edict_t *ent, pmenu_t *p)
 {
     int         sel;
+
+    // The acting leaf: this one ends the level.
+    if (!OSP_refereeOnly(ent))
+        return;
 
     sel = ent->client->resp.osp_r290;
     PMenu_Close(ent);
@@ -2269,6 +2358,11 @@ void OSP_mapAdminChoose(edict_t *ent, pmenu_t *p)
 void OSP_playerAdminChoose(edict_t *ent, pmenu_t *p)
 {
     edict_t     *target = g_edicts + ent->client->resp.osp_r290 + 1;
+
+    // The acting leaf: this one kicks or bans, and OSP_rban_cmd has no check
+    // of its own because the dispatcher is what gates `r_ban`.
+    if (!OSP_refereeOnly(ent))
+        return;
 
     if (ent->client->resp.osp_r290 > -1 && target->client) {
         if (ent->client->resp.osp_r238 == 2)

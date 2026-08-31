@@ -1079,7 +1079,29 @@ void ClientEndServerFrame(edict_t *ent)
 
     // The whole tail is ONE condition, and this block is the LAST statement
     // in the function.
-    if (current_client->showscores && !current_client->menu &&
+    if (current_client->menu) {
+        // p_menu.c departures 3 and 4, and they land here rather than at the
+        // end of ClientThink because ClientThink's tail is inside an if/else
+        // whose other arm returns early -- so it is not reached on every path,
+        // and a deferred redraw that is only sometimes flushed is worse than
+        // none.  This block already owns the "menu or scoreboard" decision for
+        // the layout channel; the original just had nothing to draw for the
+        // menu half and skipped.
+        //
+        // Two reasons to compose: a keypress marked the menu dirty and its
+        // 0.2s has elapsed, or the 32-frame repaint came round.  The repaint is
+        // a REPAINT, not a refresh -- it redraws the client's private copy of
+        // the rows, and only an update*Menu() plus PMenu_Sync() changes what is
+        // in that copy, so Team_Menu's live player counts are still whatever
+        // they were when the menu was opened or last acted on.
+        if ((current_client->menudirty && current_client->menutime <= level.time)
+            || !(level.framenum & 31)) {
+            PMenu_Do_Update(ent);
+            gi.unicast(ent, true);
+            current_client->menutime = level.time;
+            current_client->menudirty = false;
+        }
+    } else if (current_client->showscores &&
         (!(level.framenum & 31) ||
          (match_paused && (pause_time - (int)pause_time < FRAMETIME) &&
           !((int)pause_time % 3))) &&
