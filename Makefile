@@ -11,8 +11,32 @@
 # in this tree assembles to the shipped image. asm_matching/ still works, but
 # only against `main`.
 
-BUILD_DEBUG_DIR=debug
-BUILD_RELEASE_DIR=release
+BUILD_DEBUG_DIR=debug$(BUILDSUFFIX)
+BUILD_RELEASE_DIR=release$(BUILDSUFFIX)
+
+# API=old builds against the classic game ABI -- GAME_API_VERSION 3,
+# gclient_old_t, pmove_old_t -- which is what Yamagi Quake II, r1q2 and id's own
+# 3.20 dedicated server load.  The default (API=new) is Q2PRO's 3302.
+#
+# It is a SUPPORTED CONFIGURATION and not a curiosity: this mod's whole audience
+# is 1v1 and team tournaments on other people's servers, and half the servers
+# still running Quake II are not Q2PRO.  Every source file already carries the
+# `#if USE_NEW_GAME_API` branch for it -- g_save.c's client field table and save
+# version, p_client.c's PM_trace signature, g_local.h's PM_TIME_SHIFT -- so the
+# only thing missing was a way to ask for it.  See doc/q2pro-port.md.
+#
+# The two builds land in separate directories so both can exist at once, which
+# is what makes an A/B across engines a single `make`.
+API=new
+ifeq ($(API),old)
+BUILDSUFFIX=-oldapi
+API_CFLAGS=-DUSE_NEW_GAME_API=0
+else ifeq ($(API),new)
+BUILDSUFFIX=
+API_CFLAGS=
+else
+$(error API must be `new` (Q2PRO, the default) or `old` (Yamagi Quake II, r1q2, id 3.20))
+endif
 
 # Q2PRO looks for game<CPUSTRING><suffix> next to the mod directory, and its
 # CPUSTRING is meson's cpu_family: x86_64, x86, arm, aarch64.
@@ -24,7 +48,7 @@ CC=gcc
 # shared/ holds the engine headers the game links against (shared.h, game.h,
 # list.h, platform.h) plus shared.c.
 INCLUDES=-I. -Ishared
-BASE_CFLAGS=-DHAVE_CONFIG_H $(INCLUDES) -Dstricmp=strcasecmp
+BASE_CFLAGS=-DHAVE_CONFIG_H $(INCLUDES) -Dstricmp=strcasecmp $(API_CFLAGS)
 
 RELEASE_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -O2
 DEBUG_CFLAGS=$(BASE_CFLAGS) $(MODERN_CFLAGS) -g -O0
@@ -59,11 +83,11 @@ TARGETS=$(BUILDDIR)/game$(ARCH).$(SHLIBEXT)
 
 build_debug:
 	@-mkdir $(BUILD_DEBUG_DIR)
-	$(MAKE) targets BUILDDIR=$(BUILD_DEBUG_DIR) CFLAGS="$(DEBUG_CFLAGS)"
+	$(MAKE) targets API=$(API) BUILDDIR=$(BUILD_DEBUG_DIR) CFLAGS="$(DEBUG_CFLAGS)"
 
 build_release:
 	@-mkdir $(BUILD_RELEASE_DIR)
-	$(MAKE) targets BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(RELEASE_CFLAGS)"
+	$(MAKE) targets API=$(API) BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(RELEASE_CFLAGS)"
 
 all: build_debug build_release
 

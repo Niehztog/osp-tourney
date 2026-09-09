@@ -520,6 +520,55 @@ What is checked
   reviewed; the 39 of them are the monster helpers, `Cmd_PlayerList_f`, the
   baseq2 scoreboard and the coop key-stripping loop.
 
+Play-testing on two engines
+---------------------------
+
+`tools/playtest.sh` drives a real dedicated server of **both** families with
+headless clients on the wire, and asserts on what those clients and the server
+console actually do. `make API=old` is what makes the second family possible:
+it builds against the classic game ABI — `GAME_API_VERSION` 3, `gclient_old_t`,
+`pmove_old_t` — which is what Yamagi Quake II, r1q2 and id's own 3.20 dedicated
+server load. Every source file already carried its `#if USE_NEW_GAME_API` branch
+(`g_save.c`'s client field table and save version, `p_client.c`'s `PM_trace`
+signature, `g_local.h`'s `PM_TIME_SHIFT`); the only thing missing was a way to
+ask for it. The two builds land in separate directories so both can exist at
+once.
+
+**Running both is not belt and braces — the same defect presents differently.**
+
+* A `map` command issued while a game is running is **ignored** by Q2PRO on a
+  dedicated server, because `sv_allow_map` defaults to 0 there and
+  `should_really_restart()` returns -1. On Yamagi the same command is
+  **honoured, as a full server restart**: the game library is torn down and
+  re-initialised and every connected player is dropped. Measured both ways —
+  445 ignored re-issues and a wedged intermission on Q2PRO, an empty client
+  list in `status` on Yamagi. `gamemap` is the command that changes level
+  without disturbing anybody, and is what `ExitLevel()` has always used.
+* The rune cache going stale across a configuration change is **masked** on the
+  old engines, for the same reason: the full restart re-runs `InitGame` and
+  recomputes the cache as a side effect. A row that ran only against Yamagi
+  would have called it fixed.
+* A cvar re-obtained with `CVAR_NOSET` stays write-protected for the life of
+  the process on **both** — `Cvar_Get` ORs new flags onto an existing cvar and
+  never clears one, in Q2PRO and Yamagi alike.
+
+Two things the harness itself needed before a client could exercise any of it
+against a vanilla-protocol server, both fixed in `libq2` rather than worked
+around here:
+
+* **The spawn handshake.** `cmd <rest>` in a stufftext means "forward `<rest>`
+  to the server", and a vanilla server's whole spawn sequence is built out of
+  it — `cmd configstrings <spawncount> 0`, then `cmd baselines`, and only then
+  `precache`. Q2PRO short-circuits that and stuffs `precache` straight away, so
+  a client written against it stalls for ever on the older engines.
+* **The move checksum.** A vanilla server recomputes
+  `COM_BlockSequenceCRCByte` over each `clc_move` block and **silently ignores
+  the rest of the packet** when it disagrees. Q2PRO dropped that check, so a
+  client with a placeholder byte works there and is simply never moved by
+  Yamagi: it connects, it spawns, it receives frames, and every command it
+  sends is discarded — which is indistinguishable from a game library that
+  ignores input.
+
 Warnings
 --------
 
