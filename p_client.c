@@ -2075,6 +2075,36 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
     pmove_t pm;
 
     if (match_paused < 2) {
+        // *** THE FL_BOTINPUT TEST BELONGS TO BOTS, AND ONLY TO BOTS. ***
+        //
+        // FL_BOTINPUT is set by `bl_main.c` around its own ClientThink calls
+        // and nowhere else (BotExecuteInput, bl_main.c:203/:228), so it asks
+        // "are we inside the brain's own input call".  A bot is a FAKE client
+        // and the engine calls ge->ClientThink for it as well; that call has no
+        // usercmd worth running and is what this refuses.
+        //
+        // Hoisted out of the FL_BOT block -- which is how it stood here -- the
+        // same test reads "return unless we are inside a bot's input", and that
+        // is true of EVERY REAL CLIENT ON EVERY FRAME.  The whole body below is
+        // unreachable for a human: no Pmove, so no walking, no falling, no
+        // firing; no intermission exit, so a level that ends never advances;
+        // and the movement-axis menus never see a key.  Measured on q2dm1
+        // before this: a client joined, 81 server frames passed, and its origin
+        // did not move by a single unit -- it did not even fall to the floor.
+        //
+        // The shipped 1999 binary has the SDK's shape and not this one, which
+        // is what decides it rather than an argument from taste:
+        //
+        //   3d292  test BYTE PTR [edx+0x109],0x20   ; flags & FL_BOT
+        //   3d299  je   3d383                       ; NOT a bot -> the body
+        //   3d373  test BYTE PTR [edi+0x109],0x40   ; flags & FL_BOTINPUT
+        //   3d37d  je   3ec45                       ; not set -> return
+        //   3d383  ...level.current_entity = ent    ; the body
+        //
+        // A non-bot jumps PAST the FL_BOTINPUT test.  Gladiator's own source
+        // says the same in C (`gladq2-0.96-src/p_client.c:2419`), and Mr
+        // Elusive's comment there is "if this is a bot / if the bot input flag
+        // isn't set".
         if (ent->flags & FL_BOT) {
             if (ent->client->resp.entered != ENTERED_ENTERED)
                 OSP_startObserve(ent);
