@@ -24,6 +24,21 @@ static int      sl_buffered;        // lines written since the last flush
 // 2 (the default) = flush every line.
 #define SL_BUFFER_LINES 40
 
+// An absolute `sl_filename` is taken as given rather than joined onto basedir.
+// The Windows arm is not decoration: this game library ships as a .dll too, and
+// there both a leading separator and a drive letter are absolute.
+static bool sl_IsAbsolutePath(const char *path)
+{
+#ifdef _WIN32
+    return path[0] == '/' || path[0] == '\\' ||
+           (((path[0] >= 'A' && path[0] <= 'Z') ||
+             (path[0] >= 'a' && path[0] <= 'z')) &&
+            path[1] == ':');
+#else
+    return path[0] == '/';
+#endif
+}
+
 // gamex86.dll: 10063130..10063164
 // gamei386.so: 00073B68..00073BA5
 void sl_LogMapName(game_import_t *import, char *mapname)
@@ -195,6 +210,9 @@ void sl_LogScore(game_import_t *import, char *player, char *other, char *event,
 // gamei386.so: 000740E4..00074303
 int sl_OpenLogFile(game_import_t *import)
 {
+    char    path[MAX_OSPATH];
+    size_t  len;
+
     if (sl_status) {
         sl_status = 2;
         return 2;
@@ -213,19 +231,38 @@ int sl_OpenLogFile(game_import_t *import)
         return 0;
     }
 
-    // sl_filename keeps v2.75's meaning: a path relative to the Quake II
-    // base directory, not to the game directory.
-    sl_file = fopen(sl_filename->string, "a");
+    // sl_filename keeps v2.75's meaning: a path relative to the Quake II BASE
+    // directory, not to the game directory.  What it does NOT keep is
+    // "relative to whatever directory the server happens to have been started
+    // from", which is what a bare fopen() means -- and in 1999 those were the
+    // same thing because quake2.exe was launched from its own folder.  A
+    // dedicated server today is started from anywhere: a systemd unit, a
+    // container, a shell somewhere else entirely.  So `basedir` is joined on,
+    // exactly as OSP_loadMaps, OSP_configLoad and the stats log already do, and
+    // an absolute sl_filename is honoured as given.
+    if (sl_IsAbsolutePath(sl_filename->string))
+        len = Q_snprintf(path, sizeof(path), "%s", sl_filename->string);
+    else
+        len = Q_snprintf(path, sizeof(path), "%s/%s",
+                         gi.cvar("basedir", ".", 0)->string,
+                         sl_filename->string);
+    if (len >= sizeof(path)) {
+        gi.dprintf("Standard Log path is too long, logging disabled.\n");
+        sl_status = 0;
+        return 0;
+    }
+
+    sl_file = fopen(path, "a");
     if (!sl_file) {
         gi.dprintf("Couldn't create Standard Log \"%s\": %d\n",
-                   sl_filename->string, errno);
+                   path, errno);
         sl_status = 0;
         return 0;
     }
 
     sl_buffered = 0;
     sl_status = 1;
-    gi.dprintf("Standard Log logging enabled (%s).\n", sl_filename->string);
+    gi.dprintf("Standard Log logging enabled (%s).\n", path);
 
     return 1;
 }

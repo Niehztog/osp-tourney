@@ -536,7 +536,12 @@ static void G_RunFrame(void)
                 char    command[256];
 
                 gi.bprintf(PRINT_HIGH, "Loading bots...\n");
-                Q_snprintf(command, sizeof(command), " exec %s\n",
+                // Quoted, like the other two exec sites: `bots_botfile` is an
+                // operator-set filename and one containing a space would otherwise
+                // split into two tokens.  The leading space is 1999's and is kept
+                // -- the tokenizer discards it and it is how the command reads in
+                // the shipped binary.
+                Q_snprintf(command, sizeof(command), " exec \"%s\"\n",
                            bots_botfile->string);
                 gi.AddCommandString(command);
             }
@@ -563,16 +568,44 @@ static void G_RunFrame(void)
             OSP_serverbotsRemove();
             ot_count = 0;
 
+            // The config vote's exit path.  It re-reads maps.txt HERE because
+            // the `exec` that changed the configuration has already run, so
+            // the rotation this picks from is the new config's.
+            //
+            // *** `gamemap`, NOT `map`, AND THE FLAGS ARE CLEARED HERE. ***
+            //
+            // This arm `return`s, and returning is what stops ExitLevel() from
+            // running -- and ExitLevel() is where `exitintermission` and
+            // `intermission_framenum` are cleared.  So an arm that returns
+            // without clearing them is re-entered on the NEXT frame, and on
+            // every frame after that.
+            //
+            // With `map` that loop never ends.  Q2PRO ignores a `map` issued
+            // while a game is running unless `sv_allow_map` is set -- and it
+            // defaults to 0 on a DEDICATED server, which is the only kind that
+            // matters here: `should_really_restart()` prints "Using 'map' will
+            // cause full server restart" and returns -1, so the level does not
+            // change, the flags stay set, and this arm re-reads maps.txt off
+            // the disk and re-issues the ignored command for ever.  A passed
+            // config vote left the server wedged in the intermission.
+            //
+            // On an OLD engine (Yamagi Quake II, r1q2, id 3.20) `map` is not
+            // ignored -- but it is still wrong, because there it means a FULL
+            // server restart that drops every connected client.  `gamemap` is
+            // id's own 3.20 command and is what both families want; ExitLevel()
+            // below has always spelled it that way, and these two were the only
+            // `map` commands in the tree, which is why the difference survived
+            // -- there was nothing to compare them against but each other.
             if (manual_map == 2) {
                 char    command[256];
                 edict_t *nextent;
 
                 OSP_loadMaps();
                 nextent = NextMap();
-                if (nextent)
-                    Q_snprintf(command, sizeof(command), "map %s\n", nextent->map);
-                else
-                    Q_snprintf(command, sizeof(command), "map %s\n", level.mapname);
+                level.exitintermission = 0;
+                level.intermission_framenum = 0;
+                Q_snprintf(command, sizeof(command), "gamemap \"%s\"\n",
+                           nextent ? nextent->map : level.mapname);
                 gi.AddCommandString(command);
                 return;
             }
@@ -627,10 +660,22 @@ static void G_RunFrame(void)
                 gi.cvar_set("__current_config", "default");
                 gi.dprintf("Changing back to default config: %s\n",
                            vote_config_defaultname->string);
-                Q_snprintf(command, sizeof(command), "exec %s\n",
+                // QUOTED.  A config name is a filename out of
+                // serverconfigs.txt; unquoted, one containing a space splits
+                // into two tokens and `exec` gets the wrong name.
+                Q_snprintf(command, sizeof(command), "exec \"%s\"\n",
                            vote_config_defaultname->string);
                 gi.AddCommandString(command);
-                Q_snprintf(command, sizeof(command), "map %s\n", level.mapname);
+                // The same two repairs as the `manual_map == 2` arm above, for
+                // the same two reasons: `map` is ignored mid-game by Q2PRO and
+                // is a client-dropping full restart on the old engines, and
+                // returning past ExitLevel() means this arm owns the clearing.
+                // Reloading the SAME map is still a level change -- it is how
+                // the default config's settings take effect.
+                level.exitintermission = 0;
+                level.intermission_framenum = 0;
+                Q_snprintf(command, sizeof(command), "gamemap \"%s\"\n",
+                           level.mapname);
                 gi.AddCommandString(command);
                 return;
             }

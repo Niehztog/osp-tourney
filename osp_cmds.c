@@ -1001,7 +1001,11 @@ void OSP_config_vote(void)
         manual_map = 2;
         gi.cvar_set("__current_config", vote_value);
         gi.dprintf("Changing to config: %s\n", vote_value);
-        Q_snprintf(cmd, sizeof(cmd), "exec %s\n", vote_value);
+        // Quoted, for the reason at the other two exec sites: a config name is
+        // a filename out of serverconfigs.txt and one containing a space would
+        // split into two tokens.  `vote_value` has been normalised to the
+        // operator's own spelling by OSP_configExists above.
+        Q_snprintf(cmd, sizeof(cmd), "exec \"%s\"\n", vote_value);
         gi.AddCommandString(cmd);
         OSP_loadMaps();
         EndDMLevel();

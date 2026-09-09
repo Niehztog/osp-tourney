@@ -559,6 +559,8 @@ extern  cvar_t  *runes_vampire_max;
 const gitem_t *OSP_What_Rune(edict_t *ent);
 void     OSP_runeThink(edict_t *self);
 void     OSP_setupRuneSpawn(int delay);
+// Recompute the capped `rune_stat` cache from `runes_enable`.  See osp_main.c.
+void     OSP_SyncRuneState(void);
 int      OSP_runesApplyResistance(edict_t *ent, int damage);
 int      OSP_runesApplyStrength(edict_t *ent, int damage);
 bool OSP_runesApplyStrengthSound(edict_t *ent);
@@ -1335,7 +1337,7 @@ extern const char   team_statusbar_alt[];
 extern  int     conf_size;
 extern  int     blink_on_count;
 extern  int     blink_off_count;
-extern  cvar_t  *runes_enable;  // 4-byte cvar_t* -- OSP_endClean reloads rune_stat from it
+extern  cvar_t  *runes_enable;  // 4-byte cvar_t* -- OSP_SyncRuneState derives rune_stat from it
 extern  int     old_botcount;   // bl_spawn.c's CheckMinimumPlayers guard; OSP_endClean resets it
 extern  int     bots_delaytime;
 extern  int     bots_loadstat;

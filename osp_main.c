@@ -265,6 +265,28 @@ int OSP_matchMode(void)
     return mode;
 }
 
+// The one place `runes_enable` becomes `rune_stat`, cap included.
+//
+// `rune_stat` is a CACHE of a cvar, and it had two derivations with two
+// different rules -- OSP_gameInit capped the value at 0x1f, OSP_endClean did
+// not -- and the configuration transition had no derivation at all.
+// OSP_gameInit runs once per PROCESS, from InitGame, so nothing recomputed the
+// cache when a passed `vote config` exec'd a config that set `runes_enable` to
+// something else: the old mask survived into the new configuration's map, so
+// enabling runes scheduled a spawner that found no enabled type, and disabling
+// them left the rune effects live and still advertised to the HUD and to the
+// bot brain.
+//
+// A live `runes` vote deliberately writes `rune_stat` WITHOUT rewriting
+// `runes_enable`, which is why this is a function callers choose to call rather
+// than something read at the point of use.
+void OSP_SyncRuneState(void)
+{
+    rune_stat = (int)runes_enable->value;
+    if (rune_stat > 0x1f)
+        rune_stat = 0x1f;
+}
+
 // Register every cvar the mod owns and clamp the ones that have a legal range.
 // gamex86.dll: 10023D00..10025911
 // gamei386.so: 00048254..0004AA2E
@@ -384,9 +406,7 @@ void OSP_gameInit(void)
     runes_vampire_max = gi.cvar("runes_vampire_max", "200", 0);
     runes_model = gi.cvar("runes_model", "models/items/c_head/tris.md2", 0);
 
-    rune_stat = (int)runes_enable->value;
-    if (rune_stat > 0x1f)
-        rune_stat = 0x1f;
+    OSP_SyncRuneState();
     if ((int)runes_min->value > (int)runes_max->value)
         gi.cvar_set("runes_max", runes_min->string);
 
@@ -506,16 +526,47 @@ void OSP_gameInit(void)
     }
 
     // 1v1 is two teams of one, whatever the server asked for.
+    //
+    // *** FORCED PER MAP, NOT WRITE-PROTECTED FOR EVER. ***
+    //
+    // v2.75 re-gets this cvar with CVAR_NOSET here, and a cvar system ORs new
+    // flags onto an existing cvar and never clears them -- Q2PRO's Cvar_Get and
+    // Yamagi's both, `var->flags |= flags` -- so ONE `match_mode 3` map made
+    // `team_maxplayers` unwritable for the life of the SERVER PROCESS.
+    // `gi.cvar_set` is the user-level set on both engines and refuses a
+    // CVAR_NOSET write ("may be set from command line only" / "is write
+    // protected"), so after a single 1v1 map:
+    //
+    //   * a later TeamPlay map read 1 and could not be told otherwise, making
+    //     every team match on that server a 1v1 -- and `bl_spawn.c`'s bot fill
+    //     target follows it at 2 * team_maxplayers;
+    //   * the OPERATOR could not set it either, from console or from a config,
+    //     which is exactly what a `vote config` transition tries to do;
+    //   * and the clamp below could not fire, so it ANNOUNCED a change that
+    //     had been refused.
+    //
+    // There is no way to take a flag back off a cvar from a game library, so
+    // the flag cannot be scoped to the mode that wants it.  The enforcement
+    // moves to the VALUE instead, forced on every map load -- which is where
+    // `m_mode` is decided anyway, a few lines above.  `cvar_forceset` is in the
+    // classic game_import_t, so this is the same call on every engine that can
+    // load this library at all.
+    //
+    // ONE DEVIATION FROM 1999, deliberately: an operator who writes
+    // `team_maxplayers` in the middle of a 1v1 map is no longer refused, and
+    // the value stands until the next map load forces it back to 1.  That is
+    // the price of not poisoning the cvar, and it is the smaller of the two.
     if (m_mode > 1) {
         if (m_mode == 3) {
-            gi.cvar_set("team_maxplayers", "1");
+            gi.cvar_forceset("team_maxplayers", "1");
             gi.dprintf("1V1 Mode: setting teams' maxplayers to 1.\n");
-            team_maxplayers = gi.cvar("team_maxplayers", "1", CVAR_NOSET);
         }
 
+        // Also forceset: this is the game enforcing a bound the client slots
+        // make necessary, not a user request, and it must not be refusable.
         if ((int)team_maxplayers->value * 2 > (int)game.maxclients) {
             Q_snprintf(buf, sizeof(buf), "%d", (int)game.maxclients / 2);
-            gi.cvar_set("team_maxplayers", buf);
+            gi.cvar_forceset("team_maxplayers", buf);
             gi.dprintf("team_maxplayers too high!\nSetting maxplayers to: %s\n",
                        buf);
         }
@@ -714,7 +765,9 @@ void OSP_endClean(void)
         gi.cvar_set("timelimit", default_timelimit);
         gi.cvar_set("fraglimit", default_fraglimit);
         gi.cvar_set("hook_enable", default_hook);
-        rune_stat = (int)runes_enable->value;
+        // Through the helper, so this arm gets the 0x1f cap it never had: a
+        // `runes_enable 255` read 0x1f at InitGame and 255 here.
+        OSP_SyncRuneState();
     }
 
     time_update = 0;

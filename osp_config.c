@@ -155,11 +155,34 @@ bool OSP_configExists(edict_t *ent, char *name)
     int     i;
 
     for (i = 0; i < conf_size; i++) {
-        if (!Q_stricmp(name, conf_name[i]))
+        // *** BOTH ARMS NORMALISE, and the name arm is the one that matters. ***
+        //
+        // The match is case-INSENSITIVE and the caller then hands `name`
+        // straight to `exec`, so v2.75 -- which rewrites `name` on the
+        // description arm only -- execs the spelling the CLIENT typed rather
+        // than the one the operator listed in serverconfigs.txt.
+        //
+        // The exposure is narrower than it looks, and the reason is worth
+        // writing down: both Q2PRO and Yamagi retry a mixed-case path in lower
+        // case on a case-sensitive filesystem, so an all-lower-case config file
+        // resolves whatever the client shouted.  What no engine can do is
+        // re-CAPITALISE a request.  So the case that bites is a
+        // serverconfigs.txt naming a MIXED-CASE file -- `SinglePlayer1v1.cfg`
+        // is one of the five this mod has shipped since 1999: a vote spelled
+        // any other way then execs a path that does not exist, the map still
+        // changes, and the configuration is silently never applied.
+        //
+        // `name` is `vote_value` and both are the same size, so the bound is
+        // the destination's as well as the source's.  Still gated on `!ent`:
+        // with a client the caller passed `gi.argv()`, which is the engine's
+        // and is not ours to write.
+        if (!Q_stricmp(name, conf_name[i])) {
+            if (!ent)
+                Q_strlcpy(name, conf_name[i], sizeof(conf_name[i]));
             return true;
+        }
 
         if (conf_info[i][0] && !Q_stricmp(name, conf_info[i])) {
-            // `name` is vote_value, which is the same size as conf_name[]
             if (!ent)
                 Q_strlcpy(name, conf_name[i], sizeof(conf_name[i]));
             return true;

@@ -513,7 +513,35 @@ static void TossClientWeapon(edict_t *self)
         item = NULL;
 
     if (!((int)(dmflags->value) & DF_QUAD_DROP)) {
+        // *** `quad_framenum &&` IS NOT 1999's, AND IT IS THE POINT. ***
+        //
+        // v2.75's guard is `osp_r200 && quad_framenum < level.framenum`, and
+        // `osp_r200` is set by the INVULNERABILITY pickup as well as the quad
+        // (g_items.c:183 and :187).  So that arm has three reachable cases and
+        // only one of them is the event it names:
+        //
+        //   held a quad that ran out THIS frame -- p_view.c has not seen it
+        //   yet, `quad_framenum` is still set, and player_die zeroes it a few
+        //   lines below, so this is the only place the expiry can ever be
+        //   written.  Right, and the case the arm exists for.
+        //
+        //   held a quad that ran out EARLIER while also holding invulnerability
+        //   -- p_view.c logged the expiry and zeroed `quad_framenum` but kept
+        //   `osp_r200` for the second powerup, so this writes the same expiry a
+        //   SECOND time, naming the same entity.
+        //
+        //   never held a quad at all, only invulnerability -- `osp_r200` is the
+        //   INVULNERABILITY's entity number and `quad_framenum` is 0, which is
+        //   less than any frame, so this writes a "Quad" expiry for a quad that
+        //   was never picked up.
+        //
+        // p_view.c's own reader (p_view.c:1046) tests `quad_framenum &&` before
+        // the comparison for exactly this reason.  Adding that conjunct here
+        // selects the first case and excludes the other two; nothing correct is
+        // lost, because a still-running quad fails `< level.framenum` either
+        // way.  The stats log is the only consumer, so this changes no play.
         if (self->client->resp.osp_r200 &&
+            self->client->quad_framenum &&
             self->client->quad_framenum < level.framenum) {
             OSP_Stats_ItemExpire("Quad", self, self->client->resp.osp_r200);
             self->client->resp.osp_r200 = 0;
@@ -2171,8 +2199,19 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
                 client->resp.osp_r210 = 0;
             }
 
+            // *** SECONDS TIMES BASE_FRAMERATE, because the left-hand side is
+            // *** a FRAME count.
+            //
+            // 1999 compared `level.time` -- float seconds -- against
+            // `level.intermission_time + 1.25`.  The port carries frame numbers
+            // instead, and the five constants in this block never took the
+            // conversion: `+ 1.25f` on an int frame delta is "next frame", so
+            // the board a player who died into the intermission is owed arrived
+            // under the level-end board instead of after it.  Same class as the
+            // timer-unit sweep in `5d151bb`; these are what that sweep missed,
+            // because they sit inside an intermission nothing measured.
             if (client->resp.osp_r2dc == 2 &&
-                level.framenum > level.intermission_framenum + 1.25f &&
+                level.framenum > level.intermission_framenum + 1.25f * BASE_FRAMERATE &&
                 !(ent->flags & FL_BOT)) {
                 client->resp.osp_r2dc = 0;
                 DeathmatchScoreboard(ent);
@@ -2180,29 +2219,40 @@ void ClientThink(edict_t *ent, usercmd_t *ucmd)
 
             client->ps.pmove.pm_type = PM_FREEZE;
 
-            if ((level.framenum > level.intermission_framenum + nextlevel_click->value &&
+            // The intermission's two timers, and BOTH cvars are documented in
+            // seconds -- `nextlevel_click` 15.0 is how long a press is ignored
+            // for, `nextlevel_default` 45.0 ends the intermission with no press
+            // at all.  Unscaled they were 1.5 s and 4.5 s, so a tournament
+            // server ended its intermission a third of the way through the
+            // scoreboard everyone was still reading.  The two literals beside
+            // them are the short warmup/manual-map path, 7 s and 15 s.
+            if ((level.framenum > level.intermission_framenum +
+                 nextlevel_click->value * BASE_FRAMERATE &&
                  (ucmd->buttons & BUTTON_ANY) &&
                  (int)nextlevel_click->value) ||
                 ((sync_stat < 4 || manual_map) &&
-                 level.framenum > level.intermission_framenum + 7.0f &&
+                 level.framenum > level.intermission_framenum + 7.0f * BASE_FRAMERATE &&
                  (ucmd->buttons & BUTTON_ANY))) {
                 level.exitintermission = true;
                 start_count = 0;
             }
 
-            if ((level.framenum > level.intermission_framenum + nextlevel_lazy->value &&
+            if ((level.framenum > level.intermission_framenum +
+                 nextlevel_lazy->value * BASE_FRAMERATE &&
                  (int)nextlevel_lazy->value) ||
                 ((sync_stat < 4 || manual_map) &&
-                 level.framenum > level.intermission_framenum + 15.0f)) {
+                 level.framenum > level.intermission_framenum + 15.0f * BASE_FRAMERATE)) {
                 level.exitintermission = true;
                 start_count = 0;
             }
             return;
         }
 
+        // 0.5 SECONDS, which unscaled was "the next frame": the HUD came back
+        // on the frame after the respawn instead of half a second later.
         if (client->resp.osp_r2dc == 1 &&
             client->resp.entered == ENTERED_ENTERED &&
-            level.framenum > client->respawn_framenum + 0.5f) {
+            level.framenum > client->respawn_framenum + 0.5f * BASE_FRAMERATE) {
             OSP_clearStats(ent);
             client->resp.osp_r2dc = 0;
             ent->client->showscores = false;
@@ -2648,9 +2698,22 @@ void ClientBeginServerFrame(edict_t *ent)
             else
                 buttonMask = -1;
 
+            // `respawn_delay` is documented by v2.75's own server-settings
+            // notes as "an allowable delay (in seconds)", and this compares it
+            // against a FRAME count -- so unscaled the cvar was wrong by
+            // BASE_FRAMERATE across its whole documented range, and
+            // `respawn_delay 1` meant a tenth of a second.  Scaled, so the
+            // seconds are seconds.
+            //
+            // This is the second arm: a dead player who presses attack still
+            // respawns through the first one whatever the delay says, which is
+            // why the defect was invisible to anything holding fire.  The
+            // cvar's whole audience is the player who does NOT shoot, which is
+            // the case DF_FORCE_RESPAWN exists for.
             if ((client->latched_buttons & buttonMask) ||
                 (deathmatch->value && ((int)dmflags->value & DF_FORCE_RESPAWN) &&
-                 level.framenum > client->respawn_framenum + resp_delay->value)) {
+                 level.framenum > client->respawn_framenum +
+                 resp_delay->value * BASE_FRAMERATE)) {
                 respawn(ent);
                 client->latched_buttons = 0;
             }

@@ -774,6 +774,23 @@ void SpawnEntities(const char *mapname, const char *entities, const char *spawnp
     if ((int)pl_reload->value)
         OSP_playerlist_svcmd();
 
+    // A CONFIGURATION TRANSITION REFRESHES THE RUNE CACHE, and here is the only
+    // place it can.  `manual_map == 2` is the passed `vote config` path, and it
+    // reaches this map having already had the engine run its `exec` -- so
+    // `runes_enable` is the new configuration's, while `rune_stat` is still the
+    // old one's.  Nothing else recomputes it: OSP_gameInit runs once per process
+    // and OSP_endClean's reload is skipped on exactly this transition (and is
+    // not called on it at all).  Before OSP_setupRuneSpawn below, which reads
+    // the cache.
+    //
+    // Only on that transition.  An ordinary level change under `vote_carryover`
+    // must leave a live `runes` vote standing, which is why this is not
+    // unconditional -- and OSP_endClean clears `manual_map` at the end of this
+    // map, so it fires once per config change rather than once per map after
+    // one.
+    if (manual_map == 2)
+        OSP_SyncRuneState();
+
     if ((int)runes_enable->value) {
         runespawn = 0;
         OSP_setupRuneSpawn(0);
