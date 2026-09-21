@@ -116,7 +116,26 @@ check-pm-time:
 check-pm-time-control:
 	tools/check-pm-time.sh --self-test
 
+# The same shape, for the same reason: T_Damage and T_RadiusDamage answer a
+# NULL `attacker` once, at the top, and every read below them depends on that
+# having happened.  Delete those two lines and the tree still builds, still
+# boots, and dies on the first map in the rotation with a target_explosion on
+# a door.  `make check-null-attacker-control` restores each of the three defect
+# shapes to show the check actually fires.  See tools/check-null-attacker.sh.
+NULLATK_STAMP=$(BUILDDIR)/.null-attacker-ok
+
+$(NULLATK_STAMP): g_combat.c tools/check-null-attacker.sh
+	tools/check-null-attacker.sh g_combat.c
+	@touch $@
+
+check-null-attacker:
+	tools/check-null-attacker.sh g_combat.c
+
+check-null-attacker-control:
+	tools/check-null-attacker.sh --self-test
+
 .PHONY: all build_debug build_release targets check-pm-time check-pm-time-control \
+	check-null-attacker check-null-attacker-control \
 	clean clean-debug clean-release clean2
 
 # In the link order recovered from the shipped gamei386.so, with q_shared.o
@@ -175,7 +194,7 @@ GAME_OBJS = \
 $(BUILDDIR)/game$(ARCH).$(SHLIBEXT) : $(GAME_OBJS)
 	$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(GAME_OBJS) $(LDFLAGS)
 
-$(BUILDDIR)/%.o : %.c $(CHECK_STAMP)
+$(BUILDDIR)/%.o : %.c $(CHECK_STAMP) $(NULLATK_STAMP)
 	$(DO_SHLIB_CC)
 
 #####
@@ -189,4 +208,4 @@ clean-release:
 	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR)
 
 clean2:
-	-rm -f $(GAME_OBJS) $(CHECK_STAMP)
+	-rm -f $(GAME_OBJS) $(CHECK_STAMP) $(NULLATK_STAMP)

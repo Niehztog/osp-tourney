@@ -26,6 +26,15 @@
 #     restart re-runs InitGame and recomputes the cache as a side effect.
 #
 # A row that only ran on one family would have called each of those fixed.
+#
+# NOT IN THE BATTERY: tools/playtest-scenarios/nullattacker, which reproduces
+# the blocked-door NULL attacker (R-SEC-10).  It needs a map fixture built from
+# a retail pak (tools/nullattacker-map.py) and an entity-string override, which
+# is q2pro's alone, so it is run by hand rather than on every build:
+#
+#   cp -r tools/playtest-scenarios/nullattacker $HARNESS/scenarios/
+#   tools/nullattacker-map.py -o /tmp/q2dm8.ent
+#   (cd $HARNESS && go run ./scenarios/nullattacker -lib .../release/game<arch>.so)
 set -u
 
 HERE=$(cd "$(dirname "$0")/.." && pwd)

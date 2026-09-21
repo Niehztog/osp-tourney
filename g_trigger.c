@@ -202,7 +202,11 @@ void trigger_key_use(edict_t *self, edict_t *other, edict_t *activator)
 
     if (!self->item)
         return;
-    if (!activator->client)
+    // The same missing activator, one dispatch earlier than T_Damage's
+    // boundary: a blocked door fires its targets through G_UseTargets() with
+    // no activator, and every `use` in the chain is called with whatever that
+    // was.  A key nobody is holding is a key that is not there.
+    if (!activator || !activator->client)
         return;
 
     index = ITEM_INDEX(self->item);

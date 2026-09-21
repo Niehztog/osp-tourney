@@ -300,6 +300,34 @@ void T_Damage(edict_t *targ, edict_t *inflictor, edict_t *attacker, const vec3_t
     if (!targ->takedamage)
         return;
 
+    // AN ATTACKER IS AN EDICT, NEVER NULL, AND THIS IS WHERE THAT BECOMES
+    // TRUE.  Nothing in g_func.c ever assigns `activator` on a func_door --
+    // every write of that field is a button, a train or a timer -- so a door
+    // that reverses because something blocked it hands on the zero it was
+    // spawned with: door_blocked() -> door_go_up(ent, ent->activator)
+    // (g_func.c:1105) -> G_UseTargets() -> a targeted target_explosion ->
+    // T_RadiusDamage(self, self->activator, ...) (g_target.c:234) -> here,
+    // with no attacker at all.
+    //
+    // id's T_Damage survives that by accident: its one `attacker->client` read
+    // sits behind `!(dflags & DAMAGE_RADIUS)`, which short-circuits on exactly
+    // the path that produces the NULL.  That is a coincidence between one flag
+    // test and one call site, not a guard, and nothing OSP added inherits it --
+    // the match-mode friendly-fire arm below reads `attacker->client` outright,
+    // and the runes reach it through OSP_runesApplyStrength().  Guarding those
+    // one at a time only moves the crash to the next one, and the number of
+    // reads grows with every feature added to this function; the boundary does
+    // not.
+    //
+    // `world` is g_edicts[0] and its `client` is NULL, so every downstream
+    // `attacker->client` test still answers exactly what the missing attacker
+    // meant, and no path that had a real attacker changes.  It is this tree's
+    // own spelling for a nonexistent attacker already -- LookAtKiller() tests
+    // `attacker != world` (p_client.c:592) -- and MOD_EXPLOSIVE already routes
+    // the obituary through the no-attacker arm.
+    if (!attacker)
+        attacker = world;
+
     if (targ->inuse && targ->client &&
         targ->client->resp.entered != ENTERED_ENTERED)
         return;
@@ -462,6 +490,16 @@ void T_RadiusDamage(edict_t *inflictor, edict_t *attacker, float damage, edict_t
     edict_t *ent = NULL;
     vec3_t  v;
     vec3_t  dir;
+
+    // The same normalisation, because T_Damage's is not reachable from here.
+    // T_Damage normalises its own copy of the argument; the accuracy block
+    // below reads `attacker->client` on this function's own account, ten times,
+    // from the same NULL that arrives as `self->activator` in
+    // target_explosion_explode().  Fixing only T_Damage leaves that crash
+    // exactly where it is.  See the prologue of T_Damage for where the NULL
+    // comes from and why `world` is the answer.
+    if (!attacker)
+        attacker = world;
 
     while ((ent = findradius(ent, inflictor->s.origin, radius)) != NULL) {
         if (ent == ignore)

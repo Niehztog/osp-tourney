@@ -178,7 +178,17 @@ void G_UseTargets(edict_t *ent, edict_t *activator)
 //
 // print the message
 //
-    if ((ent->message) && !(activator->svflags & SVF_MONSTER)) {
+    // This function KNOWS the activator can be NULL -- it warns about exactly
+    // that eleven lines up -- and then dereferenced it here.  It is upstream of
+    // T_Damage's boundary and cannot be covered by it: a blocked door fires
+    // every one of its targets with no activator at all (door_blocked() ->
+    // door_go_up(ent, ent->activator)), so any of them that re-enters this
+    // function -- a trigger_relay, or the DelayedUse temp above, which copies
+    // `message` along with the NULL -- arrives here with nobody to print to.
+    // The door's OWN message is not the case: door_use() clears it before the
+    // first door_go_up, so a door that has moved far enough to be blocked no
+    // longer carries one.
+    if ((ent->message) && activator && !(activator->svflags & SVF_MONSTER)) {
         gi.centerprintf(activator, "%s", ent->message);
         if (ent->noise_index)
             gi.sound(activator, CHAN_AUTO, ent->noise_index, 1, ATTN_NORM, 0);
