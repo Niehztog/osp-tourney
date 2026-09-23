@@ -69,14 +69,14 @@ void sl_GameEnd (game_import_t *import, level_locals_t level)
 void sl_WriteStdLogDeath (game_import_t *import, level_locals_t level,
 	edict_t *targ, edict_t *inflictor, edict_t *attacker)
 {
-	int		mod;
-	char	*victim;
-	char	*killer;
+	int		meansofdeath;
+	char	*victimname;
+	char	*killername;
 	char	*event;
-	char	*weapon;
+	char	*wname;
 	int		score;
 	int		ping;
-	int		suicide;
+	int		issuicide;
 
 	if (!(int)sl_log_logbots->value &&
 		((targ->flags & 0x2000) || (attacker->flags & 0x2000)))
@@ -84,140 +84,140 @@ void sl_WriteStdLogDeath (game_import_t *import, level_locals_t level,
 
 	if (deathmatch->value != 0 && sl_Logging (import, sl_patch))
 	{
-		mod = meansOfDeath & ~MOD_FRIENDLY_FIRE;
-		victim = NULL;
-		killer = NULL;
+		meansofdeath = meansOfDeath & ~MOD_FRIENDLY_FIRE;
+		victimname = NULL;
+		killername = NULL;
 		event = NULL;
-		// Real initialises `weapon` here too, between event and score.
-		weapon = NULL;
+		// Real initialises `wname` here too, between event and score.
+		wname = NULL;
 		score = 0;
 		ping = -1;
 
 		if (attacker == targ)
 		{
-			victim = attacker->client->pers.netname;
-			ping = attacker->client->ping;
+			victimname = targ->client->pers.netname;
+			ping = targ->client->ping;
 			event = "Suicide";
 			score = -1;
 			// A ternary: it materialises into its own frame temp and is then
-			// copied into weapon's slot.
-			weapon = attacker->client->pers.weapon
+			// copied into wname's slot.
+			wname = attacker->client->pers.weapon
 				? attacker->client->pers.weapon->pickup_name : NULL;
 		}
 		else
 		{
-			suicide = 0;
-			weapon = "UNKNOWN";
+			issuicide = 0;
+			wname = "UNKNOWN";
 
-			switch (mod)
+			switch (meansofdeath)
 			{
 		case MOD_FALLING:
-				weapon = "Fell";
-				suicide = 1;
+				wname = "Fell";
+				issuicide = 1;
 				break;
 		case MOD_CRUSH:
-				weapon = "Crushed";
-				suicide = 1;
+				wname = "Crushed";
+				issuicide = 1;
 				break;
 		case MOD_WATER:
-				weapon = "Drowned";
-				suicide = 1;
+				wname = "Drowned";
+				issuicide = 1;
 				break;
 		case MOD_SLIME:
-				weapon = "Melted";
-				suicide = 1;
+				wname = "Melted";
+				issuicide = 1;
 				break;
 		case MOD_LAVA:
-				weapon = "Lava";
-				suicide = 1;
+				wname = "Lava";
+				issuicide = 1;
 				break;
 		case MOD_EXPLOSIVE:
 		case MOD_BARREL:
 		case MOD_BOMB:
-				weapon = "Explosion";
-				suicide = 1;
+				wname = "Explosion";
+				issuicide = 1;
 				break;
 		case MOD_TARGET_LASER:
-				weapon = "Lasered";
-				suicide = 1;
+				wname = "Lasered";
+				issuicide = 1;
 				break;
 		case MOD_TARGET_BLASTER:
-				weapon = "Blasted";
-				suicide = 1;
+				wname = "Blasted";
+				issuicide = 1;
 				break;
 		case MOD_SUICIDE:
 		case MOD_EXIT:
 		case MOD_SPLASH:
 		case MOD_TRIGGER_HURT:
-				suicide = 1;
+				issuicide = 1;
 				break;
 			}
 
-			if (suicide)
+			if (issuicide)
 			{
-				victim = targ->client->pers.netname;
+				victimname = targ->client->pers.netname;
 				ping = targ->client->ping;
 				event = "Suicide";
 				score = -1;
 			}
 		}
 
-		if (!victim || !event)
+		if (!victimname || !event)
 		{
 			if (attacker && attacker->client)
 			{
-				weapon = "UNKNOWN";
-				switch (mod)
+				wname = "UNKNOWN";
+				switch (meansofdeath)
 				{
 			case MOD_BLASTER:
-					weapon = "Blaster";
+					wname = "Blaster";
 					break;
 			case MOD_SHOTGUN:
-					weapon = "Shotgun";
+					wname = "Shotgun";
 					break;
 			case MOD_SSHOTGUN:
-					weapon = "Super Shotgun";
+					wname = "Super Shotgun";
 					break;
 			case MOD_MACHINEGUN:
-					weapon = "Machinegun";
+					wname = "Machinegun";
 					break;
 			case MOD_CHAINGUN:
-					weapon = "Chaingun";
+					wname = "Chaingun";
 					break;
 			case MOD_GRENADE:
 			case MOD_G_SPLASH:
-					weapon = "Grenade Launcher";
+					wname = "Grenade Launcher";
 					break;
 			case MOD_HANDGRENADE:
 			case MOD_HG_SPLASH:
 			case MOD_HELD_GRENADE:
-					weapon = "Grenades";
+					wname = "Grenades";
 					break;
 			case MOD_ROCKET:
 			case MOD_R_SPLASH:
-					weapon = "Rocket Launcher";
+					wname = "Rocket Launcher";
 					break;
 			case MOD_HYPERBLASTER:
-					weapon = "HyperBlaster";
+					wname = "HyperBlaster";
 					break;
 			case MOD_RAILGUN:
-					weapon = "Railgun";
+					wname = "Railgun";
 					break;
 			case MOD_BFG_LASER:
 			case MOD_BFG_BLAST:
 			case MOD_BFG_EFFECT:
-					weapon = "BFG10K";
+					wname = "BFG10K";
 					break;
 			case MOD_GRAPPLE:
-					weapon = "Grappling Hook";
+					wname = "Grappling Hook";
 					break;
 			case MOD_TELEFRAG:
-					weapon = "Telefrag";
+					wname = "Telefrag";
 					break;
 				}
 
-				killer = targ->client->pers.netname;
-				victim = attacker->client->pers.netname;
+				killername = targ->client->pers.netname;
+				victimname = attacker->client->pers.netname;
 				ping = attacker->client->ping;
 				event = "Kill";
 				score = 1;
@@ -228,7 +228,7 @@ void sl_WriteStdLogDeath (game_import_t *import, level_locals_t level,
 			}
 		}
 
-		sl_LogScore (import, victim, killer, event, weapon, score, level.time,
+		sl_LogScore (import, victimname, killername, event, wname, score, level.time,
 			ping);
 		return;
 	}

@@ -173,10 +173,12 @@ void DeathmatchScoreboardMessage (edict_t *ent, edict_t *killer)
 		return;
 	}
 
-	if (hs_mode && (int)client_highscores->value &&
-		level.intermissiontime != 0)
+	// Only the page alternation is intermission-only; the high-score page
+	// itself is shown whenever osp_r034 is clear (the `highscores` command).
+	if (hs_mode && (int)client_highscores->value)
 	{
-		if (level.framenum > ent->client->resp.osp_r244)
+		if (level.intermissiontime != 0 &&
+			level.framenum > ent->client->resp.osp_r244)
 		{
 			if (ent->client->resp.osp_r034)
 				ent->client->resp.osp_r244 = level.framenum + 40;
@@ -432,13 +434,17 @@ void G_SetStats (edict_t *ent)
 	//
 	// frags
 	//
+	// Only a client that is not playing has its detailed stats frozen behind
+	// osp_r2bc; a playing client falls straight through to them.
 	if (cl->resp.entered == ENTERED_ENTERED)
 		ps->stats[STAT_FRAGS] = cl->resp.score;
 	else
+	{
 		ps->stats[STAT_FRAGS] = 0;
 
-	if (!cl->resp.osp_r2bc)
-		return;
+		if (!cl->resp.osp_r2bc)
+			return;
+	}
 
 	//
 	// health

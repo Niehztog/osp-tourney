@@ -139,45 +139,37 @@ static void fire_lead (edict_t *self, vec3_t start, vec3_t aimdir, int damage, i
 				T_Damage (tr.ent, self, self, aimdir, tr.endpos, tr.plane.normal, damage, kick, DAMAGE_BULLET, mod);
 
 				// The mod's hit accounting for the four hitscan weapons, keyed
-				// off the MOD this shot was fired with. The per-weapon columns
-				// are behind `sync_stat > 2`; the running damage totals are not.
+				// off the MOD this shot was fired with. Only the per-weapon HIT
+				// count is behind `sync_stat > 2`; every damage total is not.
 				if (tr.ent->client)
 				{
 					if (mod == MOD_SHOTGUN)
 					{
 						if (sync_stat > 2)
-						{
 							p_acc[self->client->resp.clientid].hits[ACC_SHOTGUN]++;
-							p_acc[self->client->resp.clientid].given[ACC_SHOTGUN] += damage;
-							p_acc[tr.ent->client->resp.clientid].taken[ACC_SHOTGUN] += damage;
-						}
+						p_acc[self->client->resp.clientid].given[ACC_SHOTGUN] += damage;
+						p_acc[tr.ent->client->resp.clientid].taken[ACC_SHOTGUN] += damage;
 					}
 					else if (mod == MOD_SSHOTGUN)
 					{
 						if (sync_stat > 2)
-						{
 							p_acc[self->client->resp.clientid].hits[ACC_SSHOTGUN]++;
-							p_acc[self->client->resp.clientid].given[ACC_SSHOTGUN] += damage;
-							p_acc[tr.ent->client->resp.clientid].taken[ACC_SSHOTGUN] += damage;
-						}
+						p_acc[self->client->resp.clientid].given[ACC_SSHOTGUN] += damage;
+						p_acc[tr.ent->client->resp.clientid].taken[ACC_SSHOTGUN] += damage;
 					}
 					else if (mod == MOD_MACHINEGUN)
 					{
 						if (sync_stat > 2)
-						{
 							p_acc[self->client->resp.clientid].hits[ACC_MACHINEGUN]++;
-							p_acc[self->client->resp.clientid].given[ACC_MACHINEGUN] += damage;
-							p_acc[tr.ent->client->resp.clientid].taken[ACC_MACHINEGUN] += damage;
-						}
+						p_acc[self->client->resp.clientid].given[ACC_MACHINEGUN] += damage;
+						p_acc[tr.ent->client->resp.clientid].taken[ACC_MACHINEGUN] += damage;
 					}
 					else if (mod == MOD_CHAINGUN)
 					{
 						if (sync_stat > 2)
-						{
 							p_acc[self->client->resp.clientid].hits[ACC_CHAINGUN]++;
-							p_acc[self->client->resp.clientid].given[ACC_CHAINGUN] += damage;
-							p_acc[tr.ent->client->resp.clientid].taken[ACC_CHAINGUN] += damage;
-						}
+						p_acc[self->client->resp.clientid].given[ACC_CHAINGUN] += damage;
+						p_acc[tr.ent->client->resp.clientid].taken[ACC_CHAINGUN] += damage;
 					}
 					p_acc[self->client->resp.clientid].dgiven += damage;
 					p_acc[tr.ent->client->resp.clientid].dtaken += damage;

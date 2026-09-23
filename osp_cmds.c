@@ -180,11 +180,8 @@ void OSP_ready_cmd (edict_t *ent, int quiet)
 			gi.bprintf (PRINT_HIGH, "%s is ready!\n",
 						ent->client->pers.greenname);
 
-		if (m_mode < 2)
-		{
-			if (!(ent->flags & FL_OSP_NOCMD))
-				OSP_clientConfigString (ent, 0x623, "* WARMUP");
-		}
+		if (m_mode < 2 && !(ent->flags & FL_OSP_NOCMD))
+			OSP_clientConfigString (ent, 0x623, "* WARMUP");
 		else if (!(ent->flags & FL_OSP_NOCMD) && quiet < 2)
 		{
 			for (t = 1; t <= game.maxclients; t++)
@@ -601,43 +598,43 @@ void OSP_ffajoin_cmd (edict_t *ent)
 // gamei386.so: 00056A9C..00057CB1
 void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 {
-	char	*a1;
-	char	*a2;
-	cvar_t	*bfg;
-	cvar_t	*quad;
-	bot_t	*b;
-	edict_t	*cl;
-	edict_t	*other;
-	// argc does double duty: it counts bots in the entry loop below, then is
+	char	*arg1;
+	char	*arg2;
+	cvar_t	*bfg_cv;
+	cvar_t	*quad_cv;
+	bot_t	*bp;
+	edict_t	*c;
+	edict_t	*kick;
+	// nc does double duty: it counts bots in the entry loop below, then is
 	// overwritten with the real argument count once that is done.
-	int		argc;
+	int		nc;
 	int		nbots;
-	int		i;
+	int		ind;
 
-	bfg = gi.cvar ("allow_bfg", "1", 0);
-	quad = gi.cvar ("allow_item_quad", "1", 0);
+	bfg_cv = gi.cvar ("allow_bfg", "1", 0);
+	quad_cv = gi.cvar ("allow_item_quad", "1", 0);
 
 	connected_clients = 0;
 	active_clients = 0;
-	argc = 0;
+	nc = 0;
 
-	for (i = 1; i <= game.maxclients; i++)
+	for (ind = 1; ind <= game.maxclients; ind++)
 	{
-		cl = g_edicts + i;
+		c = g_edicts + ind;
 
-		if (cl->inuse && cl->client && cl->client->pers.connected)
+		if (c->inuse && c->client && c->client->pers.connected)
 		{
 			connected_clients++;
 
-			if (cl->client->resp.entered == ENTERED_ENTERED)
+			if (c->client->resp.entered == ENTERED_ENTERED)
 				active_clients++;
-			if (cl->flags & FL_OSP_BOT)
-				argc++;
+			if (c->flags & FL_OSP_BOT)
+				nc++;
 		}
 	}
 
-	botglobals.numbots = argc;
-	if (bots_votedin > argc)
+	botglobals.numbots = nc;
+	if (bots_votedin > nc)
 		bots_votedin = 0;
 
 	if (!connected_clients)
@@ -649,15 +646,15 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		ent->client->resp.osp_r010 = level.framenum + 2;
 
-		argc = gi.argc ();
-		a1 = gi.argv (1);
-		a2 = gi.argv (2);
+		nc = gi.argc ();
+		arg1 = gi.argv (1);
+		arg2 = gi.argv (2);
 	}
 	else
 	{
-		argc = nargs;
-		a1 = what;
-		a2 = value;
+		nc = nargs;
+		arg1 = what;
+		arg2 = value;
 	}
 
 	if (!(int)vote_enable->value)
@@ -681,7 +678,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		return;
 	}
 
-	if (argc == 1)
+	if (nc == 1)
 	{
 		if (!vote_inprogress)
 		{
@@ -710,13 +707,13 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		return;
 	}
 
-	if (!Q_stricmp (a1, "yes"))
+	if (!Q_stricmp (arg1, "yes"))
 	{
 		OSP_yes_cmd (ent);
 		return;
 	}
 
-	if (!Q_stricmp (a1, "no"))
+	if (!Q_stricmp (arg1, "no"))
 	{
 		OSP_no_cmd (ent);
 		return;
@@ -730,7 +727,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		return;
 	}
 
-	if (!Q_stricmp (a1, "map"))
+	if (!Q_stricmp (arg1, "map"))
 	{
 		if (!(int)vote_enable_map->value)
 		{
@@ -738,15 +735,15 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 		{
 			OSP_mapList (ent);
 			gi.cprintf (ent, PRINT_HIGH, "Usage: vote map <mapname>\n\n");
 		}
-		else if (OSP_mapExists (ent, a2, 0))
+		else if (OSP_mapExists (ent, arg2, 0))
 			vote_item = 1;
 	}
-	else if (!Q_stricmp (a1, "config"))
+	else if (!Q_stricmp (arg1, "config"))
 	{
 		if (!(int)vote_enable_config->value)
 		{
@@ -755,16 +752,16 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 		{
 			OSP_configList (ent);
 			gi.cprintf (ent, PRINT_HIGH,
 						"Usage: vote config \"config_name\"\n\n");
 		}
-		else if (OSP_configExists (ent, a2))
+		else if (OSP_configExists (ent, arg2))
 			vote_item = 2;
 	}
-	else if (!Q_stricmp (a1, "timelimit") || !Q_stricmp (a1, "tl"))
+	else if (!Q_stricmp (arg1, "timelimit") || !Q_stricmp (arg1, "tl"))
 	{
 		if (!(int)vote_enable_time->value)
 		{
@@ -773,15 +770,15 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 			gi.cprintf (ent, PRINT_HIGH, "Current timelimit: %d\n",
 						(int)timelimit->value);
-		else if (atoi (a2) < 0 || atoi (a2) > (int)menu_maxtime->value)
+		else if (atoi (arg2) < 0 || atoi (arg2) > (int)menu_maxtime->value)
 			gi.cprintf (ent, PRINT_HIGH, "Invalid timelimit!\n");
 		else
 			vote_item = 4;
 	}
-	else if (!Q_stricmp (a1, "fraglimit") || !Q_stricmp (a1, "fl"))
+	else if (!Q_stricmp (arg1, "fraglimit") || !Q_stricmp (arg1, "fl"))
 	{
 		if (!(int)vote_enable_frag->value)
 		{
@@ -790,15 +787,15 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 			gi.cprintf (ent, PRINT_HIGH, "Current fraglimit: %d\n",
 						(int)fraglimit->value);
-		else if (atoi (a2) < 0 || atoi (a2) > (int)menu_maxfrag->value)
+		else if (atoi (arg2) < 0 || atoi (arg2) > (int)menu_maxfrag->value)
 			gi.cprintf (ent, PRINT_HIGH, "Invalid fraglimit!\n");
 		else
 			vote_item = 8;
 	}
-	else if (!Q_stricmp (a1, "hook"))
+	else if (!Q_stricmp (arg1, "hook"))
 	{
 		if (!(int)vote_enable_hook->value)
 		{
@@ -806,7 +803,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 		{
 			if ((int)hook_enable->value)
 				gi.cprintf (ent, PRINT_HIGH, "Hook is currently ENABLED.\n");
@@ -816,7 +813,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		else
 			vote_item = 0x10;
 	}
-	else if (!Q_stricmp (a1, "runes"))
+	else if (!Q_stricmp (arg1, "runes"))
 	{
 		if (!(int)vote_enable_runes->value)
 		{
@@ -825,7 +822,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 		{
 			if (rune_stat)
 				gi.cprintf (ent, PRINT_HIGH, "Runes are currently ENABLED.\n");
@@ -835,7 +832,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		else
 			vote_item = 0x800;
 	}
-	else if (!Q_stricmp (a1, "toggles"))
+	else if (!Q_stricmp (arg1, "toggles"))
 	{
 		if (!(int)vote_enable_toggles->value)
 		{
@@ -844,17 +841,17 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 			gi.cprintf (ent, PRINT_HIGH, "Current item toggles: %d\n",
 						item_settings);
-		else if (atoi (a2) < 0 || atoi (a2) >= 256)
+		else if (atoi (arg2) < 0 || atoi (arg2) >= 256)
 			gi.cprintf (ent, PRINT_HIGH,
 						"Invalid item toggle setting (%d) (%d)!\n",
-						atoi (a2), item_settings);
+						atoi (arg2), item_settings);
 		else
 			vote_item = 0x20;
 	}
-	else if (!Q_stricmp (a1, "bfg"))
+	else if (!Q_stricmp (arg1, "bfg"))
 	{
 		if (!(int)vote_enable_toggles->value)
 		{
@@ -862,9 +859,9 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 		{
-			if ((int)bfg->value)
+			if ((int)bfg_cv->value)
 				gi.cprintf (ent, PRINT_HIGH, "BFG is currently ENABLED.\n");
 			else
 				gi.cprintf (ent, PRINT_HIGH, "BFG is currently DISABLED.\n");
@@ -872,7 +869,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		else
 			vote_item = 0x40;
 	}
-	else if (!Q_stricmp (a1, "quad"))
+	else if (!Q_stricmp (arg1, "quad"))
 	{
 		if (!(int)vote_enable_toggles->value)
 		{
@@ -880,9 +877,9 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 		{
-			if ((int)quad->value)
+			if ((int)quad_cv->value)
 				gi.cprintf (ent, PRINT_HIGH, "Quad is currently ENABLED.\n");
 			else
 				gi.cprintf (ent, PRINT_HIGH, "Quad is currently DISABLED.\n");
@@ -890,7 +887,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		else
 			vote_item = 0x80;
 	}
-	else if (!Q_stricmp (a1, "kick") || !Q_stricmp (a1, "kickplayer"))
+	else if (!Q_stricmp (arg1, "kick") || !Q_stricmp (arg1, "kickplayer"))
 	{
 		if (!(int)vote_enable_kick->value)
 		{
@@ -899,21 +896,21 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 			gi.cprintf (ent, PRINT_HIGH,
 				"\nUsage: vote kick [player_name or player_ID]\n\n");
 		else
 		{
-			other = OSP_findPlayer (a2);
+			kick = OSP_findPlayer (arg2);
 
-			if (!other)
+			if (!kick)
 			{
 				gi.cprintf (ent, PRINT_HIGH, "\n*** Could not find \"%s\".\n",
-							a2);
+							arg2);
 				gi.cprintf (ent, PRINT_HIGH,
 					"Try quoting the name or use the player's ID.\n\n");
 			}
-			else if (other->osp_e39c)
+			else if (kick->osp_e39c)
 			{
 				gi.cprintf (ent, PRINT_HIGH,
 							"\n*** Cannot vote to kick referees!\n");
@@ -922,16 +919,16 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			else
 			{
 				// The vote carries the ID, not the name.
-				sprintf (a2, "%d", other->client->resp.clientid);
+				sprintf (arg2, "%d", kick->client->resp.clientid);
 				vote_item = 0x1000;
 			}
 		}
 	}
-	else if (!Q_stricmp (a1, "specbot") || !Q_stricmp (a1, "specificbot"))
+	else if (!Q_stricmp (arg1, "specbot") || !Q_stricmp (arg1, "specificbot"))
 	{
 		CheckForNewBotFile ();
 
-		for (nbots = 0, b = botlist; b; b = b->next, nbots++)
+		for (nbots = 0, bp = botlist; bp; bp = bp->next, nbots++)
 			;
 
 		if (!(int)vote_enable_bots->value)
@@ -940,7 +937,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 			gi.cprintf (ent, PRINT_HIGH,
 						"voted bots in the game: %d (max=%d).\n",
 						bots_votedin, (int)vote_bots_max->value);
@@ -949,12 +946,12 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 						"Sorry server is full, cannot add anymore bots.\n");
 		else if (bots_votedin == (int)vote_bots_max->value)
 			gi.cprintf (ent, PRINT_HIGH, "Sorry, cannot add anymore bots.\n");
-		else if (atoi (a2) < 0 || atoi (a2) > nbots)
+		else if (atoi (arg2) < 0 || atoi (arg2) > nbots)
 			gi.cprintf (ent, PRINT_HIGH, "Voted bot # out of range\n");
 		else
 			vote_item = 0x100;
 	}
-	else if (!Q_stricmp (a1, "addbots") || !Q_stricmp (a1, "addbot"))
+	else if (!Q_stricmp (arg1, "addbots") || !Q_stricmp (arg1, "addbot"))
 	{
 		if (!(int)vote_enable_bots->value)
 		{
@@ -962,7 +959,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 			gi.cprintf (ent, PRINT_HIGH,
 						"voted bots in the game: %d (max=%d).\n",
 						bots_votedin, (int)vote_bots_max->value);
@@ -972,19 +969,19 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		else if (connected_clients == (int)maxclients->value ||
 				 bots_votedin == (int)vote_bots_max->value)
 			gi.cprintf (ent, PRINT_HIGH, "Sorry, cannot add anymore bots.\n");
-		else if (atoi (a2) + connected_clients > (int)maxclients->value)
+		else if (atoi (arg2) + connected_clients > (int)maxclients->value)
 			gi.cprintf (ent, PRINT_HIGH, "You can add in only %d more bots.\n",
 						(int)maxclients->value - connected_clients);
-		else if (atoi (a2) + bots_votedin > (int)vote_bots_max->value)
+		else if (atoi (arg2) + bots_votedin > (int)vote_bots_max->value)
 			gi.cprintf (ent, PRINT_HIGH, "You can add in only %d more bots.\n",
 						(int)vote_bots_max->value - bots_votedin);
-		else if (atoi (a2) < 0)
+		else if (atoi (arg2) < 0)
 			gi.cprintf (ent, PRINT_HIGH, "Cannot add less than 0 bots!\n");
 		else
 			vote_item = 0x200;
 	}
-	else if (!Q_stricmp (a1, "rembots") || !Q_stricmp (a1, "removebots") ||
-			 !Q_stricmp (a1, "rembot") || !Q_stricmp (a1, "removebot"))
+	else if (!Q_stricmp (arg1, "rembots") || !Q_stricmp (arg1, "removebots") ||
+			 !Q_stricmp (arg1, "rembot") || !Q_stricmp (arg1, "removebot"))
 	{
 		if (!(int)vote_enable_bots->value)
 		{
@@ -992,28 +989,28 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 			return;
 		}
 
-		if (argc == 2)
+		if (nc == 2)
 			gi.cprintf (ent, PRINT_HIGH,
 						"voted bots in the game: %d (max=%d).\n",
 						bots_votedin, (int)vote_bots_max->value);
 		else if (!botglobals.numbots)
 			gi.cprintf (ent, PRINT_HIGH, "Sorry, no more bots to remove!\n");
-		else if (atoi (a2) > bots_votedin)
+		else if (atoi (arg2) > bots_votedin)
 			gi.cprintf (ent, PRINT_HIGH, "You can remove only %d more bots.\n",
 						bots_votedin);
-		else if (atoi (a2) < 0)
+		else if (atoi (arg2) < 0)
 			gi.cprintf (ent, PRINT_HIGH, "Cannot remove less than 0 bots!\n");
 		else
 			vote_item = 0x400;
 	}
 	else
-		gi.cprintf (ent, PRINT_HIGH, "Invalid vote selection \"%s\"\n", a1);
+		gi.cprintf (ent, PRINT_HIGH, "Invalid vote selection \"%s\"\n", arg1);
 
 	if (vote_item)
 	{
 		vote_inprogress = 1;
 		vote_frametime = level.framenum + (int)vote_time->value * 10;
-		strcpy (vote_value, a2);
+		strcpy (vote_value, arg2);
 		vote_yea = 1;
 		ent->client->resp.osp_r2d8 = 1;
 
@@ -1027,7 +1024,7 @@ void OSP_vote_cmd (edict_t *ent, int mode, int nargs, char *what, char *value)
 		gi.bprintf (PRINT_HIGH, "%s has initiated a vote!\n",
 					ent->client->pers.greenname);
 		OSP_voteinfo (ent, 1);
-		q2log_voteInfo ("Propose", a1, a2);
+		q2log_voteInfo ("Propose", arg1, arg2);
 		OSP_checkVote ();
 	}
 }
@@ -2381,13 +2378,10 @@ void OSP_rmpause_cmd (void)
 		for (i = 1; i <= game.maxclients; i++)
 		{
 			ent = g_edicts + i;
-			if (ent->inuse)
-			{
-				if (!ent->client)
-					continue;
-				gi.centerprintf (ent, "Match paused by referee.\n");
-				gi.cprintf (ent, PRINT_CHAT, "Match paused by referee.\n");
-			}
+			if (!ent->inuse || !ent->client)
+				continue;
+			gi.centerprintf (ent, "Match paused by referee.\n");
+			gi.cprintf (ent, PRINT_CHAT, "Match paused by referee.\n");
 		}
 	}
 	else
@@ -2772,12 +2766,10 @@ void OSP_allready_svcmd (void)
 	for (i = 1; i <= game.maxclients; i++)
 	{
 		ent = g_edicts + i;
-		if (ent->inuse && ent->client)
-		{
-			if (ent->client->resp.entered != ENTERED_ENTERED)
-				continue;
-			ent->client->resp.osp_r20c = 1;
-		}
+		if (!ent->inuse || !ent->client ||
+			ent->client->resp.entered != ENTERED_ENTERED)
+			continue;
+		ent->client->resp.osp_r20c = 1;
 	}
 
 	OSP_setShowParams ();

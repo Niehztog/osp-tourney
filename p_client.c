@@ -199,10 +199,9 @@ qboolean IsFemale (edict_t *ent)
 void ClientObituary (edict_t *self, edict_t *inflictor, edict_t *attacker)
 {
 	int			mod;
-	// `ff` before the two message pointers is a deliberate declaration order.
-	qboolean	ff;
 	char		*message;
 	char		*message2;
+	qboolean	ff;
 	int			j;		// Invented name: notification-recipient index.
 	edict_t		*e;		// Invented name: notification recipient.
 
@@ -311,21 +310,21 @@ void ClientObituary (edict_t *self, edict_t *inflictor, edict_t *attacker)
 				{
 					self->client->resp.score--;
 					self->client->resp.osp_r2c0++;
-
-					if (m_mode > 1)
-					{
-						teams[self->client->resp.team].osp_m108++;
-						teams[self->client->resp.team].osp_m0f8--;
-
-						if (m_mode == 2)
-							OSP_playerTeamFrags (self);
-
-						if (frag_offset)
-							frag_offset--;
-					}
-
-					OSP_DoRankSort ();
 				}
+
+				if (m_mode > 1)
+				{
+					teams[self->client->resp.team].osp_m108++;
+					teams[self->client->resp.team].osp_m0f8--;
+
+					if (m_mode == 2)
+						OSP_playerTeamFrags (self);
+
+					if (frag_offset)
+						frag_offset--;
+				}
+
+				OSP_DoRankSort ();
 			}
 
 			self->enemy = NULL;
@@ -671,12 +670,15 @@ void player_die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damag
 		self->client->ps.pmove.pm_type = PM_DEAD;
 		ClientObituary (self, inflictor, attacker);
 
+		// Only a running match logs the death or drops the weapon.
 		if (sync_stat > 2)
+		{
 			sl_WriteStdLogDeath (&gi, level, self, inflictor, attacker);
-		q2log_logDeath (self, inflictor, attacker);
+			q2log_logDeath (self, inflictor, attacker);
 
-		if ((int)client_deathweapdrop->value)
-			TossClientWeapon (self);
+			if ((int)client_deathweapdrop->value)
+				TossClientWeapon (self);
+		}
 		if (rune_stat)
 			OSP_deadDropRune (self);
 
@@ -2232,9 +2234,10 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 				ent->client->resp.enterframe +
 				(int)bots_warmuptime->value * 10 < level.framenum)
 				OSP_ready_cmd (ent, 2);
+
+			if (!(ent->flags & FL_BOTINPUT))
+				return;
 		}
-		if (!(ent->flags & FL_BOTINPUT))
-			return;
 
 		level.current_entity = ent;
 		client = ent->client;
@@ -2619,42 +2622,36 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 			}
 		}
 
+		if ((int)client_nomove->value &&
+			client->resp.entered == ENTERED_ENTERED &&
+			m_mode > 1 && sync_stat < 4 &&
+			client->resp.osp_r0d4 < level.framenum &&
+			!(ent->flags & FL_OSP_BOT))
 		{
-				// A declared variable, not a CSE temp -- real stores to a slot
-				// distinct from the field in each arm and only then to the field.
-			int		inactive_seconds;	/* invented local name */
+			client->resp.osp_r0d4 = level.framenum + 60;
 
-			if ((int)client_nomove->value &&
-				client->resp.entered == ENTERED_ENTERED &&
-				m_mode > 1 && sync_stat < 4 &&
-				client->resp.osp_r0d4 < level.framenum &&
-				!(ent->flags & FL_OSP_BOT))
+			if (!VectorCompare ((vec_t *)&client->resp.osp_r0dc,
+				ent->s.angles) ||
+				!VectorCompare ((vec_t *)&client->resp.osp_r0e8,
+				ent->s.origin))
 			{
-				client->resp.osp_r0d4 = level.framenum + 60;
+				VectorCopy (ent->s.angles,
+					((vec_t *)&client->resp.osp_r0dc));
+				VectorCopy (ent->s.origin,
+					((vec_t *)&client->resp.osp_r0e8));
+				i = 0;
+			}
+			else
+				i = client->resp.osp_r0d8 + 6;
 
-				if (!VectorCompare ((vec_t *)&client->resp.osp_r0dc,
-					ent->s.angles) ||
-					!VectorCompare ((vec_t *)&client->resp.osp_r0e8,
-					ent->s.origin))
-				{
-					VectorCopy (ent->s.angles,
-						((vec_t *)&client->resp.osp_r0dc));
-					VectorCopy (ent->s.origin,
-						((vec_t *)&client->resp.osp_r0e8));
-					inactive_seconds = 0;
-				}
-				else
-					inactive_seconds = client->resp.osp_r0d8 + 6;
-
-				client->resp.osp_r0d8 = inactive_seconds;
-				if (inactive_seconds >= (int)client_nomove->value)
-				{
-					gi.bprintf (PRINT_CHAT,
-						"%s inactive for %d seconds, moved to OBSERVER mode.\n",
-						client->pers.netname, inactive_seconds);
-					OSP_startObserve (ent);
-					return;
-				}
+			client->resp.osp_r0d8 = i;
+			if (i >= (int)client_nomove->value)
+			{
+				gi.bprintf (PRINT_CHAT,
+					"%s inactive for %d seconds, moved to OBSERVER mode.\n",
+					client->pers.netname, i);
+				OSP_startObserve (ent);
+				return;
 			}
 		}
 
@@ -2727,10 +2724,12 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 							gi.cprintf (ent, PRINT_HIGH,
 								"Changing to AUTOCAM mode.\n");
 							client->resp.osp_r010 = level.framenum + 8;
-							return;
 						}
-						gi.cprintf (ent, PRINT_HIGH, "No clients to track.\n");
-						client->resp.osp_r010 = level.framenum + 8;
+						else
+						{
+							gi.cprintf (ent, PRINT_HIGH, "No clients to track.\n");
+							client->resp.osp_r010 = level.framenum + 8;
+						}
 						return;
 					}
 				}
@@ -2742,18 +2741,20 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 		if (client->resp.entered == ENTERED_ENTERED &&
 			client->resp.osp_r000 && !level.intermissiontime)
 		{
-			j = 0;
+			int		count;
+
+			count = 0;
 			for (i = 1; i <= game.maxclients &&
-				 j < client->resp.osp_r000; i++) {
+				 count < client->resp.osp_r000; i++) {
 				other = g_edicts + i;
 				if (other->inuse && other->client &&
 					other->client->chase_target == ent)
 				{
-					j++;
+					count++;
 					UpdateChaseCam(other);
 				}
 			}
-			client->resp.osp_r000 = j;
+			client->resp.osp_r000 = count;
 		}
 
 		if (rune_stat & RUNE_REGEN)
@@ -2769,7 +2770,7 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 		{
 			client->oldbuttons = client->buttons;
 			client->buttons = ucmd->buttons;
-			client->latched_buttons = client->buttons & ~client->oldbuttons;
+			client->latched_buttons = client->buttons & ~ent->client->oldbuttons;
 
 			if (client->latched_buttons & BUTTON_ATTACK)
 			{

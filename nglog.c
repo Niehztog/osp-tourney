@@ -257,17 +257,17 @@ Build the ngStatsQ2T command line. It only formats it -- the caller runs it.
 void ngLog_ngStatsCall (int arg)
 {
 	// The MSVC frame emits the three aggregate initialisers in DECLARATION
-	// order, and real's order is si, pi, flag -- which is what puts the Win32
+	// order, and real's order is si, process, flag -- which is what puts the Win32
 	// pair ahead of `flag` here.  gcc sees neither of them, and expands the
 	// initialiser as the same 6-byte block move it gives strcpy of a literal.
 	char	cmd[2048];
 #ifdef _WIN32
 	STARTUPINFO			si = {0};
-	PROCESS_INFORMATION	pi = {0};
+	PROCESS_INFORMATION	process = {0};
 #endif
 	char	flag[6] = "false";
-	char	exec[1024];
-	char	cfg[1024];
+	char	exepath[1024];
+	char	cfgpath[1024];
 	char	cwd[1024];
 
 	if (arg)
@@ -291,23 +291,23 @@ void ngLog_ngStatsCall (int arg)
 	getcwd (cwd, 1024);
 
 #ifdef _WIN32
-	sprintf (exec, "%s\\%s\\ngStats\\ngStatsQ2T.exe", cwd, __nglog_rel_path);
-	sprintf (cfg, "%s\\%s\\ngStats\\%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
-	sprintf (cmd, "%s -b %s -c %s\\%s\\ngStats\\%s %s", exec, flag,
-		cwd, __nglog_rel_path, __nglog_ngstats_cfg, cfg);
+	sprintf (exepath, "%s\\%s\\ngStats\\ngStatsQ2T.exe", cwd, __nglog_rel_path);
+	sprintf (cfgpath, "%s\\%s\\ngStats\\%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
+	sprintf (cmd, "%s -b %s -c %s\\%s\\ngStats\\%s %s", exepath, flag,
+		cwd, __nglog_rel_path, __nglog_ngstats_cfg, cfgpath);
 
 	// DETACHED_PROCESS for the silent end-of-map run,
 	// CREATE_NEW_PROCESS_GROUP for the interactive one.
 	if (!arg)
 		CreateProcess (NULL, cmd, NULL, NULL, FALSE, DETACHED_PROCESS,
-			NULL, NULL, &si, &pi);
+			NULL, NULL, &si, &process);
 	else
 		CreateProcess (NULL, cmd, NULL, NULL, FALSE, CREATE_NEW_PROCESS_GROUP,
-			NULL, NULL, &si, &pi);
+			NULL, NULL, &si, &process);
 #else
-	sprintf (exec, "%s/%s/ngStats/bin/ngStatsQ2T", cwd, __nglog_rel_path);
-	sprintf (cfg, "%s/%s/ngStats/%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
-	sprintf (cmd, "%s -b %s -c %s %s &", exec, flag, __nglog_ngstats_cfg, cfg);
+	sprintf (exepath, "%s/%s/ngStats/bin/ngStatsQ2T", cwd, __nglog_rel_path);
+	sprintf (cfgpath, "%s/%s/ngStats/%s", cwd, __nglog_rel_path, __nglog_ngstats_logdir);
+	sprintf (cmd, "%s -b %s -c %s %s &", exepath, flag, __nglog_ngstats_cfg, cfgpath);
 #endif
 }
 
@@ -323,11 +323,6 @@ for it, and hand the finished log to ngStats / ngWorldStats.
 // gamei386.so: 0006EAB0..0006EC2A
 void ngLog_logClose (int which, int reason)
 {
-	char	name[1024];
-	char	cmd[2048];
-	char	exec[1024];
-	char	dir[1024];
-
 	if (which != 2)
 	{
 		if (log_file)
@@ -337,6 +332,8 @@ void ngLog_logClose (int which, int reason)
 			log_file = NULL;
 			if (__nglog_logstyle == 4)
 			{
+				char	name[1024];
+
 				strcpy (name, __nglog_log_prefix);
 				strcat (name, ".log");
 				rename (__nglog_logname, name);
@@ -349,39 +346,45 @@ void ngLog_logClose (int which, int reason)
 
 	if (worldlog_file && which != 1)
 	{
+		// A second buffer, not `name` again: MSVC gives it its own slot, gcc
+		// reuses name's because name's block has already closed.
+		char	cwd[1024];
+		char	cmd[2048];
+		char	exepath[1024];
+		char	logdir[1024];
 #ifdef _WIN32
-		STARTUPINFO			si = {0};
-		PROCESS_INFORMATION	pi = {0};
+		STARTUPINFO			sinfo = {0};
+		PROCESS_INFORMATION	process = {0};
 #endif
 		fflush (worldlog_file);
 		fclose (worldlog_file);
 		worldlog_file = NULL;
-		strcpy (name, __nglog_worldlog_prefix);
-		strcat (name, ".log");
-		rename (__nglog_worldlog_name, name);
+		strcpy (cwd, __nglog_worldlog_prefix);
+		strcat (cwd, ".log");
+		rename (__nglog_worldlog_name, cwd);
 
 #ifdef _WIN32
-			// si/pi are declared INSIDE this block: real's zeroing sits partway
+			// sinfo/process are declared INSIDE this block: real's zeroing sits partway
 			// into the function rather than at entry.
-		si.cb = sizeof (si);
-		si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-		si.wShowWindow = SW_HIDE;
-		si.hStdInput = NULL;
-		si.hStdOutput = NULL;
-		si.hStdError = NULL;
+		sinfo.cb = sizeof (sinfo);
+		sinfo.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+		sinfo.wShowWindow = SW_HIDE;
+		sinfo.hStdInput = NULL;
+		sinfo.hStdOutput = NULL;
+		sinfo.hStdError = NULL;
 #endif
 
-		getcwd (name, 1024);
+		getcwd (cwd, 1024);
 #ifdef _WIN32
-		sprintf (exec, "%s\\%s\\ngWorldStats\\bin\\ngWorldStats.exe", name, __nglog_rel_path);
-		sprintf (dir, "%s\\%s\\ngWorldStats\\logs", name, __nglog_rel_path);
-		sprintf (cmd, "%s -d %s -g Quake2Tourney", exec, dir);
+		sprintf (exepath, "%s\\%s\\ngWorldStats\\bin\\ngWorldStats.exe", cwd, __nglog_rel_path);
+		sprintf (logdir, "%s\\%s\\ngWorldStats\\logs", cwd, __nglog_rel_path);
+		sprintf (cmd, "%s -d %s -g Quake2Tourney", exepath, logdir);
 		CreateProcess (NULL, cmd, NULL, NULL, FALSE, DETACHED_PROCESS,
-			NULL, NULL, &si, &pi);
+			NULL, NULL, &sinfo, &process);
 #else
-		sprintf (exec, "%s/%s/ngWorldStats/bin/ngWorldStats", name, __nglog_rel_path);
-		sprintf (dir, "%s/%s/ngWorldStats/logs", name, __nglog_rel_path);
-		sprintf (cmd, "%s -d %s -g Quake2Tourney &", exec, dir);
+		sprintf (exepath, "%s/%s/ngWorldStats/bin/ngWorldStats", cwd, __nglog_rel_path);
+		sprintf (logdir, "%s/%s/ngWorldStats/logs", cwd, __nglog_rel_path);
+		sprintf (cmd, "%s -d %s -g Quake2Tourney &", exepath, logdir);
 		system (cmd);
 #endif
 	}

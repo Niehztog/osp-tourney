@@ -545,9 +545,10 @@ void OSP_gameInit (void)
 		}
 	}
 
-	// The per-map high score table needs a limit to measure against.
-	if (m_mode <= 1 && (int)client_highscores->value &&
-		!(int)timelimit->value && !(int)fraglimit->value)
+	// The per-map high score table is FFA-only and needs a limit to measure
+	// against; anything else turns it off.
+	if (m_mode > 1 || !(int)client_highscores->value ||
+		(!(int)timelimit->value && !(int)fraglimit->value))
 	{
 		gi.dprintf ("High score tracking disabled!\n");
 		gi.cvar_set ("client_highscores", "0");
@@ -738,15 +739,13 @@ void OSP_endClean (void)
 	for (i = 1; i <= game.maxclients; i++)
 	{
 		ent = g_edicts + i;
-		if (ent->inuse && ent->client)
-		{
-			if (ent->client->resp.entered != ENTERED_ENTERED)
-				continue;
+		if (!ent->inuse || !ent->client ||
+			ent->client->resp.entered != ENTERED_ENTERED)
+			continue;
 
-			clientid = ent->client->resp.clientid;
+		clientid = ent->client->resp.clientid;
 
-			memcpy (&o_acc[clientid], &p_acc[clientid], sizeof(p_acc_t));
-		}
+		memcpy (&o_acc[clientid], &p_acc[clientid], sizeof(p_acc_t));
 	}
 
 	p_order[26] = 0;
@@ -1076,9 +1075,9 @@ void OSP_clearStats (edict_t *ent)
 		ent->client->ps.stats[19] = 0;
 		ent->client->ps.stats[20] = 0;
 		ent->client->ps.stats[21] = 0;
-		ent->client->ps.stats[17] = 0;
-		ent->client->ps.stats[16] = 0;
 	}
+	ent->client->ps.stats[17] = 0;
+	ent->client->ps.stats[16] = 0;
 }
 
 // gamex86.dll: 10026A14..10026ADF
@@ -1439,16 +1438,13 @@ void OSP_updateClock (void)
 				start_count |= 3;
 				gi.bprintf (PRINT_HIGH, "5 minutes remaining in match.\n");
 			}
-			if (mins < 1)
+			if (mins < 1 && !(start_count & 4) && timelimit->value >= 1)
 			{
-				if (!(start_count & 4) && timelimit->value >= 1)
-				{
-					start_count |= 7;
-					gi.bprintf (PRINT_HIGH, "1 minute remaining in match.\n");
-				}
-				if (!mins && seconds <= 10 && !(start_count & 8))
-					start_count |= 0xf;
+				start_count |= 7;
+				gi.bprintf (PRINT_HIGH, "1 minute remaining in match.\n");
 			}
+			if (!mins && seconds <= 10 && !(start_count & 8))
+				start_count |= 0xf;
 
 			sprintf (buf, "%2i:%.2i", mins, seconds);
 			gi.cvar_set ("time_remaining", buf);
@@ -1469,6 +1465,7 @@ void OSP_updateClock (void)
 				else
 					blink_on_count = 0;
 			}
+			return;
 		}
 		else
 		{
@@ -1603,17 +1600,17 @@ qboolean PlayerIdCanSee (edict_t *targ, edict_t *other)
 // gamei386.so: 0004D200..0004D5F5
 int OSP_setID (edict_t *ent)
 {
-	char		str[80];
+	char		line[80];
 	vec3_t		forward;
 	vec3_t		dir;
 	int			i;
-	float		best = 0;
-	edict_t		*bestent;
+	float		bestdp = 0;
+	edict_t		*best_ent;
 	edict_t		*cl;
 	float		d;
 
 	AngleVectors (ent->client->v_angle, forward, NULL, NULL);
-	bestent = NULL;
+	best_ent = NULL;
 
 	for (i = 1; i <= maxclients->value; i++)
 	{
@@ -1631,25 +1628,25 @@ int OSP_setID (edict_t *ent)
 		VectorNormalize (dir);
 		d = DotProduct (forward, dir);
 
-		if (d > best && d > 0.9 && PlayerIdCanSee (ent, cl))
+		if (d > bestdp && d > 0.9 && PlayerIdCanSee (ent, cl))
 		{
-			best = d;
-			bestent = cl;
+			bestdp = d;
+			best_ent = cl;
 		}
 	}
 
-	if (best > 0.9)
+	if (bestdp > 0.9)
 	{
 		if (m_mode == 2 && (ent->client->resp.team == 2 ||
-			bestent->client->resp.team == ent->client->resp.team))
+			best_ent->client->resp.team == ent->client->resp.team))
 		{
-			sprintf (str, "Teammate \"%s\"\n",
-					 bestent->client->pers.greenname);
+			sprintf (line, "Teammate \"%s\"\n",
+					 best_ent->client->pers.greenname);
 
-			if (strcmp (ent->client->resp.osp_r038, str))
+			if (strcmp (ent->client->resp.osp_r038, line))
 			{
-				strcpy (ent->client->resp.osp_r038, str);
-				OSP_clientConfigString (ent, 0x620, str);
+				strcpy (ent->client->resp.osp_r038, line);
+				OSP_clientConfigString (ent, 0x620, line);
 			}
 
 			return 0x620;
@@ -1658,14 +1655,14 @@ int OSP_setID (edict_t *ent)
 		{
 			if (ent->client->resp.osp_r204)
 			{
-				sprintf (str, "Viewing \"%s\"", bestent->client->pers.netname);
-				for (i = 0; i < strlen (str); i++)
-					str[i] += 128;
+				sprintf (line, "Viewing \"%s\"", best_ent->client->pers.netname);
+				for (i = 0; i < strlen (line); i++)
+					line[i] += 128;
 
-				if (strcmp (ent->client->resp.osp_r038, str))
+				if (strcmp (ent->client->resp.osp_r038, line))
 				{
-					strcpy (ent->client->resp.osp_r038, str);
-					OSP_clientConfigString (ent, 0x620, str);
+					strcpy (ent->client->resp.osp_r038, line);
+					OSP_clientConfigString (ent, 0x620, line);
 				}
 
 				return 0x620;
@@ -2215,8 +2212,11 @@ void OSP_checkSync (void)
 
 			if ((ent->s.effects & EF_GIB) &&
 				strcmp (ent->classname, "bodyque"))
+			{
 				G_FreeEdict (ent);
-			else if (!strcmp (ent->classname, "bodyque"))
+				continue;
+			}
+			if (!strcmp (ent->classname, "bodyque"))
 			{
 				gi.unlinkentity (ent);
 				ent->s.origin[0] = 0;
@@ -2340,8 +2340,11 @@ void OSP_checkSync (void)
 				continue;
 
 			if ((ent->s.effects & EF_GIB) && strcmp (ent->classname, "bodyque"))
+			{
 				G_FreeEdict (ent);
-			else if (!strcmp (ent->classname, "bodyque"))
+				continue;
+			}
+			if (!strcmp (ent->classname, "bodyque"))
 			{
 				gi.unlinkentity (ent);
 				ent->s.origin[0] = 0;
@@ -2733,22 +2736,20 @@ void OSP_setAllAccuracy (void)
 	for (i = 0; i < game.maxclients; i++)
 	{
 		ent = g_edicts + i + 1;
-		if (ent->inuse && ent->client)
-		{
-			if (ent->client->resp.entered != ENTERED_ENTERED)
-				continue;
+		if (!ent->inuse || !ent->client ||
+			ent->client->resp.entered != ENTERED_ENTERED)
+			continue;
 
-			cid = ent->client->resp.clientid;
-			strncpy (p_acc[cid].netname, ent->client->pers.netname, 15);
-			p_acc[cid].dgiven = 0;
-			p_acc[cid].dtaken = 0;
-			for (j = 0; j < 11; j++)
-			{
-				p_acc[cid].shots[j] = 0;
-				p_acc[cid].hits[j] = 0;
-				p_acc[cid].given[j] = 0;
-				p_acc[cid].taken[j] = 0;
-			}
+		cid = ent->client->resp.clientid;
+		strncpy (p_acc[cid].netname, ent->client->pers.netname, 15);
+		p_acc[cid].dgiven = 0;
+		p_acc[cid].dtaken = 0;
+		for (j = 0; j < 11; j++)
+		{
+			p_acc[cid].shots[j] = 0;
+			p_acc[cid].hits[j] = 0;
+			p_acc[cid].given[j] = 0;
+			p_acc[cid].taken[j] = 0;
 		}
 	}
 }
@@ -2984,12 +2985,9 @@ void OSP_serverbotsRemove (void)
 	for (i = 1; i <= game.maxclients; i++)
 	{
 		ent = g_edicts + i;
-		if (ent->inuse)
-		{
-			if (!(ent->flags & FL_OSP_NOCMD))
-				continue;
-			BotDestroy (ent);
-		}
+		if (!ent->inuse || !(ent->flags & FL_OSP_NOCMD))
+			continue;
+		BotDestroy (ent);
 	}
 }
 
@@ -3274,23 +3272,22 @@ void OSP_parseArmor (void)
 void OSP_parseString (char *str, gitem_armor_t *info)
 {
 	char		tok[4][32];
-	char		*p;
-	char		*s;
+	char		*sp[2];		// [0] = rest of the string, [1] = the space ending tok[n]
 	int			n;
 
-	s = str;
+	sp[0] = str;
 	for (n = 0; n < 4; n++)
 	{
-		strcpy (tok[n], s);
-		p = strchr (tok[n], ' ');
-		if (!p)
+		strcpy (tok[n], sp[0]);
+		sp[1] = strchr (tok[n], ' ');
+		if (!sp[1])
 		{
 			n++;
 			break;
 		}
-		*p = 0;
-		p++;
-		s = p;
+		*sp[1] = 0;
+		sp[1]++;
+		sp[0] = sp[1];
 	}
 
 	if (n == 4)

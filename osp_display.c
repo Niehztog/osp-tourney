@@ -14,79 +14,79 @@
 // gamei386.so: 00051608..00051B76
 void OSP_setMOTD (void)
 {
-	char	motdpage[9][33];
+	char	pagebuf[9][33];
 	char	buf[1024];
 	int		y;
 	int		len = 0;
 	int		lines;
 	FILE	*f = NULL;
 	// The four cvar lookups are DECLARATION INITIALISERS, which is what puts
-	// the pooled "motd.txt" address between `motdfile` and `center` in the
+	// the pooled "motd.txt" address between `motdname` and `center` in the
 	// frame: gcc creates a temp while expanding an initialiser, so it lands
 	// between the variable it initialises and the next declaration.  Written
 	// as plain statements the temp comes after every declared local instead,
 	// and real's ELF puts it fourth of five.  The literal is repeated rather
 	// than cached -- real's PE pushes two distinct .rdata copies.
 	cvar_t	*gamedir = gi.cvar ("gamedir", "ospdm", CVAR_SERVERINFO);
-	cvar_t	*basedir = gi.cvar ("basedir", ".", 0);
-	cvar_t	*motdfile = gi.cvar ("motd_file", "motd.txt", 0);
+	cvar_t	*base = gi.cvar ("basedir", ".", 0);
+	cvar_t	*motdname = gi.cvar ("motd_file", "motd.txt", 0);
 	cvar_t	*center = gi.cvar ("motd_center", "0", 0);
-	int		i;
-	char	c;
+	int		j;
 
-	if (gamedir && basedir)
+	if (gamedir && base)
 	{
 		char	path[64] = {0};
-		char	*p = path;
+		char	*pp = path;
+		char	ch;		// block scope: real's PE puts it below path and pp
 
-		sprintf (path, "%s/%s/", basedir->string, gamedir->string);
-		if (motdfile)
-			strcat (path, motdfile->string);
+		sprintf (path, "%s/%s/", base->string, gamedir->string);
+		if (motdname)
+			strcat (path, motdname->string);
 		else
 			strcat (path, "motd.txt");
 
-		f = fopen (p, "r");
+		f = fopen (pp, "r");
 
 		if (f)
 		{
 			if (!motd_read)
 			{
-				gi.dprintf ("MOTD: Reading from \"%s\"\n", motdfile->string);
+				gi.dprintf ("MOTD: Reading from \"%s\"\n", motdname->string);
 				motd_read = 1;
 			}
 			for (lines = 0; lines < 9; lines++)
 			{
-				for (i = 0; i < 33; i++)
-					motdpage[lines][i] = 0;
+				for (j = 0; j < 33; j++)
+					pagebuf[lines][j] = 0;
 
-				for (i = 0; i < 33; i++)
+				for (j = 0; j < 33; j++)
 				{
-					c = fgetc (f);
-					if (c == -1 || c == '\n')
+					ch = fgetc (f);
+					if (ch == -1 || ch == '\n')
 						break;
-					motdpage[lines][i] = c;
+					pagebuf[lines][j] = ch;
 				}
 
 				// Windows' CRT translates CRLF to LF on a text-mode fgetc, so a
 				// motd.txt with Windows line endings never shows the CR to this
 				// loop there; on Unix fopen's "r" does no such translation.
 #ifndef _WIN32
-				if (i && motdpage[lines][i - 1] == '\r')
-					motdpage[lines][i - 1] = 0;
+				if (j && pagebuf[lines][j - 1] == '\r')
+					pagebuf[lines][j - 1] = 0;
 #endif
 
-				if (i == 33)
+				if (j == 33)
 				{
-					motdpage[lines][32] = 0;
-					while (c != '\n' && c != -1)
-						c = fgetc (f);
+					pagebuf[lines][32] = 0;
+					while (ch != '\n' && ch != -1)
+						ch = fgetc (f);
 				}
 
-				if (c == -1)
+				if (ch == -1)
 					break;
 			}
 
-			if (i)
+			if (j)
 				lines++;
 			if (lines > 9)
 				lines = 9;
@@ -95,13 +95,13 @@ void OSP_setMOTD (void)
 		}
 		else
 		{
-			gi.dprintf ("MOTD: Couldn't open \"%s\"\n", motdfile->string);
+			gi.dprintf ("MOTD: Couldn't open \"%s\"\n", motdname->string);
 			lines = 0;
 		}
 	}
 	else
 	{
-		gi.dprintf ("MOTD: Couldn't find \"%s\"\n", motdfile->string);
+		gi.dprintf ("MOTD: Couldn't find \"%s\"\n", motdname->string);
 		lines = 0;
 	}
 
@@ -111,9 +111,9 @@ void OSP_setMOTD (void)
 		strcpy (match_motd, "xl 4 ");
 		len = strlen (match_motd);
 
-		for (i = 0; i < lines; i++, y += 8)
+		for (j = 0; j < lines; j++, y += 8)
 		{
-			Com_sprintf (buf, 1024, "yb %d string \"%s\"", y, motdpage[i]);
+			Com_sprintf (buf, 1024, "yb %d string \"%s\"", y, pagebuf[j]);
 			strcpy (match_motd + len, buf);
 			len += strlen (buf);
 		}
@@ -124,9 +124,9 @@ void OSP_setMOTD (void)
 		strcpy (match_motd, "xv 32 ");
 		len = strlen (match_motd);
 
-		for (i = 0; i < lines; i++, y += 8)
+		for (j = 0; j < lines; j++, y += 8)
 		{
-			Com_sprintf (buf, 1024, "yv %d string \"%s\"", y, motdpage[i]);
+			Com_sprintf (buf, 1024, "yv %d string \"%s\"", y, pagebuf[j]);
 			strcpy (match_motd + len, buf);
 			len += strlen (buf);
 		}
@@ -640,24 +640,20 @@ void OSP_showScores (int *list, int count, edict_t *ent)
 				if (other != ent)
 				{
 					if (i == ent->client->resp.osp_r2b0)
-					{
 						Com_sprintf (headbuf, 1024,
 									 "xv -48 yv %i string2 \"\x8d%s\"xv -40 ",
 									 y, rline);
-						goto appended;
-					}
-					Com_sprintf (headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
+					else
+						Com_sprintf (headbuf, 1024, "yv %i string2 \"%s\"", y, rline);
 				}
 				else
 				{
 					if (i == ent->client->resp.osp_r2b0)
-					{
 						Com_sprintf (headbuf, 1024,
 									 "xv -48 yv %i string \"\r%s\"xv -40 ",
 									 y, rline);
-						goto appended;
-					}
-					Com_sprintf (headbuf, 1024, "yv %i string \"%s\"", y, rline);
+					else
+						Com_sprintf (headbuf, 1024, "yv %i string \"%s\"", y, rline);
 				}
 			}
 			else if (level.intermissiontime != 0)
@@ -772,7 +768,6 @@ void OSP_showScores (int *list, int count, edict_t *ent)
 			}
 		}
 
-appended:
 		nchars = strlen (headbuf);
 		if (outlen + nchars > sizeof (buf))
 			break;
@@ -814,21 +809,27 @@ appended:
 // gamei386.so: 00053EC4..0005441D
 void OSP_showPlayer (edict_t *ent)
 {
-	char		line[256];
+	// All function scope, declared in this order; the names are chosen so
+	// that MSVC, which orders frame slots by a hash of the name, lays the
+	// frame out the way real's gamex86.dll does.
+	int			nframes;
+	int			aidx;
+	char		txt[256];
 	char		name[256];
 	char		buf[1400];
-	int			cid;
-	unsigned int	i;
-	int			frames;
+	int			cidx;
+	unsigned int	k;
+	int			endframe;
 	float		eff;
 	int			y;
 	int			frags;
-	int			deaths;
-	int			suicides;
-	edict_t		*other;
-	int			found;
+	int			dth;
+	int			fph;
+	int			selfkills;
+	edict_t		*pl;
+	int			any;
 
-	found = 0;
+	any = 0;
 
 	if (ent->client->resp.osp_r2ac < 1)
 	{
@@ -837,29 +838,29 @@ void OSP_showPlayer (edict_t *ent)
 		return;
 	}
 
-	other = g_edicts + ent->client->resp.osp_r2ac;
+	pl = g_edicts + ent->client->resp.osp_r2ac;
 
-	if (!other->inuse || !other->client)
+	if (!pl->inuse || !pl->client)
 	{
 		gi.cprintf (ent, PRINT_CHAT, "** Sorry, player has disconnected!\n");
 		Cmd_InvUse_f (ent);
 		return;
 	}
 
-	frags = other->client->resp.score;
-	deaths = other->client->resp.osp_r014;
-	suicides = other->client->resp.osp_r2c0;
+	frags = pl->client->resp.score;
+	dth = pl->client->resp.osp_r014;
+	selfkills = pl->client->resp.osp_r2c0;
 
-	sprintf (name, "Player: %s (%s)", other->client->pers.greenname, other->client->resp.osp_r0f4);
+	sprintf (name, "Player: %s (%s)", pl->client->pers.greenname, pl->client->resp.osp_r0f4);
 	sprintf (buf, "xv 0 yv 0 string2 \"%s\"", name);
 
-	strcpy (line, "_");
+	strcpy (txt, "_");
 	{
-		for (cid = 0; cid < strlen (name) - 1 && cid < 59; cid++)
-			strcat (line, "_");
+		for (cidx = 0; cidx < strlen (name) - 1 && cidx < 59; cidx++)
+			strcat (txt, "_");
 	}
 
-	sprintf (name, "yv 4 string2 \"%s\"", line);
+	sprintf (name, "yv 4 string2 \"%s\"", txt);
 	strcat (buf, name);
 
 	y = 18;
@@ -867,94 +868,85 @@ void OSP_showPlayer (edict_t *ent)
 	// The zero case is a two-part disjunction whose second half is dead --
 	// `frags < 1` already covers `!frags` -- and the redundancy is the
 	// original's.
-	if (frags < 1 || (!deaths && !frags))
+	if (frags < 1 || (!dth && !frags))
 		eff = 0;
 	else
-		eff = 100.0 * frags / (0.0 + frags + deaths);
+		eff = 100.0 * frags / (0.0 + frags + dth);
 
-	sprintf (line, "yv %d string \"Frags   :%3d     Efficiency: %.1f%%\"",
+	sprintf (txt, "yv %d string \"Frags   :%3d     Efficiency: %.1f%%\"",
 			 y, frags, eff);
-	strcat (buf, line);
+	strcat (buf, txt);
 	y += 8;
 
 	if (level.intermissiontime != 0)
-		frames = endlvl_frame;
+		endframe = endlvl_frame;
 	else
-		frames = level.framenum;
+		endframe = level.framenum;
 
+	if (pl->client->resp.enterframe < sync_frame)
+		nframes = endframe - sync_frame + 1;
+	else
+		nframes = endframe - pl->client->resp.enterframe + 1;
+
+	if (nframes < 1)
 	{
-		int		i;
-		int		fph;			// invented name
-
-		if (other->client->resp.enterframe < sync_frame)
-			i = frames - sync_frame + 1;
-		else
-			i = frames - other->client->resp.enterframe + 1;
-
-		if (i < 1)
-		{
-			i = 1;
-			other->client->resp.enterframe = frames + 1;
-			other->client->resp.osp_r2d4 = 1;
-		}
-
-		fph = frags * 36000 / i;
-		sprintf (line, "yv %d string \"Deaths  :%3d     Frags/Hour: %d\"",
-				 y, deaths, fph);
+		nframes = 1;
+		pl->client->resp.enterframe = endframe + 1;
+		pl->client->resp.osp_r2d4 = 1;
 	}
-	strcat (buf, line);
+
+	fph = frags * 36000 / nframes;
+	sprintf (txt, "yv %d string \"Deaths  :%3d     Frags/Hour: %d\"",
+			 y, dth, fph);
+	strcat (buf, txt);
 	y += 8;
 
-	sprintf (line, "yv %d string \"Suicides: %2d     Rank: %d/%d\"",
-			 y, suicides, other->client->resp.osp_r208, active_clients);
-	strcat (buf, line);
+	sprintf (txt, "yv %d string \"Suicides: %2d     Rank: %d/%d\"",
+			 y, selfkills, pl->client->resp.osp_r208, active_clients);
+	strcat (buf, txt);
 	y += 16;
 
-	cid = other->client->resp.clientid;
+	cidx = pl->client->resp.clientid;
 
+	for (k = 0; k < 10; k++)
 	{
-		int				index;			// invented name
-
-		for (i = 0; i < 10; i++)
+		aidx = a_info[k].index;
+		if (p_acc[cidx].shots[aidx])
 		{
-			index = a_info[i].index;
-			if (p_acc[cid].shots[index])
-			{
-				sprintf (line, "yv %d string \"%s %.1f%% (%d/%d hits)\"", y,
-						 a_info[i].name,
-						 (double)(100 * p_acc[cid].hits[index]) /
-						 p_acc[cid].shots[index],
-						 p_acc[cid].hits[index],
-						 p_acc[cid].shots[index]);
-				strcat (buf, line);
-				found = 1;
-				y += 8;
-			}
+			sprintf (txt, "yv %d string \"%s %.1f%% (%d/%d hits)\"", y,
+					 a_info[k].name,
+					 (double)(100 * p_acc[cidx].hits[aidx]) /
+					 p_acc[cidx].shots[aidx],
+					 p_acc[cidx].hits[aidx],
+					 p_acc[cidx].shots[aidx]);
+			strcat (buf, txt);
+			any = 1;
+			y += 8;
 		}
 	}
 
-	if (!found)
+	if (!any)
 	{
-		sprintf (line, "yv %d string \"Hasn't taken a shot.\"", y);
-		strcat (buf, line);
+		sprintf (txt, "yv %d string \"Hasn't taken a shot.\"", y);
+		strcat (buf, txt);
 		y += 8;
 	}
 	else
 	{
 		y += 8;
-		sprintf (line, "yv %d string2 \"Total damage given: %d\"", y,
-				 p_acc[cid].dgiven);
-		strcat (buf, line);
+		sprintf (txt, "yv %d string2 \"Total damage given: %d\"", y,
+				 p_acc[cidx].dgiven);
+		strcat (buf, txt);
 		y += 8;
-		sprintf (line, "yv %d string2 \"Total damage rcvd : %d\"", y,
-				 p_acc[cid].dtaken);
-		strcat (buf, line);
+		sprintf (txt, "yv %d string2 \"Total damage rcvd : %d\"", y,
+				 p_acc[cidx].dtaken);
+		strcat (buf, txt);
 		y += 8;
 	}
 
 	y += 8;
-	sprintf (line, "yv %d cstring \"\x90 CONTINUE \x91\"", y);
-	strcat (buf, line);
+	sprintf (txt, "yv %d cstring \"\x90 CONTINUE \x91\"", y);
+	strcat (buf, txt);
 
 	gi.WriteByte (svc_layout);
 	gi.WriteString (buf);

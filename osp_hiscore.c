@@ -206,71 +206,71 @@ void OSP_updateHighScores (void)
 // gamei386.so: 0005D244..0005D568
 void OSP_loadHighScores (void)
 {
-	char	name[64];
-	char	score[64];
+	char	pname[64];
+	char	sc[64];
 	char	date[64];
-	char	file[64];
-	char	dir[64];
-	int		i;
-	FILE	*f = NULL;
+	char	fn[64];
+	char	ddir[64];
+	int		j;
+	FILE	*fin = NULL;
 	cvar_t	*gamedir;
-	cvar_t	*basedir;
+	cvar_t	*base;
 	cvar_t	*port;
 	cvar_t	*hsdir;
 
 	gamedir = gi.cvar ("gamedir", "tourney", 0);
-	basedir = gi.cvar ("basedir", ".", 0);
+	base = gi.cvar ("basedir", ".", 0);
 	port = gi.cvar ("port", ".", 0);
 	hsdir = gi.cvar ("client_highscoredir", "highscores", 0);
 
-	if (gamedir && basedir)
+	if (gamedir && base)
 	{
-		sprintf (dir, "%s/%s", basedir->string, gamedir->string);
-		sprintf (file, "%s/%s/%d/%s", dir, hsdir->string, (int)port->value,
+		sprintf (ddir, "%s/%s", base->string, gamedir->string);
+		sprintf (fn, "%s/%s/%d/%s", ddir, hsdir->string, (int)port->value,
 			level.mapname);
 
-		f = fopen (file, "r");
+		fin = fopen (fn, "r");
 
-		if (f)
+		if (fin)
 		{
-			if (!OSP_readLine (f, name, score, date))
+			if (!OSP_readLine (fin, pname, sc, date))
 			{
-				fclose (f);
+				fclose (fin);
 				return;
 			}
 
-			if ((hs_mode == 1 && (strcmp (name, "FL") || hs_limit != atoi (score))) ||
-				(hs_mode == 2 && (strcmp (name, "TL") || hs_limit != atoi (score))))
+			if ((hs_mode == 1 && (strcmp (pname, "FL") || hs_limit != atoi (sc))) ||
+				(hs_mode == 2 && (strcmp (pname, "TL") || hs_limit != atoi (sc))))
 			{
 				gi.dprintf ("Server parameters changed, resetting highscores.\n");
-				fclose (f);
+				fclose (fin);
 				OSP_writeHighScores ();
 				return;
 			}
 
-			for (i = 0; i < 10; i++)
+			for (j = 0; j < 10; j++)
 			{
-				if (OSP_readLine (f, name, score, date) != 3)
+				if (OSP_readLine (fin, pname, sc, date) != 3)
 				{
 					gi.dprintf ("Not all players (high scores) loaded.\n");
-					fclose (f);
+					fclose (fin);
 					return;
 				}
 
-				strcpy (p_table[i].name, name);
-				strcpy (p_table[i].score, score);
-				strcpy (p_table[i].date, date);
+				strcpy (p_table[j].name, pname);
+				strcpy (p_table[j].score, sc);
+				strcpy (p_table[j].date, date);
 			}
 
-			fclose (f);
+			fclose (fin);
 			gi.dprintf ("High scores loaded.\n");
 		}
 		else
 		{
-			if (!OSP_makeHSDir (dir))
+			if (!OSP_makeHSDir (ddir))
 				return;
 
-			gi.dprintf ("\nNew \"%s\" created.\n\n", file);
+			gi.dprintf ("\nNew \"%s\" created.\n\n", fn);
 			OSP_writeHighScores ();
 		}
 	}
@@ -281,27 +281,27 @@ void OSP_loadHighScores (void)
 void OSP_writeHighScores (void)
 {
 	char	line[120];
-	char	file[64];
-	char	dir[64];
+	char	fn[64];
+	char	path[64];
 	int		i;
 	FILE	*f = NULL;
-	cvar_t	*gamedir;
-	cvar_t	*basedir;
+	cvar_t	*gdir;
+	cvar_t	*base;
 	cvar_t	*port;
-	cvar_t	*hsdir;
+	cvar_t	*hdir;
 
-	gamedir = gi.cvar ("gamedir", "tourney", 0);
-	basedir = gi.cvar ("basedir", ".", 0);
+	gdir = gi.cvar ("gamedir", "tourney", 0);
+	base = gi.cvar ("basedir", ".", 0);
 	port = gi.cvar ("port", ".", 0);
-	hsdir = gi.cvar ("client_highscoredir", "highscores", 0);
+	hdir = gi.cvar ("client_highscoredir", "highscores", 0);
 
-	if (gamedir && basedir)
+	if (gdir && base)
 	{
-		sprintf (dir, "%s/%s", basedir->string, gamedir->string);
-		sprintf (file, "%s/%s/%d/%s", dir, hsdir->string, (int)port->value,
+		sprintf (path, "%s/%s", base->string, gdir->string);
+		sprintf (fn, "%s/%s/%d/%s", path, hdir->string, (int)port->value,
 			level.mapname);
 
-		f = fopen (file, "w+");
+		f = fopen (fn, "w+");
 
 		if (!f)
 		{

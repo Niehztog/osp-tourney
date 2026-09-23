@@ -13,12 +13,12 @@ Every reconstructed function is built with the same compilers the original
 release used, and checked instruction-for-instruction against the shipped
 v2.75 binaries:
 
-- **Linux** (gcc 2.7.2.3): all 1051 exported functions present, 1044 of
-  them (99%) byte-identical machine code; the rest differ only in register
-  allocation. Nothing missing, nothing invented.
-- **Windows** (Visual C++ 6.0 SP3): all 1082 functions located, 1050 of
-  them (97%) byte-identical; the remainder differ only in register
-  allocation or relocated addresses.
+- **Linux** (gcc 2.7.2.3): all 1051 exported functions present, and every
+  one of them byte-identical machine code, as are the 22 file-local
+  functions the binary does not export. Nothing missing, nothing invented.
+- **Windows** (Visual C++ 6.0 SP3): all 1082 functions located, 1075 of
+  them (99%) byte-identical; the remaining seven differ only in the order
+  in which their local variables are laid out on the stack.
 
 Global variables, data tables, string literals and struct layouts match
 both binaries byte-for-byte as well.

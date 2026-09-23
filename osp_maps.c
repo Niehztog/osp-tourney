@@ -64,9 +64,13 @@ edict_t *NextMap (void)
 		{
 			if (map_random && (int)map_random->value)
 			{
-				// srand (tb.time), not tb.millitm -- the original reads the
-				// whole seconds field here, not the milliseconds.
+				// The seed differs by platform: real's gamex86.dll reads the
+				// milliseconds, real's gamei386.so the whole seconds.
+#ifdef _WIN32
+				srand (tb.millitm);
+#else
 				srand (tb.time);
+#endif
 				cur_map = rand () % map_size;
 				if (map_debug && (int)map_debug->value)
 					gi.dprintf ("Random Map %d %s\n", cur_map, map[cur_map].name);
@@ -262,64 +266,70 @@ void OSP_loadMaps (void)
 // gamei386.so: 0006E058..0006E23F
 int read_map_entry (FILE *f, char *name, int *lo, int *hi)
 {
-	int		field = 0;
 	int		len = 0;
-	int		quote = 0;
-	char	tok[64] = {0};
-	char	*p = tok;
+	char	*start = NULL;	// invented name; zeroed, never used again
+	int		fld = 0;
+	int		quoting = 0;
+	char	word[64] = {0};
 	int		c;
 
 	do
 	{
 		c = fgetc (f);
 
-		if (len > 0 && (((c == ' ' || c == '\t') && !quote) ||
+		if (len > 0 && (((c == ' ' || c == '\t') && !quoting) ||
 						c == -1 || c == '\n'))
 		{
-			tok[len] = 0;
-			switch (field)
+			word[len] = 0;
+			switch (fld)
 			{
 			case 0:
-				strncpy (name, p, 64);
+				strncpy (name, word, 64);
 				break;
 			case 1:
-				*lo = atoi (p);
+				*lo = atoi (word);
 				break;
 			case 2:
-				*hi = atoi (p);
+				*hi = atoi (word);
 				break;
 			}
 			len = 0;
-			field++;
+			fld++;
 		}
 		else
 		{
 			switch (c)
 			{
 			case '"':
-				quote = 1 - quote;
+				quoting = 1 - quoting;
 				break;
 			case '#':
-				if (!quote)
+				if (!quoting)
+				{
 					while (c != -1 && c != '\n')
 						c = fgetc (f);
-				break;
+					break;
+				}
+				// a quoted '#' falls through into '\r', which is dropped
 			case '\r':
 				break;
 			case ' ':
 			case '\t':
-				if (!quote)
+				if (!quoting)
 					break;
 			default:
 				if (len < 63)
-					tok[len++] = c;
+				{
+					word[len] = c;
+					len++;
+				}
 			}
 		}
 	} while (c != -1 && c != '\n');
 
-	if (c == -1 && !field)
+	if (c == -1 && !fld)
 		return -1;
-	return field;
+	return fld;
 }
 
 // `set` also latches next_map/selected_map, which is what the vote and the
@@ -331,14 +341,12 @@ qboolean OSP_mapExists (edict_t *ent, char *name, qboolean set)
 	unsigned	i;
 
 	if (!map)
-	{
 		OSP_loadMaps ();
-		if (!map)
-		{
-			if (ent)
-				gi.cprintf (ent, PRINT_HIGH, "Sorry, no maps available!\n");
-			return false;
-		}
+	if (!map)
+	{
+		if (ent)
+			gi.cprintf (ent, PRINT_HIGH, "Sorry, no maps available!\n");
+		return false;
 	}
 
 	for (i = 0; i < map_size; i++)

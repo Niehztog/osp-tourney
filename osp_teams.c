@@ -144,34 +144,31 @@ qboolean OSP_addTeamMember (edict_t *ent, int requested_team)
 		gi.bprintf (PRINT_HIGH, "%s joined team \"%s\"\n",
 					ent->client->pers.greenname, teams[team].netname);
 
-	if (!(ent->flags & FL_OSP_BOT))
+	if (!(ent->flags & FL_OSP_BOT) && m_mode == 2)
 	{
-		if (m_mode == 2)
+		// First human on the team becomes captain.
+		ent->client->resp.osp_r2c4 = 1;
+		for (t = 1; t <= game.maxclients; t++)
 		{
-			// First human on the team becomes captain.
-			ent->client->resp.osp_r2c4 = 1;
-			for (t = 1; t <= game.maxclients; t++)
+			p = g_edicts + t;
+			if (!p->inuse || !p->client ||
+				p->client->resp.entered != ENTERED_ENTERED ||
+				p->client->resp.team != team || p == ent ||
+				(p->flags & FL_OSP_BOT))
+				continue;
+			if (p->client->resp.osp_r2c4)
 			{
-				p = g_edicts + t;
-				if (!p->inuse || !p->client ||
-					p->client->resp.entered != ENTERED_ENTERED ||
-					p->client->resp.team != team || p == ent ||
-					(p->flags & FL_OSP_BOT))
-					continue;
-				if (p->client->resp.osp_r2c4)
-				{
-					ent->client->resp.osp_r2c4 = 0;
-					break;
-				}
+				ent->client->resp.osp_r2c4 = 0;
+				break;
 			}
+		}
 
-			if (ent->client->resp.osp_r2c4)
-			{
-				gi.cprintf (ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
-							teams[team].greenname);
-				if (ent->client->resp.osp_r07d[0])
-					strcpy (teams[team].joincode, ent->client->resp.osp_r07d);
-			}
+		if (ent->client->resp.osp_r2c4)
+		{
+			gi.cprintf (ent, PRINT_CHAT, "*** You are team captain of \"%s\". ***\n",
+						teams[team].greenname);
+			if (ent->client->resp.osp_r07d[0])
+				strcpy (teams[team].joincode, ent->client->resp.osp_r07d);
 		}
 	}
 	else if (m_mode == 2)
@@ -1098,10 +1095,12 @@ void OSP_teamjoin_cmd (edict_t *ent, char *name)
 	if (gi.argc () == 1)
 	{
 		if (ent->client->resp.team == 2)
+		{
 			gi.cprintf (ent, PRINT_HIGH, "You aren't currently on any team.\n");
-		else
-			gi.cprintf (ent, PRINT_HIGH, "You are on team \"%s\"\n",
-						teams[ent->client->resp.team].netname);
+			return;
+		}
+		gi.cprintf (ent, PRINT_HIGH, "You are on team \"%s\"\n",
+					teams[ent->client->resp.team].netname);
 		return;
 	}
 
@@ -1916,49 +1915,48 @@ void OSP_findTeamWinner (void)
 	edict_t		*ent;
 	int			winpct;
 	int			loserpct;
-	int			winner;
-	int			lose;
+	int			order[2];	// [0] = winning team, [1] = losing team
 
-	winner = 0;
-	lose = 1;
+	order[0] = 0;
+	order[1] = 1;
 	if (teams[0].osp_m0f8 < teams[1].osp_m0f8)
 	{
-		winner = 1;
-		lose = 0;
+		order[0] = 1;
+		order[1] = 0;
 	}
 
-	if (teams[winner].osp_m0f8 < 1)
+	if (teams[order[0]].osp_m0f8 < 1)
 		winpct = 0;
-	else if (!teams[winner].osp_m0fc ||
-			 !(teams[winner].osp_m0fc + teams[winner].osp_m0f8))
+	else if (!teams[order[0]].osp_m0fc ||
+			 !(teams[order[0]].osp_m0fc + teams[order[0]].osp_m0f8))
 		winpct = 100;
 	else
-		winpct = teams[winner].osp_m0f8 * 100 /
-				 (teams[winner].osp_m0fc + teams[winner].osp_m0f8);
+		winpct = teams[order[0]].osp_m0f8 * 100 /
+				 (teams[order[0]].osp_m0fc + teams[order[0]].osp_m0f8);
 
-	if (teams[lose].osp_m0f8 < 1)
+	if (teams[order[1]].osp_m0f8 < 1)
 		loserpct = 0;
-	else if (!teams[lose].osp_m0fc ||
-			 !(teams[lose].osp_m0fc + teams[lose].osp_m0f8))
+	else if (!teams[order[1]].osp_m0fc ||
+			 !(teams[order[1]].osp_m0fc + teams[order[1]].osp_m0f8))
 		loserpct = 100;
 	else
-		loserpct = teams[lose].osp_m0f8 * 100 /
-				  (teams[lose].osp_m0fc + teams[lose].osp_m0f8);
+		loserpct = teams[order[1]].osp_m0f8 * 100 /
+				  (teams[order[1]].osp_m0fc + teams[order[1]].osp_m0f8);
 
-	if (teams[winner].osp_m0f8 > teams[lose].osp_m0f8)
+	if (teams[order[0]].osp_m0f8 > teams[order[1]].osp_m0f8)
 	{
-		teams[winner].osp_m124 = 1;
-		teams[lose].osp_m124 = 2;
+		teams[order[0]].osp_m124 = 1;
+		teams[order[1]].osp_m124 = 2;
 		gi.bprintf (PRINT_HIGH, "\n\n%s defeats %s: %d - %d\n\n",
-					teams[winner].netname, teams[lose].netname,
-					teams[winner].osp_m0f8, teams[lose].osp_m0f8);
+					teams[order[0]].netname, teams[order[1]].netname,
+					teams[order[0]].osp_m0f8, teams[order[1]].osp_m0f8);
 	}
 	else
 	{
-		teams[winner].osp_m124 = 4;
-		teams[lose].osp_m124 = 4;
+		teams[order[0]].osp_m124 = 4;
+		teams[order[1]].osp_m124 = 4;
 		gi.bprintf (PRINT_HIGH, "\n\nTied match! (%d to %d)\n\n",
-					teams[winner].osp_m0f8, teams[lose].osp_m0f8);
+					teams[order[0]].osp_m0f8, teams[order[1]].osp_m0f8);
 	}
 
 	if (m_mode == 2)
@@ -1968,13 +1966,13 @@ void OSP_findTeamWinner (void)
 		gi.bprintf (PRINT_HIGH, " S : Score         S   K  t  i  f\n");
 		gi.bprintf (PRINT_HIGH, "====================================\n");
 		gi.bprintf (PRINT_HIGH, "%-16s %3d %3d %2d %2d %d%%\n",
-					teams[winner].netname, teams[winner].osp_m0f8,
-					teams[winner].osp_m100, teams[winner].osp_m104,
-					teams[winner].osp_m108, winpct);
+					teams[order[0]].netname, teams[order[0]].osp_m0f8,
+					teams[order[0]].osp_m100, teams[order[0]].osp_m104,
+					teams[order[0]].osp_m108, winpct);
 		gi.bprintf (PRINT_HIGH, "%-16s %3d %3d %2d %2d %d%%\n\n",
-					teams[lose].netname, teams[lose].osp_m0f8,
-					teams[lose].osp_m100, teams[lose].osp_m104,
-					teams[lose].osp_m108, loserpct);
+					teams[order[1]].netname, teams[order[1]].osp_m0f8,
+					teams[order[1]].osp_m100, teams[order[1]].osp_m104,
+					teams[order[1]].osp_m108, loserpct);
 		return;
 	}
 
@@ -1983,11 +1981,11 @@ void OSP_findTeamWinner (void)
 	gi.bprintf (PRINT_HIGH, "  S: Score        S   K  i  f\n");
 	gi.bprintf (PRINT_HIGH, "================================\n");
 	gi.bprintf (PRINT_HIGH, "%-15s %3d %3d %2d %d%%\n",
-				teams[winner].netname, teams[winner].osp_m0f8,
-				teams[winner].osp_m100, teams[winner].osp_m108, winpct);
+				teams[order[0]].netname, teams[order[0]].osp_m0f8,
+				teams[order[0]].osp_m100, teams[order[0]].osp_m108, winpct);
 	gi.bprintf (PRINT_HIGH, "%-15s %3d %3d %2d %d%%\n\n",
-				teams[lose].netname, teams[lose].osp_m0f8,
-				teams[lose].osp_m100, teams[lose].osp_m108, loserpct);
+				teams[order[1]].netname, teams[order[1]].osp_m0f8,
+				teams[order[1]].osp_m100, teams[order[1]].osp_m108, loserpct);
 
 	for (winpct = 1; winpct <= game.maxclients; winpct++)
 	{
@@ -1995,7 +1993,7 @@ void OSP_findTeamWinner (void)
 		if (!ent->inuse || !ent->client)
 			continue;
 
-		if (ent->client->resp.team == lose &&
+		if (ent->client->resp.team == order[1] &&
 			ent->client->resp.entered == ENTERED_ENTERED)
 		{
 			OSP_1v1Remove (ent, 2);

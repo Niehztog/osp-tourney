@@ -52,7 +52,12 @@ qboolean OSP_botDetect (edict_t *ent, usercmd_t *ucmd)
 	{
 		zb_client->osp_t01c[0] = zb_attack;
 
-		if (zb_attack || !(zb_client->osp_t020 < 39000))
+		// An empty then-arm, the Gladiator SDK's idiom: /Od then jumps INTO
+		// the else on the float test and skips it with a separate jmp.
+		if (!zb_attack && zb_client->osp_t020 < 39000)
+		{
+		}
+		else
 		{
 			if (!ucmd->msec || (zb_attack && abs(ucmd->angles[0]) == 0x3f49))
 			{

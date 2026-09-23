@@ -1379,21 +1379,18 @@ void ClientCommand (edict_t *ent)
 			OSP_runbanaddr_cmd (ent);
 		// A referee's unrecognised command still falls through to the bot
 		// command table and then to chat -- the same tail as the outer chain,
-		// written out twice.
-		else
+		// written out twice, in the Gladiator SDK's own empty-arm form.
+		else if (BotCmd (cmdstr, ent, false))
 		{
-			if (BotCmd (cmdstr, ent, false))
-				goto clear_args;
-			Cmd_Say_f (ent, false, true);
 		}
+		else
+			Cmd_Say_f (ent, false, true);
+	}
+	else if (BotCmd (cmdstr, ent, false))
+	{
 	}
 	else
-	{
-		if (BotCmd (cmdstr, ent, false))
-			goto clear_args;
 		Cmd_Say_f (ent, false, true);
-	}
 
-clear_args:
 	BotClearCommandArguments ();
 }

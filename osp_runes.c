@@ -581,30 +581,24 @@ void OSP_removeRunes (void)
 	ent = g_edicts;
 	for (i = 0; i < globals.num_edicts; i++, ent++)
 	{
-		if (ent->inuse)
-		{
-			if (!strstr (ent->classname, "item_rune"))
-				continue;
-			G_FreeEdict (ent);
-		}
+		if (!ent->inuse || !strstr (ent->classname, "item_rune"))
+			continue;
+		G_FreeEdict (ent);
 	}
 
 	for (i = 1; i <= game.maxclients; i++)
 	{
 		ent = g_edicts + i;
-		if (ent->inuse)
+		if (!ent->inuse || !ent->client)
+			continue;
+
+		for (j = 0; j < 5; j++)
 		{
-			if (!ent->client)
-				continue;
-
-			for (j = 0; j < 5; j++)
-			{
-				item = FindItemByClassname (runenames[j]);
-				ent->client->pers.inventory[ITEM_INDEX(item)] = 0;
-			}
-
-			OSP_zeroRuneStats (ent);
+			item = FindItemByClassname (runenames[j]);
+			ent->client->pers.inventory[ITEM_INDEX(item)] = 0;
 		}
+
+		OSP_zeroRuneStats (ent);
 	}
 
 	for (i = 0; i < 5; i++)

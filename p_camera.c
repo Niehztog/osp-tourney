@@ -836,7 +836,7 @@ void CameraThink (edict_t *ent, edict_t *target)
 
 			count++;
 			if (count >= maxclients->value)
-				goto camera_mode;
+				break;
 		}
 
 		if (count < maxclients->value)
@@ -846,7 +846,6 @@ void CameraThink (edict_t *ent, edict_t *target)
 		}
 	}
 
-camera_mode:
 	ent->client->ps.pmove.pm_type = PM_FREEZE;
 ent->client->ps.pmove.gravity = 0;
 

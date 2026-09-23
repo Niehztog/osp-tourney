@@ -1051,14 +1051,12 @@ int q2log_init (void)
 			__nglog_buffer = (int)nglog_buffer->value;
 			strcpy (__nglog_logname, nglog_logname->string);
 		}
+
+		sprintf (__nglog_rel_path, "%s", "NetGamesUSA.com");
+		sprintf (__nglog_worldlog_path, "%s/%s/ngWorldStats/logs/Q2_%s-",
+			basedir->string, "NetGamesUSA.com", gamedir->string);
 	}
 
-	sprintf (__nglog_rel_path, "%s", "NetGamesUSA.com");
-	sprintf (__nglog_worldlog_path, "%s/%s/ngWorldStats/logs/Q2_%s-",
-		basedir->string, "NetGamesUSA.com", gamedir->string);
-
-	/* Preserve the target's post-call basic block. */
-q2log_worldlog_path_ready:
 	__nglog_worldlog = (int)nglog_worldstats->value;
 	strcpy (__nglog_worldlog_tag, port->string);
 

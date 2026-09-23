@@ -18,65 +18,63 @@
 // gamei386.so: 00047B3C..00048056
 void OSP_configLoad (void)
 {
-	char	path[64];
+	char	cfgpath[64];
 	char	line[1024];
 	int		i;
-	FILE	*f = NULL;
+	FILE	*cf = NULL;
+	char	*e;		// function scope: real's PE gives it a shallow slot
 	// DECLARATION INITIALISERS, not statements: gcc creates a temp while
 	// expanding an initialiser and it lands between the variable it
 	// initialises and the next declaration, which is what puts the pooled
-	// "serverconfigs.txt" address between `list` and `cdefault` in real's
+	// "serverconfigs.txt" address between `cfglist` and `cfgdefault` in real's
 	// frame.  Written as plain assignments the temp comes after every
 	// declared local instead, and the three slots rotate.
 	cvar_t	*gamedir = gi.cvar ("gamedir", "tourney", 0);
-	cvar_t	*basedir = gi.cvar ("basedir", ".", 0);
-	cvar_t	*list = gi.cvar ("vote_config_list", "serverconfigs.txt", 0);
-	cvar_t	*cdefault = gi.cvar ("vote_config_default", "0", 0);
-	cvar_t	*cdefname = gi.cvar ("vote_config_defaultname", "default", 0);
+	cvar_t	*base = gi.cvar ("basedir", ".", 0);
+	cvar_t	*cfglist = gi.cvar ("vote_config_list", "serverconfigs.txt", 0);
+	cvar_t	*cfgdefault = gi.cvar ("vote_config_default", "0", 0);
+	cvar_t	*cdefn = gi.cvar ("vote_config_defaultname", "default", 0);
 	conf_size = 0;
 
-	if (gamedir && basedir)
+	if (gamedir && base)
 	{
-		sprintf (path, "%s/%s/", basedir->string, gamedir->string);
-		if (list)
-			strcat (path, list->string);
+		sprintf (cfgpath, "%s/%s/", base->string, gamedir->string);
+		if (cfglist)
+			strcat (cfgpath, cfglist->string);
 		else
-			strcat (path, "serverconfigs.txt");
+			strcat (cfgpath, "serverconfigs.txt");
 
-		f = fopen (path, "r");
-		if (f)
+		cf = fopen (cfgpath, "r");
+		if (cf)
 		{
 			for (i = 0; i < 32; i++)
 			{
-				// `p` is FUNCTION-scope in the original.
-				char	*p;
-
-				if (!fgets (line, 1024, f))
+				if (!fgets (line, 1024, cf))
 					break;
 
 				line[1023] = 0;
-				if ((p = strchr (line, '\r')))
-					*p = 0;
-				if ((p = strchr (line, '\n')))
-					*p = 0;
-				if ((p = strchr (line, '#')))
-					*p = 0;
+				if ((e = strchr (line, '\r')))
+					*e = 0;
+				if ((e = strchr (line, '\n')))
+					*e = 0;
+				if ((e = strchr (line, '#')))
+					*e = 0;
 
 				// A positive `if` around the whole remainder with `i--` as its
 				// `else`.
 				if (strlen (line) > 1)
 				{
 					conf_info[i][0] = 0;
-					if ((p = strchr (line, '\t')))
+					if ((e = strchr (line, '\t')))
 					{
-						*p = 0;
-						p++;
-						strncpy (conf_info[i], p, 63);
+						*e = 0;
+						e++;
+						strncpy (conf_info[i], e, 63);
 						conf_info[i][63] = 0;
 					}
 
-					sprintf (path, "%s/%s/%s", basedir->string, gamedir->string, line);
-					if (OSP_configFileExists (path))
+					sprintf (cfgpath, "%s/%s/%s", base->string, gamedir->string, line);
+					if (OSP_configFileExists (cfgpath))
 						strncpy (conf_name[i], line, 63);
 					else
 						i--;
@@ -85,7 +83,7 @@ void OSP_configLoad (void)
 					i--;
 			}
 
-			fclose (f);
+			fclose (cf);
 			conf_size = i;
 
 			if (!conf_size)
@@ -105,19 +103,19 @@ void OSP_configLoad (void)
 						gi.dprintf ("- [%s]\n", conf_name[i]);
 				}
 
-				if ((int)cdefault->value && cdefname->string &&
-					strcmp (cdefname->string, "default"))
+				if ((int)cfgdefault->value && cdefn->string &&
+					strcmp (cdefn->string, "default"))
 				{
-					sprintf (path, "%s/%s/%s", basedir->string, gamedir->string,
-							 cdefname->string);
+					sprintf (cfgpath, "%s/%s/%s", base->string, gamedir->string,
+							 cdefn->string);
 
-					if (OSP_configFileExists (path))
+					if (OSP_configFileExists (cfgpath))
 						gi.dprintf ("** Default config is: %s\n",
-									cdefname->string);
+									cdefn->string);
 					else
 					{
 						gi.dprintf ("** Default config \"%s\" not found!\n",
-									cdefname->string);
+									cdefn->string);
 						gi.dprintf ("** No default config will be used.\n");
 						gi.cvar_set ("vote_config_default", "0");
 						gi.cvar_set ("vote_config_defaultname", "default");
@@ -132,7 +130,7 @@ void OSP_configLoad (void)
 		else
 		{
 			gi.dprintf ("\n\"%s\" server config list not found. No configs loaded.\n\n",
-						path);
+						cfgpath);
 			gi.cvar_set ("vote_enable_config", "0");
 		}
 	}

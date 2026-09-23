@@ -1161,27 +1161,25 @@ void ClientEndServerFrame (edict_t *ent)
 		ent->client->resp.osp_r000 = count;
 	}
 
-	if (current_client->resp.osp_r200)
+	if (current_client->resp.osp_r200 &&
+		current_client->quad_framenum &&
+		current_client->quad_framenum < level.framenum)
 	{
-		if (current_client->quad_framenum &&
-			current_client->quad_framenum < level.framenum)
-		{
-			q2log_expireItem ("Quad", ent, ent->client->resp.osp_r200);
-			if (!current_client->invincible_framenum)
-				ent->client->resp.osp_r200 = 0;
-			current_client->quad_framenum = 0;
-		}
+		q2log_expireItem ("Quad", ent, ent->client->resp.osp_r200);
+		if (!current_client->invincible_framenum)
+			ent->client->resp.osp_r200 = 0;
+		current_client->quad_framenum = 0;
+	}
 
-		if (current_client->resp.osp_r200 &&
-			current_client->invincible_framenum &&
-			current_client->invincible_framenum < level.framenum)
-		{
-			q2log_expireItem ("Invulnerability", ent,
-				ent->client->resp.osp_r200);
-			if (!current_client->quad_framenum)
-				ent->client->resp.osp_r200 = 0;
-			current_client->invincible_framenum = 0;
-		}
+	if (current_client->resp.osp_r200 &&
+		current_client->invincible_framenum &&
+		current_client->invincible_framenum < level.framenum)
+	{
+		q2log_expireItem ("Invulnerability", ent,
+			ent->client->resp.osp_r200);
+		if (!current_client->quad_framenum)
+			ent->client->resp.osp_r200 = 0;
+		current_client->invincible_framenum = 0;
 	}
 
 	G_SetClientEvent (ent);

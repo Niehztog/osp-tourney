@@ -520,13 +520,13 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 	char		*com_token;
 	int			i;
 	float		skill_level;
-	char		address[32];
-	char		teamname[16];
-	char		teamskin[128];
+	char		netaddr[32];
+	char		tname[16];
+	char		tskin[128];
 	int			referee;
-	int			osp_dead;			// invented name; unreferenced, but present in real's frame
+	int			spare;			// invented name; unreferenced, but present in real's frame
 	extern int		botglobals;
-	cvar_t		*player_reload;
+	cvar_t		*pl_reload;
 
 	skill_level = floor (skill->value);
 	if (skill_level < 0)
@@ -549,24 +549,23 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 		if (!i)
 		{
 			memset (g_edicts, 0, sizeof (g_edicts[0]));
+			continue;
 		}
-		else
-		{
-			referee = g_edicts[i].osp_e39c;
-			strncpy (address, g_edicts[i].osp_e37c, 31);
-			strncpy (teamname, g_edicts[i].osp_e3a0, 15);
-			strncpy (teamskin, g_edicts[i].osp_e3b0, 127);
-			address[31] = 0;
-			teamname[15] = 0;
-			teamskin[127] = 0;
 
-			memset (&g_edicts[i], 0, sizeof (g_edicts[0]));
+		referee = g_edicts[i].osp_e39c;
+		strncpy (netaddr, g_edicts[i].osp_e37c, 31);
+		strncpy (tname, g_edicts[i].osp_e3a0, 15);
+		strncpy (tskin, g_edicts[i].osp_e3b0, 127);
+		netaddr[31] = 0;
+		tname[15] = 0;
+		tskin[127] = 0;
 
-			g_edicts[i].osp_e39c = referee;
-			strncpy (g_edicts[i].osp_e37c, address, 31);
-			strncpy (g_edicts[i].osp_e3a0, teamname, 15);
-			strncpy (g_edicts[i].osp_e3b0, teamskin, 127);
-		}
+		memset (&g_edicts[i], 0, sizeof (g_edicts[0]));
+
+		g_edicts[i].osp_e39c = referee;
+		strncpy (g_edicts[i].osp_e37c, netaddr, 31);
+		strncpy (g_edicts[i].osp_e3a0, tname, 15);
+		strncpy (g_edicts[i].osp_e3b0, tskin, 127);
 	}
 
 	strncpy (level.mapname, mapname, sizeof(level.mapname)-1);
@@ -650,8 +649,8 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 	PlayerTrail_Init ();
 
 	m_mode = (int)match_mode->value;
-	player_reload = gi.cvar ("player_reload", "0", 0);
-	if ((int)player_reload->value)
+	pl_reload = gi.cvar ("player_reload", "0", 0);
+	if ((int)pl_reload->value)
 		OSP_playerlist_svcmd ();
 
 	if ((int)runes_enable->value)

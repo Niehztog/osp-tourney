@@ -270,30 +270,27 @@ void EndDMLevel (void)
 	}
 
 	if (!ent)
-	{
 		ent = NextMap ();
 
-		if (!ent)
+	if (!ent)
+	{
+		if (level.nextmap[0])		// go to a specific map
 		{
-			if (level.nextmap[0])		// go to a specific map
-			{
+			ent = G_Spawn ();
+			ent->classname = "target_changelevel";
+			ent->map = level.nextmap;
+		}
+		else
+		{	// search for a changelevel
+			ent = G_Find (NULL, FOFS(classname), "target_changelevel");
+
+			if (!ent)
+			{	// the map designer didn't include a changelevel, so create
+				// a fake ent that goes back to the same level
 				ent = G_Spawn ();
 				ent->classname = "target_changelevel";
-				ent->map = level.nextmap;
+				ent->map = level.mapname;
 			}
-			else
-			{	// search for a changelevel
-				ent = G_Find (NULL, FOFS(classname), "target_changelevel");
-
-				if (!ent)
-				{	// the map designer didn't include a changelevel, so create
-					// a fake ent that goes back to the same level
-					ent = G_Spawn ();
-					ent->classname = "target_changelevel";
-					ent->map = level.mapname;
-				}
-			}
-
 		}
 	}
 
@@ -477,15 +474,19 @@ void G_RunFrame (void)
 			OSP_consoleStamp ();
 		}
 
-		if (level.framenum == 25 && bots_botfile->string &&
-			bots_loadstat == 1)
+		// Two nested ifs, not one &&: gcc frees `command`'s stack slot when
+		// the outer block closes, and the exitintermission buffer reuses it.
+		if (level.framenum == 25)
 		{
-			char	command[256];
+			if (bots_botfile->string && bots_loadstat == 1)
+			{
+				char	command[256];
 
-			gi.bprintf (PRINT_HIGH, "Loading bots...\n");
-			Com_sprintf (command, sizeof(command), " exec %s\n",
-						 bots_botfile->string);
-			gi.AddCommandString (command);
+				gi.bprintf (PRINT_HIGH, "Loading bots...\n");
+				Com_sprintf (command, sizeof(command), " exec %s\n",
+							 bots_botfile->string);
+				gi.AddCommandString (command);
+			}
 		}
 
 		if (!level.intermissiontime)
@@ -514,12 +515,12 @@ void G_RunFrame (void)
 			if (manual_map == 2)
 			{
 				char	command[256];
-				edict_t	*ent;
+				edict_t	*nextent;
 
 				OSP_loadMaps ();
-				ent = NextMap ();
-				if (ent)
-					Com_sprintf (command, sizeof(command), "map %s\n", ent->map);
+				nextent = NextMap ();
+				if (nextent)
+					Com_sprintf (command, sizeof(command), "map %s\n", nextent->map);
 				else
 					Com_sprintf (command, sizeof(command), "map %s\n", level.mapname);
 				gi.AddCommandString (command);
@@ -599,11 +600,6 @@ void G_RunFrame (void)
 		ent = g_edicts;
 		for (i=0 ; i<globals.num_edicts && ent ; i++, ent++)
 		{
-			vec3_t	forward;
-			vec3_t	right;
-			vec3_t	offset;
-			vec3_t	start;
-
 			if (!ent->inuse || !ent->classname)
 				continue;
 
@@ -616,13 +612,23 @@ void G_RunFrame (void)
 					G_FreeEdict (ent);
 					continue;
 				}
+				else
+				{
+					// Declared in this else, in this order: the four slots are
+					// freed when the hook block closes, and the match-restart
+					// block's `command[32]` is carved out of them.
+					vec3_t	start;
+					vec3_t	forward;
+					vec3_t	rvec;
+					vec3_t	offset;
 
-				AngleVectors (ent->owner->client->v_angle, forward, right, NULL);
-				VectorSet (offset, 24, 8, ent->owner->viewheight - 8);
-				P_ProjectSource (ent->owner->client, ent->owner->s.origin, offset,
-								 forward, right, start);
-				VectorSubtract (start, ent->owner->s.origin, offset);
-				VectorAdd (offset, ent->owner->s.origin, ent->s.old_origin);
+					AngleVectors (ent->owner->client->v_angle, forward, rvec, NULL);
+					VectorSet (offset, 24, 8, ent->owner->viewheight - 8);
+					P_ProjectSource (ent->owner->client, ent->owner->s.origin, offset,
+									 forward, rvec, start);
+					VectorSubtract (start, ent->owner->s.origin, offset);
+					VectorAdd (offset, ent->owner->s.origin, ent->s.old_origin);
+				}
 			}
 			else if (!(ent->flags & FL_OLDORGNOTSET))
 				VectorCopy (ent->s.origin, ent->s.old_origin);
@@ -639,6 +645,8 @@ void G_RunFrame (void)
 			G_RunEntity (ent);
 		}
 
+		// One gate over BOTH bot loops: with no bots the client loop is
+		// skipped too (real's `je` lands on the bots_loadstat test).
 		if (botglobals.numbots)
 		{
 			ent = g_edicts;
@@ -649,16 +657,16 @@ void G_RunFrame (void)
 				if (!(ent->svflags & SVF_NOCLIENT))
 					BotLib_BotUpdateEntity (ent);
 			}
-		}
 
-		for (i = 0; i < maxclients->value; i++)
-		{
-			ent = g_edicts + (i + 1);
-			if (ent->inuse && (ent->flags & FL_BOT) && BotStarted (ent))
+			for (i = 0; i < maxclients->value; i++)
 			{
-				BotLib_BotUpdateClient (ent);
-				BotLib_BotAI (ent, FRAMETIME);
-				BotExecuteInput (ent);
+				ent = g_edicts + (i + 1);
+				if (ent->inuse && (ent->flags & FL_BOT) && BotStarted (ent))
+				{
+					BotLib_BotUpdateClient (ent);
+					BotLib_BotAI (ent, FRAMETIME);
+					BotExecuteInput (ent);
+				}
 			}
 		}
 
@@ -719,11 +727,6 @@ void G_RunFrame (void)
 
 	if (match_paused == 3)
 	{
-		// message[64], and the per-iteration `command` is 32 bytes, not 48.
-		char	message[64];
-		char	command[32];
-		edict_t	*ent;
-
 		if (end_timeout == -1)
 			end_timeout = 51;
 		end_timeout--;
@@ -749,18 +752,23 @@ void G_RunFrame (void)
 
 		if (!(end_timeout % 10))
 		{
+			// buf[64], and the per-iteration `command` is 32 bytes, not 48.
+			char	buf[64];
+			char	command[32];
+			edict_t	*ent;
+
 			if (end_timeout / 10 != 1)
-				sprintf (message, "Match restarting in %d seconds.\n",
+				sprintf (buf, "Match restarting in %d seconds.\n",
 						 end_timeout / 10);
 			else
-				sprintf (message, "Match restarting in %d second!\n",
+				sprintf (buf, "Match restarting in %d second!\n",
 						 end_timeout / 10);
 			for (i = 1; i <= game.maxclients; i++)
 			{
 				ent = g_edicts + i;
 				if (!ent->inuse || !ent->client)
 					continue;
-				gi.centerprintf (ent, "%s", message);
+				gi.centerprintf (ent, "%s", buf);
 				sprintf (command, "play misc/secret.wav");
 				gi.WriteByte (svc_stufftext);
 				gi.WriteString (command);
@@ -807,9 +815,10 @@ void G_RunFrame (void)
 
 		if (pause_time - secs < FRAMETIME && !(secs % 10))
 		{
-			char	message[128];
+			char	buf[128];
+			edict_t	*ent;
 
-			sprintf (message, "Waiting for %s to reconnect.\n(%d seconds)\n",
+			sprintf (buf, "Waiting for %s to reconnect.\n(%d seconds)\n",
 					 reconn_player, secs);
 			for (i = 1; i <= game.maxclients; i++)
 			{
@@ -817,7 +826,7 @@ void G_RunFrame (void)
 				if (!ent->inuse || !ent->client)
 					continue;
 
-				gi.centerprintf (ent, message);
+				gi.centerprintf (ent, buf);
 			}
 		}
 		pause_time -= FRAMETIME;

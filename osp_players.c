@@ -790,8 +790,9 @@ void OSP_show1v1Scores (edict_t *ent)
 
 	for (sideno = 0; sideno < 2; sideno++)
 	{
+		// An empty seat skips its card; the other one is still drawn.
 		if (cids[sideno] == -1)
-			break;
+			continue;
 
 		cl = game.clients + cids[sideno];
 		// Computed and never read again within the loop -- dead, but
@@ -999,7 +1000,7 @@ static void sayteam_location (edict_t *who, char *buf)
 	float		hotdist = 999999, newdist;
 	vec3_t		v;
 	int			hotindex = 999;
-	int			lastprio = -1;	// invented, dead -- never read again
+	int			prevprio = -1;	// invented, dead -- never read again
 	int			i;
 	gitem_t		*item;
 	qboolean	hotsee = false;
