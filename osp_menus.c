@@ -287,30 +287,10 @@ char	voted_botname[32];
 
 // The menu text the update functions build.  Every *_Menu table entry's `text`
 // is just a pointer, so the builders sprintf into file statics and point the
-// entries at them.  <INVENTED NAMES>.
-static char	pm_line1[32];
-static char	pm_line2[32];
-static char	pm_pct[32];
-static char	pm_needed[32];
-static char	pm2_pct[32];
-static char	pm2_needed[32];
-static char	pm2_line0[32];
-static char	pm2_line1[32];
-static char	pm2_line2[32];
-static char	pm2_line3[32];
-static char	pm2_line4[32];
-static char	pm2_line5[32];
-static char	pm2_line6[32];
-static char	pm2_line7[32];
-static char	vm_map[32];
-static char	vm_config[32];
-static char	vm_toggles[32];
-static char	vm_bots[32];
-static char	vm_time[32];
-static char	vm_frag[32];
-static char	vm_hook[32];
-static char	vm_runes[32];
-static char	vm_kick[32];
+// entries at them.  <INVENTED NAMES>.  The ORDER is real's .bss order, read off
+// the GOTOFF displacements its update functions use: one block per builder, in
+// the builders' own order (Team, DM, Vote, Vote2, Bot, Proposal, Proposal2,
+// Invite, Admin, AdminSelect), scalars ahead of lines inside each block.
 static int	tm_teamnum0;
 static int	tm_teamnum1;
 static char	tm_title[32];
@@ -323,11 +303,6 @@ static char	tm_chase[32];
 static char	tm_hud[32];
 static char	tm_id[32];
 static char	tm_vote[32];
-static char	as_title[32];
-static char	as_prompt[32];
-static char	as_choice[32];
-static char	as_addr[32];
-static char	as_action[32];
 static char	dm_play_line[32];
 static char	dm_admin_line[32];
 static char	dm_id_line[32];
@@ -335,6 +310,15 @@ static char	dm_vote_line[32];
 static char	dm_obs_line[32];
 static char	dm_chase_line[32];
 static char	dm_hud_line[32];
+static char	vm_map[32];
+static char	vm_config[32];
+static char	vm_toggles[32];
+static char	vm_bots[32];
+static char	vm_time[32];
+static char	vm_frag[32];
+static char	vm_hook[32];
+static char	vm_runes[32];
+static char	vm_kick[32];
 static int	v2_bits0;
 static int	v2_bits1;
 static int	v2_bits2;
@@ -351,20 +335,39 @@ static char	v2_line4[32];
 static char	v2_line5[32];
 static char	v2_line6[32];
 static char	v2_line7[32];
+static int	bot_add_arg;
+static int	bot_rem_arg;
 static char	bot_name_line[32];
 static char	bot_add_line[32];
 static char	bot_rem_line[32];
 static char	bot_total_line[32];
-static int	bot_add_arg;
-static int	bot_rem_arg;
-static char	invite_teamname[32];
+static char	pm_line1[32];
+static char	pm_line2[32];
+static char	pm_pct[32];
+static char	pm_needed[32];
+static char	pm2_pct[32];
+static char	pm2_needed[32];
+static char	pm2_line0[32];
+static char	pm2_line1[32];
+static char	pm2_line2[32];
+static char	pm2_line3[32];
+static char	pm2_line4[32];
+static char	pm2_line5[32];
+static char	pm2_line6[32];
+static char	pm2_line7[32];
 static int	invite_teamnum;
+static char	invite_teamname[32];
 static char	admin_title[32];
 // A SECOND 32-byte line static here, and nothing in the image references it:
-// real's .bss gives this position 64 bytes where one line needs 32, and the
-// next TU's block starts exactly 0x40 on.  Only its existence and size are
+// real's .bss gives this position 64 bytes where one line needs 32, so
+// as_title below starts exactly 0x40 on.  Only its existence and size are
 // evidence -- the name is <INVENTED>.
 static char	admin_unused_line[32];
+static char	as_title[32];
+static char	as_prompt[32];
+static char	as_choice[32];
+static char	as_addr[32];
+static char	as_action[32];
 
 // <INVENTED NAMES>: the three ints the AdminMain_Menu select entries carry,
 // dereferenced into resp.osp_r238.

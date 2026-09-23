@@ -7,12 +7,6 @@
 
 #include "g_local.h"
 
-int	runespawn = 0;
-int	rune_spawncount = 0;
-edict_t * rune_spawnpoint[50];
-int	r_count[5];
-
-
 // The five rune classnames, NULL-terminated.
 static char	*runenames[] =
 {
@@ -24,9 +18,10 @@ static char	*runenames[] =
 	NULL
 };
 
-// Defined at the very end of the file, so it needs a forward declaration
-// here.  Name <INVENTED>.
-static void OSP_runeSpawnThink (edict_t *self);
+int	runespawn = 0;
+int	rune_spawncount = 0;
+edict_t * rune_spawnpoint[50];
+int	r_count[5];
 
 /*
 ==============
@@ -297,6 +292,21 @@ void OSP_respawnRune (edict_t *ent)
 	if (spot)
 		OSP_spawnRuneAt (ent->item, spot);
 	G_FreeEdict (ent);
+}
+
+// The one-shot timer OSP_setupRuneSpawn hangs on a spare edict: seed the
+// level, then free itself.  `static` in the original, and defined BEFORE its
+// one user, which is what both images need: VC6 /Od emits a static right
+// after the first function that references it (real's DLL has it between
+// OSP_setupRuneSpawn and OSP_runesApplyResistance), while gcc -O3 defers an
+// inlinable static that is not yet address-taken to the end of the object
+// (real's ELF has it last).  Defined after its user, gcc emits it in place.
+// gamex86.dll: 100369D3..100369E9
+// gamei386.so: 00063758..00063780
+static void OSP_runeSpawnThink (edict_t *self)
+{
+	OSP_checkMinRunes ();
+	G_FreeEdict (self);
 }
 
 /*
@@ -702,14 +712,4 @@ qboolean OSP_checkMaxRunes (void)
 			return false;
 	}
 	return true;
-}
-
-// The one-shot timer OSP_setupRuneSpawn hangs on a spare edict: seed the
-// level, then free itself.  `static` in the original.
-// gamex86.dll: 100369D3..100369E9
-// gamei386.so: 00063758..00063780
-static void OSP_runeSpawnThink (edict_t *self)
-{
-	OSP_checkMinRunes ();
-	G_FreeEdict (self);
 }

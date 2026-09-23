@@ -5,7 +5,6 @@
 #include "g_local.h"
 #include "bl_main.h"
 
-int	conf_size = 0;
 int	blink_on_count = 9;
 int	blink_off_count = 0;
 int	bots_votedin = 0;
@@ -51,10 +50,6 @@ a_info_t a_info[10] =
 	{  7, "H.Blaster :" },
 	{  8, "Railgun   :" },
 };
-int	motd_read = 0;
-int	who_paused = -1;
-char	conf_info[50][64];
-char	conf_name[50][64];
 cvar_t * qualifier_numspots;
 cvar_t * max_cells;
 p_acc_t	p_acc[256];
@@ -114,6 +109,7 @@ cvar_t * demo_tag;
 cvar_t * pack_slugs;
 cvar_t * runes_vampire;
 cvar_t * pack_health;
+cvar_t * flood_msgs;
 cvar_t * pack_grenades;
 cvar_t * client_botdetect;
 cvar_t * runes_strength;
@@ -192,6 +188,7 @@ cvar_t * hook_color;
 cvar_t * team_maxplayers;
 cvar_t * start_health;
 cvar_t * start_bullets;
+cvar_t * flood_waitdelay;
 int	initial_weap;
 cvar_t * start_rockets;
 cvar_t * match_prestartpercent;
@@ -203,6 +200,7 @@ cvar_t * runes_max;
 char	reconn_player[32];
 cvar_t * warmup_health;
 cvar_t * hook_incdamage;
+cvar_t * flood_persecond;
 cvar_t * nextlevel_lazy;
 cvar_t * runes_flash;
 cvar_t * qualifier_forceskins;
@@ -232,8 +230,6 @@ cvar_t * hook_holdtime;
 cvar_t * team_hurtteam;
 cvar_t * vote_enable_frag;
 cvar_t * vote_enable_kick;
-char	match_motd[1024];
-char	match_info[1024];
 
 
 // Register every cvar the mod owns and clamp the ones that have a legal range.
@@ -331,8 +327,16 @@ void OSP_gameInit (void)
 	hook_sky = gi.cvar ("hook_sky", "0", 0);
 	hook_wait = gi.cvar ("hook_wait", "0.5", 0);
 
+	// The Win32 build defaults to logstyle 4, ngStats -- whose analyser is a
+	// Windows .exe (see ngLog_ngStatsCall).  Real's DLL holds "4" for both
+	// defaults where the ELF holds "0"; no audit can see a string's content.
+#ifdef _WIN32
+	nglog_logstyle = gi.cvar ("nglog_logstyle", "4", 0);
+	nglog_logstyle_working = gi.cvar ("nglog_logstyle_working", "4", 0);
+#else
 	nglog_logstyle = gi.cvar ("nglog_logstyle", "0", 0);
 	nglog_logstyle_working = gi.cvar ("nglog_logstyle_working", "0", 0);
+#endif
 	gi.cvar_set ("nglog_logstyle_working", nglog_logstyle->string);
 	if ((int)nglog_logstyle->value)
 		gi.cvar_set ("sl_log_method", "0");

@@ -62,7 +62,6 @@ GAME_OBJS = \
 	$(BUILDDIR)/g_func.o \
 	$(BUILDDIR)/g_items.o \
 	$(BUILDDIR)/g_main.o \
-	$(BUILDDIR)/g_monsters.o \
 	$(BUILDDIR)/g_misc.o \
 	$(BUILDDIR)/g_monster.o \
 	$(BUILDDIR)/g_phys.o \
@@ -85,7 +84,6 @@ GAME_OBJS = \
 	$(BUILDDIR)/osp_config.o \
 	$(BUILDDIR)/osp_main.o \
 	$(BUILDDIR)/osp_display.o \
-	$(BUILDDIR)/osp_observe.o \
 	$(BUILDDIR)/g_chase.o \
 	$(BUILDDIR)/osp_cmds.o \
 	$(BUILDDIR)/osp_hook.o \
@@ -93,13 +91,10 @@ GAME_OBJS = \
 	$(BUILDDIR)/osp_menus.o \
 	$(BUILDDIR)/osp_runes.o \
 	$(BUILDDIR)/osp_teams.o \
-	$(BUILDDIR)/osp_players.o \
 	$(BUILDDIR)/osp_plist.o \
 	$(BUILDDIR)/osp_maps.o \
 	$(BUILDDIR)/nglog.o \
 	$(BUILDDIR)/ngmark.o \
-	$(BUILDDIR)/md5c.o \
-	$(BUILDDIR)/osp_detect.o \
 	$(BUILDDIR)/q2log.o \
 	$(BUILDDIR)/stdlog.o \
 	$(BUILDDIR)/sl_write.o \
@@ -130,9 +125,6 @@ $(BUILDDIR)/g_items.o :      g_items.c
 	$(DO_SHLIB_CC)
 
 $(BUILDDIR)/g_main.o :       g_main.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/g_monsters.o :   g_monsters.c
 	$(DO_SHLIB_CC)
 
 $(BUILDDIR)/g_misc.o :       g_misc.c
@@ -201,9 +193,6 @@ $(BUILDDIR)/osp_display.o :  osp_display.c
 $(BUILDDIR)/osp_main.o :     osp_main.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/osp_observe.o :  osp_observe.c
-	$(DO_SHLIB_CC)
-
 $(BUILDDIR)/g_chase.o :      g_chase.c
 	$(DO_SHLIB_CC)
 
@@ -225,9 +214,6 @@ $(BUILDDIR)/osp_runes.o :    osp_runes.c
 $(BUILDDIR)/osp_teams.o :    osp_teams.c
 	$(DO_SHLIB_CC)
 
-$(BUILDDIR)/osp_players.o :  osp_players.c
-	$(DO_SHLIB_CC)
-
 $(BUILDDIR)/osp_plist.o :    osp_plist.c
 	$(DO_SHLIB_CC)
 
@@ -238,12 +224,6 @@ $(BUILDDIR)/ngmark.o :       ngmark.c
 	$(DO_SHLIB_CC)
 
 $(BUILDDIR)/nglog.o :        nglog.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/md5c.o :         md5c.c
-	$(DO_SHLIB_CC)
-
-$(BUILDDIR)/osp_detect.o :   osp_detect.c
 	$(DO_SHLIB_CC)
 
 $(BUILDDIR)/q2log.o :        q2log.c

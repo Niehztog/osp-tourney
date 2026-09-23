@@ -9,6 +9,10 @@
 // .cfg filename and conf_info[i] an optional friendly description.  Either one
 // may be used to name a config in a vote, which is what OSP_configExists is
 // resolving.
+int	conf_size = 0;
+char	conf_info[50][64];
+char	conf_name[50][64];
+
 // Read the server-config list (serverconfigs.txt unless vote_config_list says
 // otherwise) and fill conf_name/conf_info from it.  A line is
 // "<file>\t<description>"; the description is optional.  A blank line, a

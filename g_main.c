@@ -52,9 +52,6 @@ cvar_t	*bob_roll;
 
 cvar_t	*sv_cheats;
 
-cvar_t	*flood_msgs;
-cvar_t	*flood_persecond;
-cvar_t	*flood_waitdelay;
 
 void SpawnEntities (char *mapname, char *entities, char *spawnpoint);
 void ClientThink (edict_t *ent, usercmd_t *cmd);

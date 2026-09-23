@@ -35,6 +35,17 @@
 #include "botlib.h"
 #include "bl_debug.h"
 
+// Win32 calls these two by the CRT's own underscored names.  Nothing in the
+// code shows it -- an old POSIX name reaches the very same function through an
+// OLDNAMES.LIB alias -- but the link does: real's DLL loads LIBCMT's getcwd and
+// ftime objects in the linker's FIRST pass over LIBCMT, which only a direct
+// reference to _getcwd/_ftime can do, and its Rich header counts three alias
+// objects (stricmp, access, mkdir), not five.
+#ifdef _WIN32
+#define getcwd	_getcwd
+#define ftime	_ftime
+#endif
+
 // the "gameversion" client command will print this plus compile date
 #define	GAMEVERSION	"OSP Tourney DM v(2.75)"
 
@@ -544,10 +555,8 @@ extern	int		rune_spawncount;
 extern	edict_t	*rune_spawnpoint[50];
 // The once-per-map latch OSP_setupRuneSpawn tests and sets.
 extern	int		runespawn;
-extern	cvar_t	*runes_model;
-extern	cvar_t	*runes_flash;
 extern	cvar_t	*runes_min;
-extern	cvar_t	*runes_max;
+extern	cvar_t	*runes_flash;
 extern	cvar_t	*runes_perplayer;
 extern	cvar_t	*runes_resist;
 extern	cvar_t	*runes_strength;
@@ -837,10 +846,12 @@ extern	cvar_t	*skill;
 extern	cvar_t	*fraglimit;
 extern	cvar_t	*timelimit;
 extern	cvar_t	*password;
-extern	cvar_t	*g_select_empty;
 extern	cvar_t	*dedicated;
 
 extern	cvar_t	*filterban;
+// Below filterban, not vanilla's spot above dedicated: g_main.c's .comm order
+// -- first-DECLARATION order -- shows in real's .dynsym as filterban first.
+extern	cvar_t	*g_select_empty;
 
 extern	cvar_t	*sv_gravity;
 extern	cvar_t	*sv_maxvelocity;
@@ -1443,9 +1454,18 @@ extern	cvar_t	*max_shells;
 extern	cvar_t	*max_bullets;
 extern	cvar_t	*max_cells;
 extern	cvar_t	*max_grenades;
+// The DLL's COMMON order is first-DECLARATION order inside the compiler's
+// hash buckets, so a few relative orders in this block are evidence: real
+// declares qualifier_forceskins before max_armor, team_overtime_count before
+// start_cells, menu_timestep before weapon_initial, match_readypercent before
+// max_rockets, bots_minplayers before warmup_armor, runes_model and runes_max
+// after menu_fragstep and warmup_armor, and runes_min ahead of runes_flash ahead
+// of demo_tag (above).  Only those orders are measured; the rest is not.
+extern	cvar_t	*match_readypercent;
 extern	cvar_t	*max_rockets;
 extern	cvar_t	*max_slugs;
 extern	cvar_t	*max_health;
+extern	cvar_t	*qualifier_forceskins;
 extern	cvar_t	*max_armor;
 extern	cvar_t	*start_armor;
 extern	cvar_t	*hook_holdplayertime;
@@ -1466,6 +1486,7 @@ extern	cvar_t	*vote_carryover;
 extern	cvar_t	*match_countinfo;
 extern	cvar_t	*start_shells;
 extern	int		pack_spawn;
+extern	int		pack_life;
 extern	cvar_t	*vote_bots_max;
 extern	cvar_t	*referee_password;
 extern	cvar_t	*team_a_hookcolor;
@@ -1491,6 +1512,7 @@ extern	cvar_t	*match_mode;
 extern	char	conf_file[2048];
 extern	int		p_order[28];
 extern	cvar_t	*team_idteam;
+extern	cvar_t	*bots_minplayers;
 extern	cvar_t	*warmup_armor;
 extern	cvar_t	*team_b_skin;
 extern	cvar_t	*hook_sky;
@@ -1498,7 +1520,6 @@ extern	cvar_t	*vote_countspectators;
 extern	cvar_t	*pack_armor;
 extern	cvar_t	*bots_autoload;
 extern	cvar_t	*bots_botfile;
-extern	cvar_t	*bots_minplayers;
 extern	cvar_t	*bots_noclients;
 extern	cvar_t	*client_recover;
 extern	cvar_t	*client_fastweap;
@@ -1518,11 +1539,10 @@ extern	cvar_t	*client_muzzlemode;
 extern	char	default_fraglimit[8];
 extern	cvar_t	*menu_maxtime;
 extern	cvar_t	*power_armor_shield;
-extern	cvar_t	*match_readypercent;
 extern	cvar_t	*vote_enable_config;
+extern	cvar_t	*menu_timestep;
 extern	cvar_t	*weapon_initial;
 extern	cvar_t	*client_maxrate;
-extern	cvar_t	*menu_timestep;
 extern	cvar_t	*camera_pitch;
 extern	cvar_t	*pack_rockets;
 extern	cvar_t	*team_overtime_mode;
@@ -1534,6 +1554,7 @@ extern	cvar_t	*demo_player;
 extern	cvar_t	*hook_speed;
 extern	cvar_t	*vote_enable_runes;
 extern	cvar_t	*team_a_name;
+extern	cvar_t	*team_overtime_count;
 extern	cvar_t	*start_cells;
 extern	cvar_t	*client_maxfps;
 extern	cvar_t	*bots_delayload;
@@ -1552,25 +1573,24 @@ extern	cvar_t	*vote_config_defaultname;
 extern	cvar_t	*__current_config;
 extern	cvar_t	*hook_wait;
 extern	cvar_t	*client_deathweapdrop;
-extern	cvar_t	*team_overtime_count;
 extern	char	reconn_player[32];
 extern	cvar_t	*warmup_health;
 extern	cvar_t	*hook_incdamage;
 extern	cvar_t	*nextlevel_lazy;
-extern	cvar_t	*qualifier_forceskins;
 extern	cvar_t	*armor_combat;
 extern	cvar_t	*client_minping;
 extern	int		pack_items[11];
 extern	cvar_t	*team_recovertime;
 extern	cvar_t	*client_infochange;
 extern	cvar_t	*menu_fragstep;
+extern	cvar_t	*runes_model;
+extern	cvar_t	*runes_max;
 extern	cvar_t	*team_lockskin;
 extern	cvar_t	*match_latejoin;
 extern	cvar_t	*hook_maxdamage;
 extern	char	vote_value[64];
 extern	cvar_t	*qualifier_skinname;
 extern	cvar_t	*armor_body;
-extern	int		pack_life;
 extern	cvar_t	*match_startsound;
 extern	cvar_t	*match_endmusic;
 extern	cvar_t	*pack_bullets;

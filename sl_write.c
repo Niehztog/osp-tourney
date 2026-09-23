@@ -3,6 +3,12 @@
 
 #include "g_local.h"
 
+int		sl_ngloglog_status;
+cvar_t	*sl_log_style;
+cvar_t	*sl_filename;
+cvar_t	*sl_log_flush;
+cvar_t	*sl_log_method;
+
 
 // gamex86.dll: 10063130..10063164
 // gamei386.so: 00073B68..00073BA5

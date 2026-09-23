@@ -3,11 +3,6 @@
 #include "g_local.h"
 
 cvar_t	*sl_log_logbots;
-int		sl_ngloglog_status;
-cvar_t	*sl_log_style;
-cvar_t	*sl_filename;
-cvar_t	*sl_log_flush;
-cvar_t	*sl_log_method;
 
 static int		sl_started = 0;
 static char		*sl_patch = NULL;

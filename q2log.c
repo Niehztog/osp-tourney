@@ -8,6 +8,23 @@
 
 #include "g_local.h"
 
+int	ngloglog_status = 0;
+cvar_t * nglog_worldstats;
+cvar_t * nglog_flush;
+cvar_t * nglog_ngstats_browser;
+cvar_t * nglog_logchat;
+cvar_t * nglog_logstyle;
+cvar_t * ngWorldStats_Status;
+cvar_t * nglog_ngstats_exec;
+cvar_t * nglog_logstyle_working;
+cvar_t * nglog_ngstats_cfg;
+cvar_t * nglog_logallpickups;
+cvar_t * nglog_ngstats_vidrestart;
+cvar_t * nglog_buffer;
+cvar_t * nglog_logname;
+cvar_t * nglog_ngstats_logdir;
+cvar_t * nglog_logmiscpickup;
+
 // gamex86.dll: 1004FA60..1004FBD3
 // gamei386.so: 0007057C..000706C4
 void q2log_customStart (void)

@@ -4,6 +4,10 @@
 #include "g_local.h"
 #include "bl_main.h"
 
+int	motd_read = 0;
+char	match_motd[1024];
+char	match_info[1024];
+
 
 // Read motd.txt into nine 32-column lines and build the whole layout string
 // match_motd out of them, followed by the fixed OSP credit block.  motd_center

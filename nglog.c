@@ -27,7 +27,6 @@ FILE * worldlog_file = NULL;
 int	__nglog_worldlog = 0;
 int	__nglog_num_errs = 0;
 int	__nglog_ngstats_exec = 0;
-int	ngloglog_status = 0;
 char	__nglog_error_msg[8][4096];
 char	__nglog_ngstats_cfg[1024];
 char	__nglog_worldlog_tag[64];
@@ -42,22 +41,6 @@ int	__nglog_logstyle;
 char	__nglog_ngstats_logdir[1024];
 char	__nglog_worldlog_path[1024];
 char	__nglog_worldlog_name[1024];
-MD5_CTX	context;
-cvar_t * nglog_worldstats;
-cvar_t * nglog_flush;
-cvar_t * nglog_ngstats_browser;
-cvar_t * nglog_logchat;
-cvar_t * nglog_logstyle;
-cvar_t * ngWorldStats_Status;
-cvar_t * nglog_ngstats_exec;
-cvar_t * nglog_logstyle_working;
-cvar_t * nglog_ngstats_cfg;
-cvar_t * nglog_logallpickups;
-cvar_t * nglog_ngstats_vidrestart;
-cvar_t * nglog_buffer;
-cvar_t * nglog_logname;
-cvar_t * nglog_ngstats_logdir;
-cvar_t * nglog_logmiscpickup;
 
 
 // gamex86.dll: 1004CE60..1004D2AD
@@ -426,7 +409,9 @@ ngLog_getDateInfo
 float; otherwise just down to the minute.
 
 The timezone source is #ifdef'd: on Unix it is struct timeb::timezone, a
-short; under Win32 it is the CRT global `timezone`, an int.
+short; under Win32 it is the CRT global `_timezone`, an int, written with the
+underscore (see g_local.h's getcwd/ftime note: real's link resolves it without
+an OLDNAMES alias).
 ==============
 */
 // gamex86.dll: 1004D9DA..1004DAB2
@@ -452,7 +437,7 @@ void ngLog_getDateInfo (char *out, int full)
 			ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday, ltime->tm_hour,
 			ltime->tm_min, ltime->tm_sec, tb.millitm,
 #ifdef _WIN32
-			-(float)(timezone / 3600));
+			-(float)(_timezone / 3600));
 #else
 			-(float)(tz / 3600));
 #endif
@@ -518,26 +503,26 @@ This machine's dotted-quad, or an error string in the same buffer.
 // gamei386.so: 0006EEC0..0006EF58
 char *ngLog_hostAddr (void)
 {
-	static char		addr[128];
+	static char		address[128];
 	static char		host[256];
 	struct hostent	*h;
 	unsigned char	*hostaddr;	// <INVENTED NAME>
 
 	if (gethostname (host, 256))
 	{
-		sprintf (addr, "ERROR: no name");
-		return addr;
+		sprintf (address, "ERROR: no name");
+		return address;
 	}
 
 	h = gethostbyname (host);
 	if (!h)
 	{
-		sprintf (addr, "ERROR: can't convert name\n");
-		return addr;
+		sprintf (address, "ERROR: can't convert name\n");
+		return address;
 	}
 
 	hostaddr = (unsigned char *)h->h_addr_list[0];
-	sprintf (addr, "%d.%d.%d.%d",
+	sprintf (address, "%d.%d.%d.%d",
 		hostaddr[0], hostaddr[1], hostaddr[2], hostaddr[3]);
-	return addr;
+	return address;
 }

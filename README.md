@@ -16,7 +16,9 @@ v2.75 binaries:
 - **Linux** (gcc 2.7.2.3): all 1051 exported functions present, and every
   one of them byte-identical machine code, as are the 22 file-local
   functions the binary does not export. Nothing missing, nothing invented.
-- **Windows** (Visual C++ 6.0 SP3): all 1082 functions located, 1075 of
+  Built and stripped the way the original was, the whole game library is
+  byte-for-byte identical to the shipped file.
+- **Windows** (Visual C++ 6.0 SP3): all 1081 functions located, 1074 of
   them (99%) byte-identical; the remaining seven differ only in the order
   in which their local variables are laid out on the stack.
 
@@ -51,8 +53,9 @@ engine, such as Yamagi Quake II.
 Reconstructed on top of id Software's Quake II 3.20 game SDK, id's Quake II
 CTF 1.02 SDK (the grapple hook and menu system), Mr. Elusive's Gladiator
 Bot Q2 game SDK (the bot integration layer), and the RSA Data Security MD5
-reference implementation (`md5c.c`, used for log verification). Each of
-those components carries its own original license terms.
+reference implementation (its `md5c.c`, carried inside `ngmark.c` and used
+for log verification). Each of those components carries its own original
+license terms.
 
 ## Disclaimer
 

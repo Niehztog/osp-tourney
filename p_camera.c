@@ -804,6 +804,40 @@ done:
 	UpdateValues (ent);
 }
 
+// gamex86.dll: 10008E5B..10008FE1
+// gamei386.so: 00037EBC..00037FF2
+void CameraStaticThink (edict_t *ent, edict_t *target)
+{
+	trace_t	tr;
+	vec3_t	epos;
+	vec3_t	camera_end;
+
+	epos[0] = ent->s.origin[0];
+	epos[1] = ent->s.origin[1];
+	epos[2] = ent->s.origin[2] - 40000;
+	tr = gi.trace (ent->s.origin, NULL, NULL, epos, ent, CONTENTS_SOLID);
+
+	// The three camera_end stores read back out of `epos`, not out of
+	// tr.endpos -- same values, different code.
+	VectorCopy (tr.endpos, epos);
+	camera_end[0] = epos[0];
+	camera_end[1] = epos[1];
+	camera_end[2] = epos[2] + 175;
+	tr = gi.trace (epos, NULL, NULL, camera_end, ent, CONTENTS_SOLID);
+
+	VectorCopy (tr.endpos, ent->s.origin);
+
+	if (ent->last_move_time < level.time)
+	{
+		ent->last_move_time = level.time + 2;
+		ent->s.angles[0] = 25;
+		ent->s.angles[1] = 0;
+		ent->s.angles[2] = 0;
+		VectorCopy (ent->s.angles, ent->client->ps.viewangles);
+		VectorCopy (ent->s.angles, ent->client->v_angle);
+	}
+}
+
 // gamex86.dll: 10008FE1..1000918A
 // gamei386.so: 00037FF4..0003821B
 void CameraThink (edict_t *ent, edict_t *target)
@@ -865,40 +899,6 @@ ent->client->ps.pmove.gravity = 0;
 
 camera_normal:
 		CameraNormalThink (ent, target);
-	}
-}
-
-// gamex86.dll: 10008E5B..10008FE1
-// gamei386.so: 00037EBC..00037FF2
-void CameraStaticThink (edict_t *ent, edict_t *target)
-{
-	trace_t	tr;
-	vec3_t	epos;
-	vec3_t	camera_end;
-
-	epos[0] = ent->s.origin[0];
-	epos[1] = ent->s.origin[1];
-	epos[2] = ent->s.origin[2] - 40000;
-	tr = gi.trace (ent->s.origin, NULL, NULL, epos, ent, CONTENTS_SOLID);
-
-	// The three camera_end stores read back out of `epos`, not out of
-	// tr.endpos -- same values, different code.
-	VectorCopy (tr.endpos, epos);
-	camera_end[0] = epos[0];
-	camera_end[1] = epos[1];
-	camera_end[2] = epos[2] + 175;
-	tr = gi.trace (epos, NULL, NULL, camera_end, ent, CONTENTS_SOLID);
-
-	VectorCopy (tr.endpos, ent->s.origin);
-
-	if (ent->last_move_time < level.time)
-	{
-		ent->last_move_time = level.time + 2;
-		ent->s.angles[0] = 25;
-		ent->s.angles[1] = 0;
-		ent->s.angles[2] = 0;
-		VectorCopy (ent->s.angles, ent->client->ps.viewangles);
-		VectorCopy (ent->s.angles, ent->client->v_angle);
 	}
 }
 

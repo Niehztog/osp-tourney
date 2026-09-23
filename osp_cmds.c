@@ -10,6 +10,12 @@
 #include "bl_main.h"
 #include "bl_botcfg.h"
 
+// The pause command's own state.  Defined HERE, not in osp_main.c: real's ELF
+// has it in the .data word after osp_display.c's motd_read, and real's DLL puts
+// it ahead of every osp_main.c datum -- osp_cmds is the one object between the
+// two that both link orders allow.
+int	who_paused = -1;
+
 void ClientDisconnect (edict_t *ent);
 
 // gamex86.dll: 1001D6F0..1001D70E
